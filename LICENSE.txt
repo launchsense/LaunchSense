@@ -7,7 +7,8 @@ only. This visibility grants no rights.
 
 Without prior written permission from the copyright holder, no one may copy,
 download, modify, distribute, publish, or use this code or these resources in
-any form, in whole or in part. Permission requests go to the repository owner.
+any form, in whole or in part. Permission requests go to Keshav Maheshwari at
+www.withkeshav.com.
 
 THE CODE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
