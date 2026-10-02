@@ -14,3 +14,14 @@ node_modules/
 /AGENTS.md
 /.codex
 /docs/SETUP.md
+
+# Private keys, credentials, and local tool/editor state. Never publish.
+*.pem
+*.key
+credentials*.json
+secrets*.json
+.builder-pulse/
+.claude/
+.opencode/
+.vscode/
+.idea/

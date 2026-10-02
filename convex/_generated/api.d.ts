@@ -9,12 +9,15 @@
  */
 
 import type * as adapters_github from "../adapters/github.js";
+import type * as adapters_osv from "../adapters/osv.js";
 import type * as auth from "../auth.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as scans_actions from "../scans/actions.js";
+import type * as scans_analyze from "../scans/analyze.js";
 import type * as scans_internal from "../scans/internal.js";
 import type * as scans_queries from "../scans/queries.js";
+import type * as scans_store from "../scans/store.js";
 
 import type {
   ApiFromModules,
@@ -24,12 +27,15 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "adapters/github": typeof adapters_github;
+  "adapters/osv": typeof adapters_osv;
   auth: typeof auth;
   health: typeof health;
   http: typeof http;
   "scans/actions": typeof scans_actions;
+  "scans/analyze": typeof scans_analyze;
   "scans/internal": typeof scans_internal;
   "scans/queries": typeof scans_queries;
+  "scans/store": typeof scans_store;
 }>;
 
 /**
