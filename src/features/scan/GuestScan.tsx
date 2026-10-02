@@ -150,7 +150,7 @@ export default function GuestScan() {
               2MB caps, binary and generated files, dependency freshness,
               deps.dev metadata, live URL, and AI explanations.{" "}
               {scan.status === "partial"
-                ? "This is a partial result — unlisted files were not examined."
+                ? "This is a partial result. Unlisted files were not examined."
                 : "Deterministic checks only."}
             </p>
           </div>
