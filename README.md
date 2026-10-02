@@ -1,14 +1,14 @@
 # LaunchSense
 
-Check your app before you share it.
+Check your repo before you flip it public.
 
-LaunchSense looks at public code repos and lists problems with proof. It tells you what to fix first. It never changes your code.
+LaunchSense looks at your code and your live app the way a stranger would, and lists problems with proof. It gives one fix prompt for the top 3. It never changes your code.
 
 ## How to use
 
-1. Open the app and paste a public GitHub repo link.
+1. Open the app and paste your repo link plus your live app URL.
 2. Press Run scan.
-3. Read the Fix Before You Share list.
+3. Copy the top 3 prompt into your coding helper.
 4. Fix the items, then scan again.
 
 ## What it checks

@@ -4,6 +4,7 @@ import { validateLiveUrl } from "../shared/ssrf.ts";
 import { toShareCard } from "../shared/reports/shareCard.ts";
 import { nextHopUrl } from "../convex/adapters/live.ts";
 import { isPublicIdShape, newPublicId } from "../convex/adapters/share.ts";
+import { buildTopPrompt, liveActionItems } from "../shared/reports/topPrompt.ts";
 
 describe("validateLiveUrl", () => {
   it("blocks local, private, and disguised addresses", () => {
@@ -71,5 +72,35 @@ describe("newPublicId", () => {
     }
     assert.equal(ids.size, 200);
     assert.equal(isPublicIdShape("short"), false);
+  });
+});
+
+describe("buildTopPrompt", () => {
+  it("ranks live items with repo findings and caps at 3", () => {
+    const findings = [
+      { ruleId: "secret.debug-leftover", path: "a.ts", line: 1, severity: "medium", title: "Debug" },
+      { ruleId: "secret.tracked-env", path: ".env", line: 1, severity: "high", title: "Env" },
+      { ruleId: "deps.duplicate", path: "(repo)", line: 0, severity: "low", title: "Dup" },
+      { ruleId: "hygiene.no-readme", path: "(repo)", line: 0, severity: "info", title: "Readme" },
+    ];
+    const live = liveActionItems(
+      { reaches: false, https: true, url: "https://example.com/" },
+      null,
+    );
+    const top = buildTopPrompt(findings, [], live);
+    assert.equal(top.topCount, 3);
+    assert.equal(top.restCount, 1);
+    assert.ok(top.prompt.includes("Before your repo goes public"));
+    assert.ok(top.prompt.split("\n").filter((l) => /^[0-9]\. /.test(l)).length === 3);
+  });
+
+  it("names live problems plainly", () => {
+    const items = liveActionItems(
+      { reaches: true, https: false, nonBlank: true, viewportMeta: false, url: "https://example.com/" },
+      "Visitors sign up",
+    );
+    const titles = items.map((i) => i.title);
+    assert.ok(titles.includes("Live site does not use HTTPS"));
+    assert.ok(titles.includes("No phone viewport tag"));
   });
 });

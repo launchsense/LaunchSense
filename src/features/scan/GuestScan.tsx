@@ -140,13 +140,14 @@ export default function GuestScan() {
 
   return (
     <section aria-label="Guest repository scan">
-      <h2>Scan a public repository</h2>
+      <h2>Check before you go public</h2>
       <div role="note" aria-label="Privacy note">
         <p>
           <strong>Before you run:</strong> we fetch the public file list and
-          bounded file contents. Nothing on your machine leaves the browser
-          except the form below. We save the owner, repo, commit SHA, file
-          paths, and redacted finding snippets for 24-hour caching. Raw secret
+          bounded file contents. If you add a live URL, we also fetch the
+          served page HTML. Nothing on your machine leaves the browser except
+          the form below. We save the owner, repo, commit SHA, file paths,
+          and redacted finding snippets for 24-hour caching. Raw secret
           values are never stored. Free GitHub quota is shared; quota
           exhaustion shows as partial, never as a pass.
         </p>
@@ -163,7 +164,7 @@ export default function GuestScan() {
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
         />
-        <label htmlFor="guest-live-url">Live site URL, optional</label>
+        <label htmlFor="guest-live-url">Live app URL, optional but recommended</label>
         <input
           id="guest-live-url"
           name="liveUrl"
@@ -220,6 +221,7 @@ export default function GuestScan() {
               findings={resultsState.findings}
               plan={plan}
               live={resultsState.live}
+              mainAction={scan.mainAction ?? null}
               onShare={() => void onShare()}
               onPassport={() => void onPassport()}
               shareId={shareId}
