@@ -1,0 +1,16 @@
+# Internal documentation and planning folders.
+/.agents
+/.progress/
+
+# Dependencies, build output, and private machine configuration.
+node_modules/
+/dist/
+.env*
+!.env.example
+*.tsbuildinfo
+.auth-keys.json
+
+# Local agent instructions, tools, and internal notes never go to GitHub.
+/AGENTS.md
+/.codex
+/docs/SETUP.md
