@@ -17,11 +17,14 @@ import {
   redactedSnippet,
 } from "../../shared/redaction";
 import { fetchBlobContent } from "../adapters/github";
+import { fetchRepoTarball } from "../adapters/tarball";
 import { queryOsvBatch } from "../adapters/osv";
 
 const MAX_FILES_FETCHED = 200;
 const MAX_TOTAL_BYTES = 2000000;
-const FETCH_CONCURRENCY = 12;
+// Convex actions time out at 10 minutes. Stop well before that so a slow
+// upstream produces an honest partial result instead of a dropped action.
+const ANALYZE_DEADLINE_MS = 150000;
 const CONTENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const OSV_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -218,55 +221,87 @@ export const analyzeScan = action({
       skipped.push({ path, reason: "file cap (200 files)" });
     }
 
+    // One tarball request replaces up to 200 per-file content requests. This is
+    // the difference between a scan that fits an unauthenticated GitHub quota
+    // and one that exhausts it on the first visitor.
+    const deadline = Date.now() + ANALYZE_DEADLINE_MS;
+    const tarball = await fetchRepoTarball(owner, repo, sha);
     const files: Array<{ path: string; content: string; size: number }> = [];
     let bytesUsed = 0;
     let rateLimitedAt: number | null = null;
     let processed = 0;
 
-    // Small worker pool. A cold scan is up to 200 files, so fetching them one
-    // at a time was the difference between a 15 second scan and a 60 second one.
-    // The byte budget is enforced inside the worker against the shared counter.
-    // Hoisting it into a filter before the loop left bytesUsed at zero and the
-    // cap unenforced.
-    const queue = selected;
+    if (tarball.status === "ok") {
+      for (const entry of tarball.entries) {
+        if (Date.now() > deadline) break;
+        if (files.length >= MAX_FILES_FETCHED || bytesUsed >= MAX_TOTAL_BYTES) break;
+        files.push({ path: entry.path, content: entry.content, size: entry.size });
+        bytesUsed += entry.size;
+        processed += 1;
+        await ctx.runMutation(internal.scans.store.saveContent, {
+          owner,
+          repo,
+          sha,
+          path: entry.path,
+          contentSha: "",
+          size: entry.size,
+          truncated: false,
+          fetchedAt: Date.now(),
+        });
+      }
+      if (tarball.truncated) {
+        for (const path of candidates) {
+          if (!files.some((f) => f.path === path) && !skipped.some((s) => s.path === path)) {
+            skipped.push({ path, reason: "file cap (200 files) or byte budget (2MB)" });
+          }
+        }
+      }
+    } else if (tarball.status === "too-large") {
+      for (const path of candidates) {
+        skipped.push({ path, reason: "repo tarball over 20MB" });
+      }
+    } else {
+      for (const path of candidates) {
+        skipped.push({ path, reason: "tarball fetch failed" });
+      }
+    }
+
+    await ctx.runMutation(internal.scans.internal.markProgress, {
+      scanId: args.scanId,
+      fetchedFileCount: processed,
+      totalPlanned: candidates.length,
+      now: Date.now(),
+    });
+
+    // Fallback path only. The tarball above normally covers everything in one
+    // request. If it failed, fall back to per-file fetches for the files the
+    // tarball did not deliver, at concurrency 8 so a fallback cannot itself
+    // exhaust the quota.
+    const missing = selected.filter(
+      (path) => !files.some((f) => f.path === path) && !skipped.some((s) => s.path === path),
+    );
+    const FALLBACK_CONCURRENCY = 8;
     let nextIndex = 0;
     let stopped = false;
 
     const worker = async (): Promise<void> => {
       for (;;) {
         if (stopped) return;
+        if (Date.now() > deadline) {
+          stopped = true;
+          return;
+        }
         const index = nextIndex;
         nextIndex += 1;
-        const path = queue[index];
+        const path = missing[index];
         if (path === undefined) return;
         if (bytesUsed >= MAX_TOTAL_BYTES) {
           skipped.push({ path, reason: "byte budget (2MB)" });
           continue;
         }
 
-        // Metadata cache only. File bodies are always refetched: a cached
-        // redacted body would strip exactly the patterns the secret checks
-        // look for, so repeat scans would report fewer secrets than the first.
-        void (
-          await ctx.runQuery(internal.scans.store.getCachedMeta, {
-            owner,
-            repo,
-            sha,
-            path,
-            sinceMs: Date.now() - CONTENT_CACHE_TTL_MS,
-          })
-        );
-
         const blob = await fetchBlobContent(owner, repo, sha, path);
         processed += 1;
-        if (processed % 20 === 0) {
-          await ctx.runMutation(internal.scans.internal.markProgress, {
-            scanId: args.scanId,
-            fetchedFileCount: processed,
-            totalPlanned: queue.length,
-            now: Date.now(),
-          });
-        }
         if (blob.status === "rate-limited") {
           rateLimitedAt = blob.resetAtMs;
           stopped = true;
@@ -285,8 +320,7 @@ export const analyzeScan = action({
           skipped.push({ path, reason: "fetch failed" });
           continue;
         }
-        // Store size and content hash only. No file body is persisted anywhere, so a
-        // secret cannot be stored even if it slips past an analyzer pattern.
+        // Size and content hash only. No file body is persisted anywhere.
         await ctx.runMutation(internal.scans.store.saveContent, {
           owner,
           repo,
@@ -302,28 +336,27 @@ export const analyzeScan = action({
       }
     };
 
-    await Promise.all(
-      Array.from({ length: Math.min(FETCH_CONCURRENCY, Math.max(1, queue.length)) }, () =>
-        worker(),
-      ),
-    );
-    if (stopped) {
-      for (let i = nextIndex; i < queue.length; i++) {
-        const path = queue[i];
+    if (missing.length > 0) {
+      await Promise.all(
+        Array.from(
+          { length: Math.min(FALLBACK_CONCURRENCY, missing.length) },
+          () => worker(),
+        ),
+      );
+      for (let i = nextIndex; i < missing.length; i++) {
+        const path = missing[i];
         if (path === undefined) continue;
-        if (!files.some((f) => f.path === path)) {
-          skipped.push({ path, reason: "not reached after rate limit" });
+        if (!files.some((f) => f.path === path) && !skipped.some((s) => s.path === path)) {
+          skipped.push({ path, reason: stopped ? "not reached after rate limit" : "not reached" });
         }
       }
     }
 
-    // The worker pool completes out of order. Analyzers are documented as
-    // deterministic, so restore the sorted queue order before any of them see
-    // the file list. Without this, content hashes and fingerprints changed run
-    // to run on identical input.
+    // Analyzers are documented as deterministic, so restore the sorted queue
+    // order before any of them see the file list.
     files.sort((a, b) => {
-      const ia = queue.indexOf(a.path);
-      const ib = queue.indexOf(b.path);
+      const ia = selected.indexOf(a.path);
+      const ib = selected.indexOf(b.path);
       return ia - ib;
     });
     skipped.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
