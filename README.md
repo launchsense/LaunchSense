@@ -56,8 +56,10 @@ Releases use `npm run deploy` and are done by maintainers only. A git push never
 ## Docs
 
 - `docs/HOW-IT-WORKS.md`: what happens when you scan.
+- `docs/READ-YOUR-REPORT.md`: how to read findings and the fix list.
 - `docs/PRIVACY.md`: what we save and what we never save.
 - `docs/LIMITS.md`: quotas, caps, and what stays unchecked.
+- `docs/GLOSSARY.md`: every special word in one plain line.
 - `CHANGELOG.md`: what changed in each release.
 
 Built with React, Vite, TypeScript, and Convex. License: proprietary, see `LICENSE.txt`. The repo is visible for review only. No use without permission.
