@@ -83,7 +83,11 @@ export const fetchScan = internalQuery({
   },
 });
 
-export const getCachedContent = internalQuery({
+// Metadata only. File bodies are NEVER stored and never returned: caching a
+// redacted body and feeding it back to the analyzers silently destroyed the
+// exact patterns the secret checks look for, so a repeat scan of the same
+// commit reported fewer secrets than the first one.
+export const getCachedMeta = internalQuery({
   args: {
     owner: v.string(),
     repo: v.string(),
@@ -93,7 +97,6 @@ export const getCachedContent = internalQuery({
   },
   returns: v.union(
     v.object({
-      content: v.string(),
       size: v.number(),
       contentSha: v.string(),
     }),
@@ -109,7 +112,7 @@ export const getCachedContent = internalQuery({
       .take(1);
     const hit = matches[0] ?? null;
     if (hit === null || hit.fetchedAt < args.sinceMs) return null;
-    return { content: hit.content, size: hit.size, contentSha: hit.contentSha };
+    return { size: hit.size, contentSha: hit.contentSha };
   },
 });
 
@@ -142,7 +145,6 @@ export const saveContent = internalMutation({
     size: v.number(),
     truncated: v.boolean(),
     fetchedAt: v.number(),
-    content: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -153,6 +155,8 @@ export const saveContent = internalMutation({
       )
       .order("desc")
       .take(1);
+    // No file body is stored. Size and content hash are enough to detect a
+    // changed file and to compute coverage honestly.
     const doc = {
       owner: args.owner,
       repo: args.repo,
@@ -162,7 +166,6 @@ export const saveContent = internalMutation({
       size: args.size,
       truncated: args.truncated,
       fetchedAt: args.fetchedAt,
-      content: args.content,
     };
     if (existing[0] !== undefined) {
       await ctx.db.patch("fileContents", existing[0]._id, doc);

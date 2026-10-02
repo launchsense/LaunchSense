@@ -86,7 +86,6 @@ export default defineSchema({
     size: v.number(),
     truncated: v.boolean(),
     fetchedAt: v.number(),
-    content: v.string(),
   })
     .index("by_repo_sha_path", ["owner", "repo", "sha", "path"])
     .index("by_owner_before", ["owner", "repo", "fetchedAt"]),

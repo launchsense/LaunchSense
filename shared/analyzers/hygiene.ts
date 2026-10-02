@@ -2,6 +2,7 @@
 // reported as info findings, inventory (languages, entry points) as evidence.
 
 import { fnv1aHex } from "../redaction.ts";
+import { hasCIIn, hasLicenseIn, hasReadmeIn, hasTestsIn } from "./projectSignals.ts";
 
 export interface FetchedFile {
   path: string;
@@ -13,6 +14,7 @@ export interface HygieneSignals {
   languages: Array<{ language: string; files: number }>;
   entryPoints: string[];
   hasReadme: boolean;
+  hasLicense: boolean;
   readmeChars: number;
   hasTests: boolean;
   hasCI: boolean;
@@ -98,10 +100,11 @@ export function analyzeHygiene(
   const readmePath = treeBlobs.find((p) => /^(readme)(\..+)?$/i.test(p.split("/").pop() ?? ""));
   const readmeFile = files.find((f) => f.path === readmePath);
 
-  const hasTests =
-    treeBlobs.some((p) => /(^|\/)__tests__\//.test(p) || /\.test\.[a-z]+$/i.test(p) || /\.spec\.[a-z]+$/i.test(p)) ||
-    treeBlobs.some((p) => /vitest|jest|playwright|pytest|go\.test/i.test(p.split("/").pop() ?? ""));
-  const hasCI = treeBlobs.some((p) => p.startsWith(".github/workflows/"));
+  // One rule, imported. The Repo DNA panel reads the same functions so the two
+  // can never disagree.
+  const hasTests = hasTestsIn(treeBlobs);
+  const hasCI = hasCIIn(treeBlobs);
+  const hasLicenseFile = hasLicenseIn(treeBlobs);
 
   const agentFiles = treeBlobs.filter(
     (p) =>
@@ -134,7 +137,8 @@ export function analyzeHygiene(
   return {
     languages,
     entryPoints,
-    hasReadme: readmePath !== undefined,
+    hasReadme: hasReadmeIn(treeBlobs),
+    hasLicense: hasLicenseFile,
     readmeChars: readmeFile?.content.length ?? 0,
     hasTests,
     hasCI,
