@@ -2,13 +2,53 @@ LaunchSense Proprietary License
 
 Copyright (c) 2026 Keshav Maheshwari. All rights reserved.
 
-The code and resources in this repository are publicly visible for review
-only. This visibility grants no rights.
+Contact for permission: www.withkeshav.com
 
-Without prior written permission from the copyright holder, no one may copy,
-download, modify, distribute, publish, or use this code or these resources in
-any form, in whole or in part. Permission requests go to Keshav Maheshwari at
-www.withkeshav.com.
+1. NO LICENCE IS GRANTED
+
+No licence is granted to copy, download, modify, distribute, sublicense,
+sublicense, publish, or use this software or any resource in this repository,
+in whole or in part, except as expressly permitted in writing by the
+copyright holder.
+
+This applies while the repository is public and after it is made private. This
+notice is not temporary and does not expire.
+
+2. WHILE THE REPOSITORY IS PUBLIC
+
+Viewing a public repository on GitHub is governed by GitHub's own Terms of
+Service, which separately grant users the right to view and fork public
+content. That grant comes from GitHub, not from the copyright holder. Nothing
+here widens it, and nothing here can narrow it.
+
+Accordingly, and honestly: the copyright holder cannot technically prevent a
+download of public code. What this notice does is make such a download
+unauthorised. Under copyright law, copying, downloading into a working copy,
+modifying, and redistributing without permission are acts reserved to the
+copyright holder.
+
+3. AFTER THE REPOSITORY IS MADE PRIVATE
+
+Making this repository private does not release anyone who already obtained a
+copy. Any copy taken while the repository was public remains subject to the
+terms in force at the time it was taken. Those terms permit nothing without
+written permission.
+
+Existing public forks are not made private by the copyright holder and are not
+deleted.
+
+4. FORKS AND DERIVATIVES
+
+A derivative work, a fork, or a modification of this software is a copy. It is
+not permitted. It does not become permitted because it is published, because it
+is visible, or because the repository is public.
+
+5. PERMISSION
+
+Permission requests go to the copyright holder at www.withkeshav.com. Written
+permission may be granted for a specified use and revoked for future use.
+
+6. NO WARRANTY
 
 THE CODE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -16,3 +56,8 @@ FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF,
 OR IN CONNECTION WITH THE CODE OR THE USE OF THE CODE.
+
+7. TRADEMARK
+
+"LaunchSense" is a trademark of the copyright holder. No trademark rights are
+granted by this notice.
