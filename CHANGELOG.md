@@ -6,7 +6,12 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 
 ### Added
 
-- Nothing yet.
+- Scan report page with per-finding cards, severity, and a single ordered fix prompt for the top 3.
+- Live app URL check over fetch: HTTPS, response, main action hint, and phone viewport meta.
+- Safe share cards and Passport links that work signed out on a phone, with referral attribution.
+- Re-scan and compare: fixed, still broken, new, back again, and unknown states, with both commit numbers pinned.
+- Accept-risk marking on findings you decide to keep.
+- Plain-language docs set: how a scan works, how to read your report, privacy, limits, glossary.
 
 ## [0.3.0] - 2026-10-02
 

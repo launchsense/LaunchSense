@@ -57,6 +57,7 @@ Releases use `npm run deploy` and are done by maintainers only. A git push never
 
 - `docs/HOW-IT-WORKS.md`: what happens when you scan.
 - `docs/READ-YOUR-REPORT.md`: how to read findings and the fix list.
+- `docs/ABOUT.md`: who LaunchSense is for and what it will not do.
 - `docs/PRIVACY.md`: what we save and what we never save.
 - `docs/LIMITS.md`: quotas, caps, and what stays unchecked.
 - `docs/GLOSSARY.md`: every special word in one plain line.
