@@ -1,7 +1,7 @@
 // Deterministic repository hygiene signals. Signals, not verdicts: gaps are
 // reported as info findings, inventory (languages, entry points) as evidence.
 
-import { fnv1aHex } from "../redaction";
+import { fnv1aHex } from "../redaction.ts";
 
 export interface FetchedFile {
   path: string;

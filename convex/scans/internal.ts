@@ -33,12 +33,13 @@ const scanDoc = v.object({
   errorKind: v.optional(scanErrorKind),
   errorMessage: v.optional(v.string()),
   rateLimitResetAt: v.optional(v.number()),
+  liveUrl: v.optional(v.string()),
+  mainAction: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
 
-const treeDoc = v.object({
-  _id: v.id("repoTrees"),
+const treeDoc = v.object({  _id: v.id("repoTrees"),
   _creationTime: v.number(),
   owner: v.string(),
   repo: v.string(),

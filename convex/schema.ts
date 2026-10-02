@@ -29,6 +29,7 @@ const severity = v.union(
 // Product tables are added alongside the features that need them.
 // Stage 2: guest scan rows + cached recursive trees.
 // Stage 3: bounded file contents, OSV cache, evidence ledger, findings.
+// Stage 4: live checks, share/passport artifacts, first-party analytics.
 export default defineSchema({
   ...authTables,
   scans: defineTable({
@@ -49,6 +50,8 @@ export default defineSchema({
     skippedFileCount: v.optional(v.number()),
     analyzedAt: v.optional(v.number()),
     coverageNote: v.optional(v.string()),
+    liveUrl: v.optional(v.string()),
+    mainAction: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -114,4 +117,52 @@ export default defineSchema({
     bucket: v.union(v.literal("actionable"), v.literal("info")),
     createdAt: v.number(),
   }).index("by_scan", ["scanId"]),
+  liveChecks: defineTable({
+    scanId: v.id("scans"),
+    url: v.string(),
+    finalUrl: v.optional(v.string()),
+    https: v.boolean(),
+    reaches: v.boolean(),
+    httpStatus: v.optional(v.number()),
+    nonBlank: v.optional(v.boolean()),
+    mainActionFound: v.optional(v.boolean()),
+    viewportMeta: v.optional(v.boolean()),
+    hops: v.number(),
+    errorKind: v.optional(scanErrorKind),
+    errorMessage: v.optional(v.string()),
+    checkedAt: v.number(),
+  }).index("by_scan", ["scanId"]),
+  shareArtifacts: defineTable({
+    shareId: v.string(),
+    scanId: v.id("scans"),
+    createdAt: v.number(),
+  })
+    .index("by_shareId", ["shareId"])
+    .index("by_scan", ["scanId"]),
+  passportArtifacts: defineTable({
+    passportId: v.string(),
+    scanId: v.id("scans"),
+    createdAt: v.number(),
+  })
+    .index("by_passportId", ["passportId"])
+    .index("by_scan", ["scanId"]),
+  analyticsEvents: defineTable({
+    day: v.string(),
+    kind: v.union(
+      v.literal("scan_started"),
+      v.literal("scan_completed"),
+      v.literal("scan_partial"),
+      v.literal("live_checked"),
+      v.literal("share_created"),
+      v.literal("passport_created"),
+      v.literal("share_viewed"),
+      v.literal("share_cta_clicked"),
+      v.literal("referred_visit"),
+      v.literal("referred_scan_started"),
+    ),
+    scanId: v.optional(v.id("scans")),
+    shareId: v.optional(v.string()),
+    refShareId: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_day", ["day"]),
 });

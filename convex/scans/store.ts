@@ -45,6 +45,8 @@ const fullScanDoc = v.object({
   skippedFileCount: v.optional(v.number()),
   analyzedAt: v.optional(v.number()),
   coverageNote: v.optional(v.string()),
+  liveUrl: v.optional(v.string()),
+  mainAction: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -321,5 +323,149 @@ export const listFindings = internalQuery({
       why: r.why,
       bucket: r.bucket,
     }));
+  },
+});
+
+export const setLiveInputs = internalMutation({
+  args: {
+    scanId: v.id("scans"),
+    liveUrl: v.optional(v.string()),
+    mainAction: v.optional(v.string()),
+    now: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("scans", args.scanId, {
+      liveUrl: args.liveUrl,
+      mainAction: args.mainAction,
+      updatedAt: args.now,
+    });
+    return null;
+  },
+});
+
+export const saveLiveCheck = internalMutation({
+  args: {
+    scanId: v.id("scans"),
+    url: v.string(),
+    finalUrl: v.optional(v.string()),
+    https: v.boolean(),
+    reaches: v.boolean(),
+    httpStatus: v.optional(v.number()),
+    nonBlank: v.optional(v.boolean()),
+    mainActionFound: v.optional(v.boolean()),
+    viewportMeta: v.optional(v.boolean()),
+    hops: v.number(),
+    errorKind: v.optional(scanErrorKind),
+    errorMessage: v.optional(v.string()),
+    checkedAt: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("liveChecks")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.scanId))
+      .order("desc")
+      .take(1);
+    const doc = {
+      scanId: args.scanId,
+      url: args.url,
+      finalUrl: args.finalUrl,
+      https: args.https,
+      reaches: args.reaches,
+      httpStatus: args.httpStatus,
+      nonBlank: args.nonBlank,
+      mainActionFound: args.mainActionFound,
+      viewportMeta: args.viewportMeta,
+      hops: args.hops,
+      errorKind: args.errorKind,
+      errorMessage: args.errorMessage,
+      checkedAt: args.checkedAt,
+    };
+    if (existing[0] !== undefined) {
+      await ctx.db.patch("liveChecks", existing[0]._id, doc);
+    } else {
+      await ctx.db.insert("liveChecks", doc);
+    }
+    return null;
+  },
+});
+
+export const saveShare = internalMutation({
+  args: { shareId: v.string(), scanId: v.id("scans"), now: v.number() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("shareArtifacts")
+      .withIndex("by_shareId", (q) => q.eq("shareId", args.shareId))
+      .order("desc")
+      .take(1);
+    if (existing[0] === undefined) {
+      await ctx.db.insert("shareArtifacts", {
+        shareId: args.shareId,
+        scanId: args.scanId,
+        createdAt: args.now,
+      });
+    }
+    return null;
+  },
+});
+
+export const findShare = internalQuery({
+  args: { shareId: v.string() },
+  returns: v.union(
+    v.object({ shareId: v.string(), scanId: v.id("scans"), createdAt: v.number() }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const matches = await ctx.db
+      .query("shareArtifacts")
+      .withIndex("by_shareId", (q) => q.eq("shareId", args.shareId))
+      .order("desc")
+      .take(1);
+    const hit = matches[0] ?? null;
+    if (hit === null) return null;
+    return { shareId: hit.shareId, scanId: hit.scanId, createdAt: hit.createdAt };
+  },
+});
+
+export const savePassport = internalMutation({
+  args: { passportId: v.string(), scanId: v.id("scans"), now: v.number() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("passportArtifacts")
+      .withIndex("by_passportId", (q) => q.eq("passportId", args.passportId))
+      .order("desc")
+      .take(1);
+    if (existing[0] === undefined) {
+      await ctx.db.insert("passportArtifacts", {
+        passportId: args.passportId,
+        scanId: args.scanId,
+        createdAt: args.now,
+      });
+    }
+    return null;
+  },
+});
+
+export const findPassport = internalQuery({
+  args: { passportId: v.string() },
+  returns: v.union(
+    v.object({ passportId: v.string(), scanId: v.id("scans"), createdAt: v.number() }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const matches = await ctx.db
+      .query("passportArtifacts")
+      .withIndex("by_passportId", (q) => q.eq("passportId", args.passportId))
+      .order("desc")
+      .take(1);
+    if (matches[0] === undefined) return null;
+    return {
+      passportId: matches[0].passportId,
+      scanId: matches[0].scanId,
+      createdAt: matches[0].createdAt,
+    };
   },
 });

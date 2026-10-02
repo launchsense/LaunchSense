@@ -1,4 +1,6 @@
-import { query } from "../_generated/server";
+import { mutation, query } from "../_generated/server";
+import type { QueryCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 
 const scanStatus = v.union(
@@ -45,9 +47,24 @@ const scanFields = {
   skippedFileCount: v.optional(v.number()),
   analyzedAt: v.optional(v.number()),
   coverageNote: v.optional(v.string()),
+  liveUrl: v.optional(v.string()),
+  mainAction: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
+
+export const analyticsKind = v.union(
+  v.literal("scan_started"),
+  v.literal("scan_completed"),
+  v.literal("scan_partial"),
+  v.literal("live_checked"),
+  v.literal("share_created"),
+  v.literal("passport_created"),
+  v.literal("share_viewed"),
+  v.literal("share_cta_clicked"),
+  v.literal("referred_visit"),
+  v.literal("referred_scan_started"),
+);
 
 const findingFields = {
   ruleId: v.string(),
@@ -98,18 +115,40 @@ export const getResults = query({
     scan: v.union(v.object(scanFields), v.null()),
     findings: v.array(v.object(findingFields)),
     analyzed: v.boolean(),
+    live: v.union(
+      v.object({
+        url: v.string(),
+        finalUrl: v.optional(v.string()),
+        https: v.boolean(),
+        reaches: v.boolean(),
+        httpStatus: v.optional(v.number()),
+        nonBlank: v.optional(v.boolean()),
+        mainActionFound: v.optional(v.boolean()),
+        viewportMeta: v.optional(v.boolean()),
+        hops: v.number(),
+        errorMessage: v.optional(v.string()),
+        checkedAt: v.number(),
+      }),
+      v.null(),
+    ),
   }),
   handler: async (ctx, args) => {
     const scan = await ctx.db.get("scans", args.scanId);
-    if (scan === null) return { scan: null, findings: [], analyzed: false };
+    if (scan === null) return { scan: null, findings: [], analyzed: false, live: null };
     if (scan.analyzedAt === undefined) {
-      return { scan, findings: [], analyzed: false };
+      return { scan, findings: [], analyzed: false, live: null };
     }
     const rows = await ctx.db
       .query("findings")
       .withIndex("by_scan", (q) => q.eq("scanId", args.scanId))
       .order("desc")
       .take(500);
+    const liveRows = await ctx.db
+      .query("liveChecks")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.scanId))
+      .order("desc")
+      .take(1);
+    const liveRow = liveRows[0] ?? null;
     return {
       scan,
       findings: rows.map((r) => ({
@@ -123,6 +162,171 @@ export const getResults = query({
         bucket: r.bucket,
       })),
       analyzed: true,
+      live:
+        liveRow === null
+          ? null
+          : {
+              url: liveRow.url,
+              finalUrl: liveRow.finalUrl,
+              https: liveRow.https,
+              reaches: liveRow.reaches,
+              httpStatus: liveRow.httpStatus,
+              nonBlank: liveRow.nonBlank,
+              mainActionFound: liveRow.mainActionFound,
+              viewportMeta: liveRow.viewportMeta,
+              hops: liveRow.hops,
+              errorMessage: liveRow.errorMessage,
+              checkedAt: liveRow.checkedAt,
+            },
     };
+  },
+});
+
+const publicFinding = v.object({
+  ruleId: v.string(),
+  severity,
+  title: v.string(),
+  why: v.string(),
+});
+
+interface PublicScan {
+  owner: string;
+  repo: string;
+  sha: string | undefined;
+  status: "validating" | "fetching" | "completed" | "partial" | "failed";
+  analyzedAt: number | undefined;
+  coverageNote: string | undefined;
+}
+
+interface PublicFindingRow {
+  ruleId: string;
+  severity: "high" | "medium" | "low" | "info";
+  title: string;
+  why: string;
+}
+
+interface PublicBundle {
+  scan: PublicScan | null;
+  findings: PublicFindingRow[];
+}
+
+async function publicScanBundle(
+  ctx: QueryCtx,
+  scanId: Id<"scans">,
+): Promise<PublicBundle | null> {
+  const scan = await ctx.db.get("scans", scanId);
+  if (scan === null || scan.analyzedAt === undefined) return null;
+  const rows = await ctx.db
+    .query("findings")
+    .withIndex("by_scan", (q) => q.eq("scanId", scan._id))
+    .order("desc")
+    .take(500);
+  return {
+    scan: {
+      owner: scan.owner,
+      repo: scan.repo,
+      sha: scan.sha,
+      status: scan.status,
+      analyzedAt: scan.analyzedAt,
+      coverageNote: scan.coverageNote,
+    },
+    findings: rows.map((r) => ({
+      ruleId: r.ruleId,
+      severity: r.severity,
+      title: r.title,
+      why: r.why,
+    })),
+  };
+}
+
+export const getSharePage = query({
+  args: { shareId: v.string() },
+  returns: v.union(
+    v.object({
+      scan: v.object({
+        owner: v.string(),
+        repo: v.string(),
+        sha: v.optional(v.string()),
+        status: scanStatus,
+        analyzedAt: v.optional(v.number()),
+        coverageNote: v.optional(v.string()),
+      }),
+      findings: v.array(publicFinding),
+      createdAt: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const matches = await ctx.db
+      .query("shareArtifacts")
+      .withIndex("by_shareId", (q) => q.eq("shareId", args.shareId))
+      .order("desc")
+      .take(1);
+    if (matches[0] === undefined) return null;
+    const bundle = await publicScanBundle(ctx, matches[0].scanId);
+    if (bundle === null) return null;
+    if (bundle.scan === null) return null;
+    return {
+      scan: bundle.scan,
+      findings: bundle.findings,
+      createdAt: matches[0].createdAt,
+    };
+  },
+});
+
+export const getPassportPage = query({
+  args: { passportId: v.string() },
+  returns: v.union(
+    v.object({
+      scan: v.object({
+        owner: v.string(),
+        repo: v.string(),
+        sha: v.optional(v.string()),
+        status: scanStatus,
+        analyzedAt: v.optional(v.number()),
+        coverageNote: v.optional(v.string()),
+      }),
+      findings: v.array(publicFinding),
+      createdAt: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const matches = await ctx.db
+      .query("passportArtifacts")
+      .withIndex("by_passportId", (q) => q.eq("passportId", args.passportId))
+      .order("desc")
+      .take(1);
+    if (matches[0] === undefined) return null;
+    const bundle = await publicScanBundle(ctx, matches[0].scanId);
+    if (bundle === null) return null;
+    if (bundle.scan === null) return null;
+    return {
+      scan: bundle.scan,
+      findings: bundle.findings,
+      createdAt: matches[0].createdAt,
+    };
+  },
+});
+
+export const logEvent = mutation({
+  args: {
+    kind: analyticsKind,
+    scanId: v.optional(v.id("scans")),
+    shareId: v.optional(v.string()),
+    refShareId: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    await ctx.db.insert("analyticsEvents", {
+      day: new Date(now).toISOString().slice(0, 10),
+      kind: args.kind,
+      scanId: args.scanId,
+      shareId: args.shareId?.slice(0, 64),
+      refShareId: args.refShareId?.slice(0, 64),
+      createdAt: now,
+    });
+    return null;
   },
 });
