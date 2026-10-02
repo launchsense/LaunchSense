@@ -17,6 +17,8 @@ export interface DepsResult {
   installScripts: Array<{ manifest: string; script: string }>;
   duplicates: string[];
   manifests: string[];
+  // Internal lookup across manifests, not part of the reported result.
+  byName: Map<string, DepEntry>;
 }
 
 function isPinnedNpm(version: string): boolean {
@@ -36,7 +38,10 @@ function parsePackageJson(path: string, text: string, out: DepsResult): void {
     ["dependencies", false],
     ["devDependencies", true],
   ];
-  const seen = new Map<string, DepEntry>();
+  // Duplicates are tracked across the whole repo, not per manifest. Scoping
+  // `seen` to one manifest missed the real case (the same package at two
+  // versions in two files) and fired on the harmless one (same package in
+  // dependencies and devDependencies at one version).
   for (const [group, dev] of groups) {
     const values = record[group];
     if (typeof values !== "object" || values === null) continue;
@@ -50,11 +55,13 @@ function parsePackageJson(path: string, text: string, out: DepsResult): void {
         dev,
         manifest: path,
       };
-      const prev = seen.get(name);
-      if (prev !== undefined && (prev.version !== entry.version || prev.dev !== entry.dev)) {
-        out.duplicates.push(`${name} (${prev.version} vs ${entry.version})`);
+      const key = `${entry.ecosystem}:${name}`;
+      const prev = out.byName.get(key);
+      if (prev !== undefined && prev.version !== entry.version) {
+        const signature = `${name} (${[prev.version, entry.version].sort().join(" vs ")})`;
+        if (!out.duplicates.includes(signature)) out.duplicates.push(signature);
       }
-      seen.set(name, entry);
+      if (prev === undefined) out.byName.set(key, entry);
       out.deps.push(entry);
     }
   }
@@ -118,7 +125,13 @@ function parseGoMod(path: string, text: string, out: DepsResult): void {
 export function parseManifests(
   files: Array<{ path: string; content: string }>,
 ): DepsResult {
-  const out: DepsResult = { deps: [], installScripts: [], duplicates: [], manifests: [] };
+  const out: DepsResult = {
+    deps: [],
+    installScripts: [],
+    duplicates: [],
+    manifests: [],
+    byName: new Map(),
+  };
   for (const file of files) {
     const base = file.path.split("/").pop() ?? file.path;
     if (base === "package.json") {

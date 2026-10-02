@@ -15,7 +15,6 @@ import {
   fingerprintFinding,
   fnv1aHex,
   redactedSnippet,
-  sharedRedact,
 } from "../../shared/redaction";
 import { fetchBlobContent } from "../adapters/github";
 import { queryOsvBatch } from "../adapters/osv";
@@ -226,13 +225,10 @@ export const analyzeScan = action({
 
     // Small worker pool. A cold scan is up to 200 files, so fetching them one
     // at a time was the difference between a 15 second scan and a 60 second one.
-    const queue = selected.filter((path) => {
-      if (bytesUsed >= MAX_TOTAL_BYTES) {
-        skipped.push({ path, reason: "byte budget (2MB)" });
-        return false;
-      }
-      return true;
-    });
+    // The byte budget is enforced inside the worker against the shared counter.
+    // Hoisting it into a filter before the loop left bytesUsed at zero and the
+    // cap unenforced.
+    const queue = selected;
     let nextIndex = 0;
     let stopped = false;
 
@@ -243,20 +239,23 @@ export const analyzeScan = action({
         nextIndex += 1;
         const path = queue[index];
         if (path === undefined) return;
-
-        const cached = await ctx.runQuery(internal.scans.store.getCachedContent, {
-          owner,
-          repo,
-          sha,
-          path,
-          sinceMs: Date.now() - CONTENT_CACHE_TTL_MS,
-        });
-        if (cached !== null) {
-          files.push({ path, content: cached.content, size: cached.size });
-          bytesUsed += cached.size;
-          processed += 1;
+        if (bytesUsed >= MAX_TOTAL_BYTES) {
+          skipped.push({ path, reason: "byte budget (2MB)" });
           continue;
         }
+
+        // Metadata cache only. File bodies are always refetched: a cached
+        // redacted body would strip exactly the patterns the secret checks
+        // look for, so repeat scans would report fewer secrets than the first.
+        void (
+          await ctx.runQuery(internal.scans.store.getCachedMeta, {
+            owner,
+            repo,
+            sha,
+            path,
+            sinceMs: Date.now() - CONTENT_CACHE_TTL_MS,
+          })
+        );
 
         const blob = await fetchBlobContent(owner, repo, sha, path);
         processed += 1;
@@ -286,8 +285,8 @@ export const analyzeScan = action({
           skipped.push({ path, reason: "fetch failed" });
           continue;
         }
-        // Cache the redacted text only. Raw file bodies are never persisted, so
-        // a secret that slips past an analyzer pattern still cannot be stored.
+        // Store size and content hash only. No file body is persisted anywhere, so a
+        // secret cannot be stored even if it slips past an analyzer pattern.
         await ctx.runMutation(internal.scans.store.saveContent, {
           owner,
           repo,
@@ -297,7 +296,6 @@ export const analyzeScan = action({
           size: blob.size,
           truncated: false,
           fetchedAt: Date.now(),
-          content: sharedRedact(blob.content),
         });
         files.push({ path, content: blob.content, size: blob.size });
         bytesUsed += blob.size;
@@ -318,6 +316,17 @@ export const analyzeScan = action({
         }
       }
     }
+
+    // The worker pool completes out of order. Analyzers are documented as
+    // deterministic, so restore the sorted queue order before any of them see
+    // the file list. Without this, content hashes and fingerprints changed run
+    // to run on identical input.
+    files.sort((a, b) => {
+      const ia = queue.indexOf(a.path);
+      const ib = queue.indexOf(b.path);
+      return ia - ib;
+    });
+    skipped.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
     const evidence: EvidenceItem[] = [];
     const findings: FindingItem[] = [];
@@ -344,6 +353,18 @@ export const analyzeScan = action({
       .filter((s) => s.reason === "over 100KB")
       .map((s) => s.path);
     const hygiene = analyzeHygiene(blobs, files, skippedLarge);
+    for (const path of hygiene.envUsages) {
+      pushEvidence(evidence, findings, {
+        ruleId: "hygiene.env-usage",
+        path,
+        line: 1,
+        severity: "info",
+        title: "Reads environment variables",
+        why: "This file reads config from the environment at runtime.",
+        bucket: "info",
+        rawSnippet: "environment variable usage",
+      });
+    }
     const langSummary = hygiene.languages.map((l) => `${l.language} ${l.files}`).join(", ");
     evidence.push({
       ruleId: "hygiene.languages",

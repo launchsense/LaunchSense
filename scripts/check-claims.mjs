@@ -22,7 +22,18 @@ import { dirname, join, relative } from "node:path";
 // raw pathname keeps them percent encoded.
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
-const NEGATION = /\b(not|never|no|without|cannot|does\s+not)\b/i;
+// A walk-back only counts when it qualifies the phrase. Matching a negation
+// anywhere on the line let "no issues found" rescue itself, because "no" is
+// part of the phrase.
+function isWalkedBack(line, match) {
+  const before = line.slice(0, match.index).toLowerCase();
+  // The negation has to be close to the claim and not inside it.
+  // Tight window. A negation 25 characters away, separated by a clause, does
+  // not qualify this phrase: "It does not store secrets, and it fully scans
+  // every repository" is still an overclaim about the scanning.
+  const tail = before.slice(Math.max(0, before.length - 15));
+  return /\b(not|never|without|cannot)\b\s*$/.test(tail) || /\b(is|are|does|do)\s+not\s*$/.test(tail);
+}
 
 const POSITIVE_CLAIMS = [
   { phrase: /fully\s+scans?/i, why: "the scan reads at most 200 files and 2MB" },
@@ -36,8 +47,13 @@ const POSITIVE_CLAIMS = [
 ];
 
 const NEGATIVE_CLAIMS = [
-  { phrase: /never\s+stores?\s+raw/i, evidence: /sharedRedact/, why: "redaction at write time" },
-  { phrase: /never\s+(stores|saves|keeps)\s+(raw\s+)?secret/i, evidence: /sharedRedact/, why: "redaction at write time" },
+  {
+    phrase: /never\s+stores?\s+raw\s+(file\s+)?(text|body|contents?)/i,
+    structural: noFileBodyStored,
+    why: "a file body column would exist",
+  },
+  { phrase: /never\s+stores?\s+raw\s+secret/i, structural: noFileBodyStored, why: "a file body column would exist" },
+  { phrase: /never\s+(stores|saves|keeps)\s+(raw\s+)?secret/i, structural: noFileBodyStored, why: "a file body column would exist" },
   { phrase: /never\s+block/i, structural: noRepoWritePath, why: "the code would contain a write path" },
   { phrase: /never\s+changes?\s+(your\s+)?code/i, structural: noRepoWritePath, why: "the code would contain a write path" },
 ];
@@ -55,21 +71,39 @@ function walk(dir, out = []) {
   return out;
 }
 
-const source = walk(join(ROOT, "convex"))
-  .concat(walk(join(ROOT, "shared")))
+// Definitions are excluded. `shared/redaction.ts` defines sharedRedact, so
+// including it let the guard pass after the only real call site was deleted.
+const sourceFiles = walk(join(ROOT, "convex")).concat(walk(join(ROOT, "shared")));
+const source = sourceFiles
+  .filter((f) => !/(^|\/)(redaction|projectSignals)\.ts$/.test(f))
   .map((f) => readFileSync(f, "utf8"))
   .join("\n");
 
 // "never changes your code" and "never blocks publishing" are the same claim:
 // there is no write path to a repository. Proved structurally by finding no
 // write verb aimed at the GitHub API, rather than by matching a comment.
+// "never stores raw file text" is proved structurally: the fileContents table
+// must not have a body field at all, and the write mutation must not take one.
+function noFileBodyStored() {
+  const schema = readFileSync(join(ROOT, "convex", "schema.ts"), "utf8");
+  const block = schema.match(/fileContents: defineTable\([\s\S]*?\n  \}\)/);
+  if (block === null) return false;
+  if (/\bcontent:\s*v\./.test(block[0])) return false;
+  const store = readFileSync(join(ROOT, "convex", "scans", "store.ts"), "utf8");
+  const mutation = store.match(/export const saveContent[\s\S]*?returns:/);
+  if (mutation === null) return false;
+  if (/\bcontent:\s*v\./.test(mutation[0])) return false;
+  return true;
+}
+
 function noRepoWritePath() {
-  const verbs = /\b(POST|PUT|PATCH|DELETE)\b/;
-  for (const file of walk(join(ROOT, "convex")).concat(walk(join(ROOT, "shared")))) {
+  const verbs = /method:\s*["'`](POST|PUT|PATCH|DELETE)["'`]/i;
+  for (const file of sourceFiles) {
     const text = readFileSync(file, "utf8");
-    if (verbs.test(text) && /api\.github\.com/.test(text) && /contents\/|repos\/.*\/(issues|pulls)\b/.test(text)) {
-      return false;
-    }
+    if (!verbs.test(text)) continue;
+    // A write verb anywhere in a file that also talks to the GitHub API counts,
+    // whatever the endpoint path is.
+    if (/api\.github\.com|github\.com\/repos/.test(text)) return false;
   }
   return true;
 }
@@ -93,13 +127,17 @@ for (const file of copyFiles()) {
   if (rel === "scripts/check-claims.mjs") continue;
   readFileSync(file, "utf8")
     .split("\n")
-    .forEach((line, i) => {
+    .forEach((raw, i) => {
+      // Inline code is a quoted example, not a claim about the product. The
+      // self-scan log names banned phrases while describing them.
+      const line = raw.replace(/`[^`]*`/g, "``");
       for (const claim of POSITIVE_CLAIMS) {
-        if (!claim.phrase.test(line)) continue;
+        const match = line.match(claim.phrase);
+        if (match === null) continue;
         checked++;
         // "This is not a certification" walks the claim back, so it is honest.
-        if (NEGATION.test(line)) continue;
-        failures.push({ rel, line: i + 1, text: line.trim(), why: claim.why });
+        if (isWalkedBack(line, match)) continue;
+        failures.push({ rel, line: i + 1, text: raw.trim(), why: claim.why });
       }
       for (const claim of NEGATIVE_CLAIMS) {
         if (!claim.phrase.test(line)) continue;
@@ -109,7 +147,7 @@ for (const file of copyFiles()) {
         } else if (claim.evidence.test(source)) {
           continue;
         }
-        failures.push({ rel, line: i + 1, text: line.trim(), why: `${claim.why} (no code support)` });
+        failures.push({ rel, line: i + 1, text: raw.trim(), why: `${claim.why} (no code support)` });
       }
     });
 }

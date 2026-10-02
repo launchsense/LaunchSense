@@ -2,6 +2,12 @@ import { mutation, query } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import {
+  hasCIIn,
+  hasLicenseIn,
+  hasReadmeIn,
+  hasTestsIn,
+} from "../../shared/analyzers/projectSignals";
 
 const scanStatus = v.union(
   v.literal("validating"),
@@ -360,29 +366,28 @@ export const getAnalysisFacts = query({
       .take(500);
     const analyzedPaths = contents.map((c) => c.path);
     const base = treePaths.length > 0 ? treePaths : analyzedPaths;
-    const lower = base.map((p) => p.toLowerCase());
-    const hasReadme = lower.some((p) => p === "readme.md" || p.startsWith("readme."));
-    // Shared rule with shared/analyzers/hygiene.ts so a repo can never be told
-    // both "no tests" and "you have tests".
-    const hasTests = lower.some(
-      (p) =>
-        p.includes("/__tests__/") ||
-        p.includes(".test.") ||
-        p.includes(".spec.") ||
-        /(^|\/)(test|tests|spec)\//.test(p) ||
-        /^test_.*\.py$/.test(p),
-    );
-    const hasCI = lower.some((p) => p.startsWith(".github/workflows/"));
-    const hasLicense = lower.some((p) => p === "license" || p.startsWith("license.") || p.startsWith("licence"));
+    // One shared rule, imported. A repo can never be told both "no tests" and
+    // "you have tests".
+    const hasReadme = hasReadmeIn(base);
+    const hasTests = hasTestsIn(base);
+    const hasCI = hasCIIn(base);
+    const hasLicense = hasLicenseIn(base);
     const entryPoints = base.filter((p) =>
       /^(src\/)?(main|app|index)\.(tsx?|jsx?|js|html)$|^convex\/schema\.ts$|^package\.json$|^readme\.md$/i.test(p),
     );
     const agentFiles = base.filter((p) =>
       /(^|\/)(agents\.md|claude\.md|cursor\.md)$|^\.(agents|codex|claude)\//.test(p.toLowerCase()),
     );
-    const envUsages = contents
-      .filter((c) => /process\.env|import\.meta\.env|\bVITE_/.test(c.content))
-      .map((c) => c.path);
+    // File bodies are not stored, so env usage comes from the analyzer's own
+    // recorded evidence rather than from re-reading contents here.
+    const envEvidence = await ctx.db
+      .query("evidenceItems")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.scanId))
+      .order("desc")
+      .take(500);
+    const envUsages = envEvidence
+      .filter((e) => e.ruleId === "hygiene.env-usage")
+      .map((e) => e.path);
     return {
       treePaths: base.slice(0, 2000),
       analyzedPaths,

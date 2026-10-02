@@ -117,8 +117,10 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
         continue;
       }
       // A debugger statement halts execution for whoever opens the app, so it
-      // stays at medium. Console noise is low and capped per file below.
-      if (line.length <= 500 && /\bdebugger\b/.test(line)) {
+      // stays at medium. It must be a real statement, not the bare word in a
+      // comment, string, or rule definition, otherwise the checker flags its
+      // own documentation.
+      if (line.length <= 500 && /^[\s;{}]*debugger[\s;]*$/i.test(line.trim())) {
         pushCapped(out, {
           ruleId: "secret.debugger-statement",
           path: file.path,
