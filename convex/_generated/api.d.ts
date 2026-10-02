@@ -13,6 +13,7 @@ import type * as adapters_github from "../adapters/github.js";
 import type * as adapters_live from "../adapters/live.js";
 import type * as adapters_osv from "../adapters/osv.js";
 import type * as adapters_share from "../adapters/share.js";
+import type * as adapters_tarball from "../adapters/tarball.js";
 import type * as auth from "../auth.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   "adapters/live": typeof adapters_live;
   "adapters/osv": typeof adapters_osv;
   "adapters/share": typeof adapters_share;
+  "adapters/tarball": typeof adapters_tarball;
   auth: typeof auth;
   health: typeof health;
   http: typeof http;
