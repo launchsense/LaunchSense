@@ -20,6 +20,7 @@ import type * as scans_analyze from "../scans/analyze.js";
 import type * as scans_internal from "../scans/internal.js";
 import type * as scans_livecheck from "../scans/livecheck.js";
 import type * as scans_queries from "../scans/queries.js";
+import type * as scans_rescan from "../scans/rescan.js";
 import type * as scans_sharing from "../scans/sharing.js";
 import type * as scans_store from "../scans/store.js";
 
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   "scans/internal": typeof scans_internal;
   "scans/livecheck": typeof scans_livecheck;
   "scans/queries": typeof scans_queries;
+  "scans/rescan": typeof scans_rescan;
   "scans/sharing": typeof scans_sharing;
   "scans/store": typeof scans_store;
 }>;
