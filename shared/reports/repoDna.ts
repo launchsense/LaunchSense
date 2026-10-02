@@ -29,8 +29,13 @@ export interface ReadinessBand {
   band: "ready" | "nearly" | "not-yet" | "unknown";
   label: string;
   reasons: string[];
-  coverage: number;
-  coveredFindings: number;
+  // Share of the repo we actually read. A real measure of coverage.
+  readCoverage: number;
+  filesRead: number;
+  filesInTree: number;
+  // Share of findings that are actionable. A measure of the mix, not coverage.
+  actionableShare: number;
+  actionableFindings: number;
   totalFindings: number;
 }
 
@@ -121,9 +126,18 @@ export function buildReadiness(input: ReadinessInput): ReadinessBand {
   const high = actionable.filter((f) => f.severity === "high").length;
   const medium = actionable.filter((f) => f.severity === "medium").length;
   const total = input.findings.length;
-  const covered = actionable.length;
-  const coverage = total === 0 ? 1 : covered / total;
+  // Read coverage is what we actually looked at, not a restatement of severity.
+  const filesInTree = Math.max(1, input.dna.totalPaths);
+  const filesRead = Math.min(input.dna.analyzedFiles, filesInTree);
+  const readCoverage = filesRead / filesInTree;
+  const actionableShare = total === 0 ? 1 : actionable.length / total;
   const reasons: string[] = [];
+
+  if (readCoverage < 0.5) {
+    reasons.push(
+      `Only ${Math.round(readCoverage * 100)}% of the repo was read, so most of it is unchecked.`,
+    );
+  }
 
   if (high > 0) reasons.push(`${high} high severity item(s) must be fixed first.`);
   if (medium > 0) reasons.push(`${medium} medium severity item(s) need review.`);
@@ -149,5 +163,15 @@ export function buildReadiness(input: ReadinessInput): ReadinessBand {
           ? "Not ready to share yet"
           : "Too much unchecked to say";
 
-  return { band, label, reasons, coverage, coveredFindings: covered, totalFindings: total };
+  return {
+    band,
+    label,
+    reasons,
+    readCoverage,
+    filesRead,
+    filesInTree,
+    actionableShare,
+    actionableFindings: actionable.length,
+    totalFindings: total,
+  };
 }

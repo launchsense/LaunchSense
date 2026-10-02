@@ -32,6 +32,17 @@ function pushCapped(
   if (out.length < MAX_MATCHES_PER_FILE) out.push(match);
 }
 
+// Noisy rules report once per file. Forty console calls in one file is one
+// line item for the builder, not forty.
+function pushOncePerFile(
+  out: RawSecretMatch[],
+  match: RawSecretMatch,
+): void {
+  const already = out.some((m) => m.ruleId === match.ruleId && m.path === match.path);
+  if (already) return;
+  pushCapped(out, match);
+}
+
 export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
   const out: RawSecretMatch[] = [];
 
@@ -105,11 +116,19 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
         });
         continue;
       }
-      if (
-        line.length <= 500 &&
-        /(\bdebugger\b|console\.(log|debug|trace)\s*\()/.test(line)
-      ) {
+      // A debugger statement halts execution for whoever opens the app, so it
+      // stays at medium. Console noise is low and capped per file below.
+      if (line.length <= 500 && /\bdebugger\b/.test(line)) {
         pushCapped(out, {
+          ruleId: "secret.debugger-statement",
+          path: file.path,
+          line: lineNo,
+          snippet: line.trim(),
+        });
+        continue;
+      }
+      if (line.length <= 500 && /console\.(log|debug|trace)\s*\(/.test(line)) {
+        pushOncePerFile(out, {
           ruleId: "secret.debug-leftover",
           path: file.path,
           line: lineNo,

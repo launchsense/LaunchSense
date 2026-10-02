@@ -98,9 +98,13 @@ const SECRET_TEXT: Record<string, { title: string; why: string }> = {
     title: "Eval runs strings as code",
     why: "Eval turns small injection flaws into full control of the page or server.",
   },
+  "secret.debugger-statement": {
+    title: "Debugger statement left in code",
+    why: "A debugger statement freezes the app for anyone who opens it.",
+  },
   "secret.debug-leftover": {
-    title: "Debug leftover in source",
-    why: "Debug output leaks internals and looks unfinished to anyone reviewing.",
+    title: "Debug output left in source",
+    why: "Console noise leaks internals and looks unfinished to anyone reviewing.",
   },
   "secret.sql-pattern": {
     title: "Possible string-built database query",

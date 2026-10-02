@@ -11,6 +11,13 @@ Two useful moments:
 
 Private repos are out of scope for now. Local tools such as MCP can read them, but that is not built here.
 
+## The first minute
+
+1. Paste a repo link and press Run scan. Nothing else is needed. There is a "Try this repo" button if you have no repo of your own to hand.
+2. To check your live app too, press "Also check my live app" and add the URL.
+3. Copy the top 3 prompt into your coding helper.
+4. Fix what it says, push a commit, then press Re-scan. That comparison is the part worth showing: fixed, still broken, new, back again, unknown.
+
 ## The steps
 
 1. You paste your repo link plus your live app URL.

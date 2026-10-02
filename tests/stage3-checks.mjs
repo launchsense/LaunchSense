@@ -10,6 +10,8 @@ import { scanSecrets } from "../shared/analyzers/secrets.ts";
 import { parseManifests } from "../shared/analyzers/deps.ts";
 import { analyzeLicenses } from "../shared/analyzers/licenses.ts";
 import { buildFixPlan } from "../shared/reports/fixPlan.ts";
+import { severityFor } from "../shared/policies/severity.ts";
+import { buildMissions } from "../shared/reports/missions.ts";
 
 // Synthetic canaries only. They are built by concatenation so these exact
 // strings never appear as literals in source (avoids tripping secret
@@ -73,7 +75,55 @@ describe("scanSecrets", () => {
     assert.ok(!rules.some((r) => r.endsWith(".env.example")));
     assert.ok(rules.includes("secret.client-exposure:public/app.js"));
     assert.ok(rules.includes("secret.eval-use:src/a.ts"));
+    assert.ok(rules.includes("secret.debugger-statement:src/a.ts"));
     assert.ok(rules.includes("secret.debug-leftover:src/a.ts"));
+  });
+
+  it("reports console noise once per file, not once per line", () => {
+    const noisy = Array.from({ length: 40 }, (_, i) => `console.log(${i});`).join("\n");
+    const matches = scanSecrets([{ path: "src/noisy.ts", content: noisy }]);
+    assert.equal(matches.filter((m) => m.ruleId === "secret.debug-leftover").length, 1);
+    const twoFiles = scanSecrets([
+      { path: "src/a.ts", content: "console.log(1)" },
+      { path: "src/b.ts", content: "console.log(2)" },
+    ]);
+    assert.equal(twoFiles.filter((m) => m.ruleId === "secret.debug-leftover").length, 2);
+  });
+
+  it("keeps a debugger statement separate from console noise", () => {
+    const matches = scanSecrets([
+      { path: "src/a.ts", content: "debugger;\nconsole.log(1);" },
+    ]);
+    const byRule = new Map(matches.map((m) => [m.ruleId, m.line]));
+    assert.equal(byRule.get("secret.debugger-statement"), 1);
+    assert.equal(byRule.get("secret.debug-leftover"), 2);
+    assert.equal(severityFor("secret.debugger-statement"), "medium");
+    assert.equal(severityFor("secret.debug-leftover"), "low");
+  });
+});
+
+describe("judge-ready gate", () => {
+  const base = {
+    scanRan: true,
+    analyzed: true,
+    hasReadme: true,
+    hasTests: true,
+    rescanRan: true,
+    passportIssued: true,
+    shareCreated: true,
+    shareViewed: true,
+    liveOk: true,
+  };
+
+  it("lets a repo with console noise but no high findings reach judge-ready", () => {
+    const result = buildMissions({ ...base, highSecrets: 0, highOpen: 0 });
+    assert.equal(result.missions.find((m) => m.id === "judge-ready")?.done, true);
+    assert.equal(result.progress.done, result.progress.total);
+  });
+
+  it("still blocks on a single high finding", () => {
+    const result = buildMissions({ ...base, highSecrets: 1, highOpen: 1 });
+    assert.equal(result.missions.find((m) => m.id === "judge-ready")?.done, false);
   });
 });
 

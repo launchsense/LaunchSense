@@ -24,6 +24,12 @@ What this release does not do. Everything here is stated so nothing looks finish
 - Standards mappings are an OWASP ASVS 5.0.0 subset with version, coverage, and caveat on every line. No mapping claims full coverage it cannot prove.
 - Repo DNA describes shape and structure, nothing about merit.
 
+## Signals, not scores
+
+- Read coverage is the share of paths we actually opened. It is not a quality score.
+- Actionable share is the share of findings needing action. It describes the mix of findings, not how much was checked.
+- Judge Readiness is a band with plain reasons attached. Not a certification and not a grade.
+
 ## AI explanations
 
 - Explanations are written by an AI provider when a key is configured. No key is configured in this release, so plain deterministic wording is shown instead.

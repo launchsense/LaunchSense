@@ -6,7 +6,7 @@ export interface MissionFacts {
   scanRan: boolean;
   analyzed: boolean;
   highSecrets: number;
-  highOrMediumOpen: number;
+  highOpen: number;
   hasReadme: boolean;
   hasTests: boolean;
   rescanRan: boolean;
@@ -54,8 +54,10 @@ const SEQUENTIAL: Array<{ id: string; title: string; plain: string; done: (f: Mi
   {
     id: "judge-ready",
     title: "Make the Demo Judge-Ready",
-    plain: "Clear the medium findings and confirm the live site loads.",
-    done: (f) => f.analyzed && f.highOrMediumOpen === 0 && f.liveOk !== false,
+    // Gate on high findings only. Console noise is low severity and would
+    // make this unreachable for a normal AI-built repo.
+    plain: "Clear every high severity finding and confirm the live site loads.",
+    done: (f) => f.analyzed && f.highOpen === 0 && f.liveOk !== false,
   },
   {
     id: "rescan-compare",
@@ -122,7 +124,7 @@ export function buildMissions(facts: MissionFacts): {
       id: "clean-compare",
       title: "Clean Compare",
       plain: "Your rescan showed nothing still broken.",
-      earned: facts.rescanRan && facts.highOrMediumOpen === 0,
+      earned: facts.rescanRan && facts.highOpen === 0,
     },
     {
       id: "shared-safely",

@@ -134,6 +134,39 @@ describe("buildStandards", () => {
 });
 
 describe("buildReadiness", () => {
+  it("reports real read coverage, not a restatement of severity", () => {
+    const full = buildRepoDna(
+      ["a.ts", "b.ts"],
+      ["a.ts", "b.ts"],
+      { hasReadme: true, hasTests: true, hasCI: true, hasLicense: true, entryPoints: ["a.ts"], agentFiles: [], envUsages: [] },
+    );
+    const read = buildReadiness({
+      dna: full,
+      findings: [{ severity: "info", ruleId: "hygiene.no-ci", bucket: "info" }],
+      liveReaches: true,
+      partial: false,
+    });
+    assert.equal(read.readCoverage, 1);
+    assert.equal(read.filesRead, 2);
+    assert.equal(read.filesInTree, 2);
+    // Every finding info means nothing is actionable, and that is a mix measure.
+    assert.equal(read.actionableShare, 0);
+
+    const partialDna = buildRepoDna(
+      ["a.ts", "b.ts", "c.ts", "d.ts"],
+      ["a.ts"],
+      { hasReadme: true, hasTests: true, hasCI: true, hasLicense: true, entryPoints: ["a.ts"], agentFiles: [], envUsages: [] },
+    );
+    const partialRead = buildReadiness({
+      dna: partialDna,
+      findings: [{ severity: "info", ruleId: "hygiene.no-ci", bucket: "info" }],
+      liveReaches: true,
+      partial: true,
+    });
+    assert.equal(partialRead.readCoverage, 0.25);
+    assert.ok(partialRead.reasons.some((r) => r.includes("was read")));
+  });
+
   it("is not-yet with a high finding and unknown on a partial clean scan", () => {
     const dna = buildRepoDna(
       ["a.ts", "b.ts"],
@@ -163,7 +196,7 @@ describe("buildMissions", () => {
       scanRan: true,
       analyzed: true,
       highSecrets: 1,
-      highOrMediumOpen: 2,
+      highOpen: 2,
       hasReadme: false,
       hasTests: false,
       rescanRan: false,
@@ -180,7 +213,7 @@ describe("buildMissions", () => {
     const all = buildMissions({
       ...facts,
       highSecrets: 0,
-      highOrMediumOpen: 0,
+      highOpen: 0,
       hasReadme: true,
       hasTests: true,
       rescanRan: true,

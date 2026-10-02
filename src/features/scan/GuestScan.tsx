@@ -8,6 +8,10 @@ import ScanReport from "../report/ScanReport";
 import CompareView from "../report/CompareView";
 import Stage5Panels from "../report/Stage5Panels";
 
+// This project's own public repo, so a first-time visitor can see a real
+// report without needing a repo of their own to hand.
+const SELF_REPO_URL = "https://github.com/withkeshav/LaunchSense";
+
 function shortSha(sha: string): string {
   return sha.slice(0, 7);
 }
@@ -54,6 +58,7 @@ export default function GuestScan() {
   // Set when the builder confirms their own share link opened. There is no
   // server round trip for someone else's view, so we ask instead of guessing.
   const [shareViewedAt, setShareViewedAt] = useState<number | null>(null);
+  const [showLive, setShowLive] = useState(false);
   const scanState = useQuery(
     api.scans.queries.getScan,
     scanId === null ? "skip" : { scanId },
@@ -234,28 +239,46 @@ export default function GuestScan() {
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
         />
-        <label htmlFor="guest-live-url">Live app URL, optional but recommended</label>
-        <input
-          id="guest-live-url"
-          name="liveUrl"
-          type="url"
-          inputMode="url"
-          autoComplete="off"
-          placeholder="https://your-demo-site.com"
-          value={liveUrl}
-          onChange={(e) => setLiveUrl(e.target.value)}
-        />
-        <label htmlFor="guest-main-action">Main action in one sentence, optional</label>
-        <input
-          id="guest-main-action"
-          name="mainAction"
-          type="text"
-          autoComplete="off"
-          maxLength={140}
-          placeholder="Visitors sign up for the waitlist"
-          value={mainAction}
-          onChange={(e) => setMainAction(e.target.value)}
-        />
+        <p>
+          <button type="button" onClick={() => setRepoUrl(SELF_REPO_URL)}>
+            Try this repo
+          </button>
+        </p>
+        <p>
+          <button
+            type="button"
+            aria-expanded={showLive}
+            onClick={() => setShowLive((v) => !v)}
+          >
+            {showLive ? "Hide the live app check" : "Also check my live app"}
+          </button>
+        </p>
+        {showLive && (
+          <>
+            <label htmlFor="guest-live-url">Live app URL, optional but recommended</label>
+            <input
+              id="guest-live-url"
+              name="liveUrl"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              placeholder="https://your-demo-site.com"
+              value={liveUrl}
+              onChange={(e) => setLiveUrl(e.target.value)}
+            />
+            <label htmlFor="guest-main-action">Main action in one sentence, optional</label>
+            <input
+              id="guest-main-action"
+              name="mainAction"
+              type="text"
+              autoComplete="off"
+              maxLength={140}
+              placeholder="Visitors sign up for the waitlist"
+              value={mainAction}
+              onChange={(e) => setMainAction(e.target.value)}
+            />
+          </>
+        )}
         <button type="submit" disabled={phase !== "idle"}>
           {phase === "fetching"
             ? "Fetching…"
@@ -329,6 +352,13 @@ export default function GuestScan() {
               <button type="button" disabled={phase !== "idle"} onClick={() => void onExplain()}>
                 Explain in plain words
               </button>
+              {rescanNote.length === 0 && comparePair === null && (
+                <p>
+                  Re-scanning is the part that matters. After you fix things and
+                  push a commit, come back and press it: every finding is sorted
+                  into fixed, still broken, new, back again, or unknown.
+                </p>
+              )}
               {rescanNote.length > 0 && <p role="status">{rescanNote}</p>}
               {explainNote.length > 0 && <p role="status">{explainNote}</p>}
             </div>

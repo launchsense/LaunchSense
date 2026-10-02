@@ -18,6 +18,8 @@ One prompt for the top 3 comes first, with a copy button. Those three are ranked
 
 High and medium findings need review before sharing. Low and info findings are advisory only.
 
+Debug output is low. A leftover `debugger` statement is medium, because it freezes the app for anyone who opens it. Only high findings block the judge-ready milestone.
+
 ## The Not checked box
 
 It is always visible. It lists what was skipped and why, so skipped work never looks finished.
@@ -28,7 +30,7 @@ The Explain in plain words button rewrites each finding in one or two short sent
 
 ## The four tabs
 
-**Repo DNA.** The shape of your project: folders, languages, entry points, what exists and what does not. Judge Readiness sits here as a signal from the files we could read, with evidence coverage shown as a percentage. It is not a certification.
+**Repo DNA.** The shape of your project: folders, languages, entry points, what exists and what does not. Judge Readiness sits here as a signal from the files we could read. Two numbers are shown: read coverage, which is how much of the repo was actually opened, and actionable share, which is how many findings need action. It is not a certification.
 
 **Standards.** One honest line per OWASP ASVS 5.0.0 requirement we can partially map. Every line carries coverage, status, evidence count, and a caveat. Nothing claims full coverage we cannot prove.
 

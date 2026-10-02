@@ -89,14 +89,14 @@ export default function Stage5Panels(props: {
     const highSecrets = props.findings.filter(
       (f) => f.severity === "high" && f.ruleId.startsWith("secret."),
     ).length;
-    const highOrMediumOpen = props.findings.filter(
-      (f) => (f.severity === "high" || f.severity === "medium") && f.bucket === "actionable",
+    const highOpen = props.findings.filter(
+      (f) => f.severity === "high" && f.bucket === "actionable",
     ).length;
     return buildMissions({
       scanRan: true,
       analyzed: true,
       highSecrets,
-      highOrMediumOpen,
+      highOpen,
       hasReadme: dna.hasReadme,
       hasTests: dna.hasTests,
       rescanRan: props.rescanRan,

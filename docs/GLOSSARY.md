@@ -23,8 +23,9 @@ Each word in one plain line.
 ## Signals
 
 - Repo DNA: the shape of the project. Folders, languages, entry points, what exists and what does not.
-- Judge Readiness: a signal from the files we could read, with evidence coverage shown. Not a certification.
-- Evidence coverage: the share of findings that came from files actually read. Low coverage means less was checked.
+- Judge Readiness: a signal from the files we could read, with read coverage shown. Not a certification.
+- Read coverage: the share of the repo we actually opened and read. Low read coverage means most of the repo is unchecked.
+- Actionable share: the share of findings that need action. It describes the mix of findings, not how much was checked.
 - Coverage: how much of the repo we actually looked at.
 - Policy: the rule that decides if a finding needs review before sharing.
 - Standards mapping: one honest line linking a finding to an OWASP ASVS 5.0.0 requirement, with coverage and a caveat.

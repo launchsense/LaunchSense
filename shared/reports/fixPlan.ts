@@ -88,10 +88,18 @@ const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[
       "Remove the call and re-test the surrounding feature.",
     ],
   },
+  "secret.debugger-statement": {
+    title: "Remove debugger statements",
+    why: "A debugger statement freezes the app for anyone who opens it.",
+    checklist: [
+      "Delete every debugger statement.",
+      "Open the app once after removing them to confirm nothing hangs.",
+    ],
+  },
   "secret.debug-leftover": {
-    title: "Remove debug leftovers",
-    why: "Debug output leaks internals and clutters the console for judges.",
-    checklist: ["Delete debugger statements and console noise.", "Keep one intentional error log per failure path."],
+    title: "Clean up debug output",
+    why: "Console noise leaks internals and looks unfinished to anyone reviewing.",
+    checklist: ["Remove console noise, keeping one intentional error log per failure path."],
   },
   "secret.sql-pattern": {
     title: "Check database queries for injection",
@@ -139,6 +147,7 @@ const STEP_ORDER = [
   "secret.credential-pattern",
   "secret.client-exposure",
   "secret.eval-use",
+  "secret.debugger-statement",
   "secret.debug-leftover",
   "secret.sql-pattern",
   "deps.vulnerability",

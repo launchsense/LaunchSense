@@ -66,8 +66,12 @@ export function DnaPanel(props: { dna: RepoDna; readiness: ReadinessBand }) {
           ))}
         </ul>
         <p>
-          Evidence coverage: {Math.round(props.readiness.coverage * 100)}% ({props.readiness.coveredFindings} of{" "}
-          {props.readiness.totalFindings} findings are actionable).
+          Read coverage: {Math.round(props.readiness.readCoverage * 100)}% ({props.readiness.filesRead} of{" "}
+          {props.readiness.filesInTree} paths were read).
+        </p>
+        <p>
+          Actionable share: {Math.round(props.readiness.actionableShare * 100)}% (
+          {props.readiness.actionableFindings} of {props.readiness.totalFindings} findings need action).
         </p>
         <p>
           This is a signal from the files we could read. It is not a certification and it does not
