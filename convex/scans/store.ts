@@ -47,6 +47,7 @@ const fullScanDoc = v.object({
   coverageNote: v.optional(v.string()),
   liveUrl: v.optional(v.string()),
   mainAction: v.optional(v.string()),
+  rescanOf: v.optional(v.id("scans")),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -467,5 +468,168 @@ export const findPassport = internalQuery({
       scanId: matches[0].scanId,
       createdAt: matches[0].createdAt,
     };
+  },
+});
+
+const transitionState = v.union(
+  v.literal("fixed"),
+  v.literal("still_broken"),
+  v.literal("new"),
+  v.literal("regressed"),
+  v.literal("unknown"),
+);
+
+const changeCause = v.union(
+  v.literal("code_change"),
+  v.literal("advisory_update"),
+  v.literal("analyzer_update"),
+);
+
+export const createRescan = internalMutation({
+  args: {
+    owner: v.string(),
+    repo: v.string(),
+    repoUrl: v.string(),
+    rescanOf: v.id("scans"),
+    now: v.number(),
+  },
+  returns: v.id("scans"),
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("scans", {
+      owner: args.owner,
+      repo: args.repo,
+      repoUrl: args.repoUrl,
+      status: "validating",
+      rescanOf: args.rescanOf,
+      createdAt: args.now,
+      updatedAt: args.now,
+    });
+  },
+});
+
+export const saveTransitions = internalMutation({
+  args: {
+    fromScanId: v.id("scans"),
+    toScanId: v.id("scans"),
+    now: v.number(),
+    transitions: v.array(
+      v.object({
+        oldFingerprint: v.optional(v.string()),
+        newFingerprint: v.optional(v.string()),
+        ruleId: v.string(),
+        state: transitionState,
+        cause: v.optional(changeCause),
+      }),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("findingTransitions")
+      .withIndex("by_pair", (q) => q.eq("fromScanId", args.fromScanId).eq("toScanId", args.toScanId))
+      .order("desc")
+      .take(1000);
+    for (const row of existing) await ctx.db.delete("findingTransitions", row._id);
+    for (const t of args.transitions) {
+      await ctx.db.insert("findingTransitions", {
+        fromScanId: args.fromScanId,
+        toScanId: args.toScanId,
+        oldFingerprint: t.oldFingerprint,
+        newFingerprint: t.newFingerprint,
+        ruleId: t.ruleId,
+        state: t.state,
+        cause: t.cause,
+        createdAt: args.now,
+      });
+    }
+    return null;
+  },
+});
+
+export const listTransitions = internalQuery({
+  args: { fromScanId: v.id("scans"), toScanId: v.id("scans") },
+  returns: v.array(
+    v.object({
+      oldFingerprint: v.optional(v.string()),
+      newFingerprint: v.optional(v.string()),
+      ruleId: v.string(),
+      state: transitionState,
+      cause: v.optional(changeCause),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("findingTransitions")
+      .withIndex("by_pair", (q) => q.eq("fromScanId", args.fromScanId).eq("toScanId", args.toScanId))
+      .order("desc")
+      .take(1000);
+    return rows.map((r) => ({
+      oldFingerprint: r.oldFingerprint,
+      newFingerprint: r.newFingerprint,
+      ruleId: r.ruleId,
+      state: r.state,
+      cause: r.cause,
+    }));
+  },
+});
+
+export const saveDecision = internalMutation({
+  args: {
+    scanId: v.id("scans"),
+    fingerprint: v.string(),
+    decision: v.union(v.literal("accepted_risk")),
+    now: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("userDecisions")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.scanId))
+      .order("desc")
+      .take(200);
+    for (const row of existing) {
+      if (row.fingerprint === args.fingerprint) {
+        await ctx.db.patch("userDecisions", row._id, {
+          decision: args.decision,
+          createdAt: args.now,
+        });
+        return null;
+      }
+    }
+    await ctx.db.insert("userDecisions", {
+      scanId: args.scanId,
+      fingerprint: args.fingerprint,
+      decision: args.decision,
+      createdAt: args.now,
+    });
+    return null;
+  },
+});
+
+export const listDecisions = internalQuery({
+  args: { scanId: v.id("scans") },
+  returns: v.array(v.object({ fingerprint: v.string() })),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("userDecisions")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.scanId))
+      .order("desc")
+      .take(200);
+    return rows.map((r) => ({ fingerprint: r.fingerprint }));
+  },
+});
+
+export const listScanContents = internalQuery({
+  args: { owner: v.string(), repo: v.string(), sha: v.string() },
+  returns: v.array(v.object({ path: v.string(), contentSha: v.string() })),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("fileContents")
+      .withIndex("by_repo_sha_path", (q) =>
+        q.eq("owner", args.owner).eq("repo", args.repo).eq("sha", args.sha),
+      )
+      .order("desc")
+      .take(500);
+    return rows.map((r) => ({ path: r.path, contentSha: r.contentSha }));
   },
 });

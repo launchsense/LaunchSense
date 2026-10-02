@@ -5,6 +5,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { buildFixPlan } from "../../../shared/reports/fixPlan";
 import type { PlanFinding } from "../../../shared/reports/fixPlan";
 import ScanReport from "../report/ScanReport";
+import CompareView from "../report/CompareView";
 
 function shortSha(sha: string): string {
   return sha.slice(0, 7);
@@ -24,6 +25,8 @@ export default function GuestScan() {
   const runScan = useAction(api.scans.actions.runScan);
   const analyzeScan = useAction(api.scans.analyze.analyzeScan);
   const checkLive = useAction(api.scans.livecheck.checkLive);
+  const rescanScan = useAction(api.scans.rescan.rescanScan);
+  const compareScans = useAction(api.scans.rescan.compareScans);
   const createShare = useAction(api.scans.sharing.createShare);
   const createPassport = useAction(api.scans.sharing.createPassport);
   const logEvent = useMutation(api.scans.queries.logEvent);
@@ -42,6 +45,8 @@ export default function GuestScan() {
   const [shareId, setShareId] = useState<string | null>(null);
   const [passportId, setPassportId] = useState<string | null>(null);
   const [shareError, setShareError] = useState("");
+  const [comparePair, setComparePair] = useState<{ from: Id<"scans">; to: Id<"scans"> } | null>(null);
+  const [rescanNote, setRescanNote] = useState("");
   const scanState = useQuery(
     api.scans.queries.getScan,
     scanId === null ? "skip" : { scanId },
@@ -49,6 +54,11 @@ export default function GuestScan() {
   const resultsState = useQuery(
     api.scans.queries.getResults,
     scanId === null ? "skip" : { scanId },
+  );
+
+  const compareState = useQuery(
+    api.scans.queries.getCompare,
+    comparePair === null ? "skip" : { fromScanId: comparePair.from, toScanId: comparePair.to },
   );
 
   async function onSubmit(event: React.FormEvent) {
@@ -109,6 +119,31 @@ export default function GuestScan() {
     }
   }
 
+  async function onRescan() {
+    if (scanId === null || phase !== "idle") return;
+    setSubmitError("");
+    setRescanNote("");
+    setPhase("fetching");
+    try {
+      const base = scanId;
+      const rescan = await rescanScan({ scanId: base });
+      if (rescan.sameSha) {
+        setRescanNote("No new commits. The report is unchanged.");
+        setPhase("idle");
+        setComparePair({ from: base, to: base });
+        return;
+      }
+      setPhase("analyzing");
+      await analyzeScan({ scanId: rescan.scanId });
+      await compareScans({ fromScanId: base, toScanId: rescan.scanId });
+      setScanId(rescan.scanId);
+      setComparePair({ from: base, to: rescan.scanId });
+      setPhase("idle");
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Could not rescan. Try again.");
+      setPhase("idle");
+    }
+  }
   async function onPassport() {
     if (scanId === null) return;
     setShareError("");
@@ -227,6 +262,24 @@ export default function GuestScan() {
               shareId={shareId}
               passportId={passportId}
               shareError={shareError}
+            />
+          )}
+          {analyzed && (
+            <div aria-label="Rescan">
+              <button type="button" disabled={phase !== "idle"} onClick={() => void onRescan()}>
+                {phase !== "idle" ? "Working…" : "Re-scan for new commits"}
+              </button>
+              {rescanNote.length > 0 && <p role="status">{rescanNote}</p>}
+            </div>
+          )}
+          {compareState !== undefined && compareState !== null && comparePair !== null && (
+            <CompareView
+              fromSha={compareState.from.sha}
+              toSha={compareState.to.sha}
+              sameSha={compareState.sameSha}
+              transitions={compareState.transitions}
+              accepted={compareState.accepted}
+              toScanId={comparePair.to}
             />
           )}
           <div aria-label="What was not checked">

@@ -30,6 +30,7 @@ const severity = v.union(
 // Stage 2: guest scan rows + cached recursive trees.
 // Stage 3: bounded file contents, OSV cache, evidence ledger, findings.
 // Stage 4: live checks, share/passport artifacts, first-party analytics.
+// Rescan: compare pairs, transitions, guest decisions.
 export default defineSchema({
   ...authTables,
   scans: defineTable({
@@ -52,6 +53,7 @@ export default defineSchema({
     coverageNote: v.optional(v.string()),
     liveUrl: v.optional(v.string()),
     mainAction: v.optional(v.string()),
+    rescanOf: v.optional(v.id("scans")),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -165,4 +167,32 @@ export default defineSchema({
     refShareId: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_day", ["day"]),
+  findingTransitions: defineTable({
+    fromScanId: v.id("scans"),
+    toScanId: v.id("scans"),
+    oldFingerprint: v.optional(v.string()),
+    newFingerprint: v.optional(v.string()),
+    ruleId: v.string(),
+    state: v.union(
+      v.literal("fixed"),
+      v.literal("still_broken"),
+      v.literal("new"),
+      v.literal("regressed"),
+      v.literal("unknown"),
+    ),
+    cause: v.optional(
+      v.union(
+        v.literal("code_change"),
+        v.literal("advisory_update"),
+        v.literal("analyzer_update"),
+      ),
+    ),
+    createdAt: v.number(),
+  }).index("by_pair", ["fromScanId", "toScanId"]),
+  userDecisions: defineTable({
+    scanId: v.id("scans"),
+    fingerprint: v.string(),
+    decision: v.union(v.literal("accepted_risk")),
+    createdAt: v.number(),
+  }).index("by_scan", ["scanId"]),
 });

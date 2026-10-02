@@ -49,6 +49,7 @@ const scanFields = {
   coverageNote: v.optional(v.string()),
   liveUrl: v.optional(v.string()),
   mainAction: v.optional(v.string()),
+  rescanOf: v.optional(v.id("scans")),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
@@ -326,6 +327,120 @@ export const logEvent = mutation({
       shareId: args.shareId?.slice(0, 64),
       refShareId: args.refShareId?.slice(0, 64),
       createdAt: now,
+    });
+    return null;
+  },
+});
+
+const transitionDetail = v.object({
+  oldFingerprint: v.optional(v.string()),
+  newFingerprint: v.optional(v.string()),
+  ruleId: v.string(),
+  state: v.union(
+    v.literal("fixed"),
+    v.literal("still_broken"),
+    v.literal("new"),
+    v.literal("regressed"),
+    v.literal("unknown"),
+  ),
+  cause: v.optional(
+    v.union(
+      v.literal("code_change"),
+      v.literal("advisory_update"),
+      v.literal("analyzer_update"),
+    ),
+  ),
+  title: v.string(),
+  path: v.string(),
+  line: v.number(),
+  severity,
+});
+
+export const getCompare = query({
+  args: { fromScanId: v.id("scans"), toScanId: v.id("scans") },
+  returns: v.union(
+    v.object({
+      from: v.object({
+        sha: v.optional(v.string()),
+        status: scanStatus,
+        analyzedAt: v.optional(v.number()),
+      }),
+      to: v.object({
+        sha: v.optional(v.string()),
+        status: scanStatus,
+        analyzedAt: v.optional(v.number()),
+      }),
+      sameSha: v.boolean(),
+      transitions: v.array(transitionDetail),
+      accepted: v.array(v.string()),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const from = await ctx.db.get("scans", args.fromScanId);
+    const to = await ctx.db.get("scans", args.toScanId);
+    if (from === null || to === null) return null;
+    if (from.analyzedAt === undefined || to.analyzedAt === undefined) return null;
+    const rows = await ctx.db
+      .query("findingTransitions")
+      .withIndex("by_pair", (q) => q.eq("fromScanId", args.fromScanId).eq("toScanId", args.toScanId))
+      .order("desc")
+      .take(1000);
+    if (rows.length === 0) return null;
+    const oldRows = await ctx.db
+      .query("findings")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.fromScanId))
+      .order("desc")
+      .take(500);
+    const newRows = await ctx.db
+      .query("findings")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.toScanId))
+      .order("desc")
+      .take(500);
+    const oldByFp = new Map(oldRows.map((r) => [r.fingerprint, r]));
+    const newByFp = new Map(newRows.map((r) => [r.fingerprint, r]));
+    const decisions = await ctx.db
+      .query("userDecisions")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.toScanId))
+      .order("desc")
+      .take(200);
+    return {
+      from: { sha: from.sha, status: from.status, analyzedAt: from.analyzedAt },
+      to: { sha: to.sha, status: to.status, analyzedAt: to.analyzedAt },
+      sameSha: from.sha !== undefined && from.sha === to.sha,
+      transitions: rows.map((t) => {
+        const detail =
+          (t.newFingerprint !== undefined ? newByFp.get(t.newFingerprint) : undefined) ??
+          (t.oldFingerprint !== undefined ? oldByFp.get(t.oldFingerprint) : undefined);
+        return {
+          oldFingerprint: t.oldFingerprint,
+          newFingerprint: t.newFingerprint,
+          ruleId: t.ruleId,
+          state: t.state,
+          cause: t.cause,
+          title: detail?.title ?? t.ruleId,
+          path: detail?.path ?? "(repo)",
+          line: detail?.line ?? 0,
+          severity: detail?.severity ?? "info",
+        };
+      }),
+      accepted: decisions.map((d) => d.fingerprint),
+    };
+  },
+});
+
+export const setDecision = mutation({
+  args: { scanId: v.id("scans"), fingerprint: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.fingerprint.length === 0 || args.fingerprint.length > 200) {
+      throw new Error("That finding reference is not valid.");
+    }
+    await ctx.db.insert("userDecisions", {
+      scanId: args.scanId,
+      fingerprint: args.fingerprint,
+      decision: "accepted_risk",
+      createdAt: Date.now(),
     });
     return null;
   },
