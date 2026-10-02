@@ -7,6 +7,7 @@ import type { PlanFinding } from "../../../shared/reports/fixPlan";
 import ScanReport from "../report/ScanReport";
 import CompareView from "../report/CompareView";
 import Stage5Panels from "../report/Stage5Panels";
+import CapacityMeter from "../report/CapacityMeter";
 
 // This project's own public repo, so a first-time visitor can see a real
 // report without needing a repo of their own to hand.
@@ -59,6 +60,7 @@ export default function GuestScan() {
   // server round trip for someone else's view, so we ask instead of guessing.
   const [shareViewedAt, setShareViewedAt] = useState<number | null>(null);
   const [showLive, setShowLive] = useState(false);
+  const [queueNote, setQueueNote] = useState("");
   const scanState = useQuery(
     api.scans.queries.getScan,
     scanId === null ? "skip" : { scanId },
@@ -101,7 +103,32 @@ export default function GuestScan() {
         return;
       }
       setPhase("analyzing");
-      const analyzed = await analyzeScan({ scanId: result.scanId });
+      // analyzeScan handles admission control internally: on sprint day many
+      // people arrive at once, so a scan either gets a slot or is told its
+      // place in the queue. All of that lives server side.
+      let analyzed = await analyzeScan({ scanId: result.scanId });
+      // Queued scans keep their place. We retry while the user waits here.
+      if (analyzed.status === "queued") {
+        setQueueNote(
+          `Busy right now. You are number ${analyzed.queuePosition ?? 1} in line of ${analyzed.queueLimit ?? 6} slots. Holding your place.`,
+        );
+        for (let attempt = 0; attempt < 20; attempt++) {
+          await new Promise((r) => setTimeout(r, 3000));
+          analyzed = await analyzeScan({ scanId: result.scanId });
+          if (analyzed.status !== "queued") break;
+          setQueueNote(
+            `Still waiting. You are number ${analyzed.queuePosition ?? 1} in line. Holding your place.`,
+          );
+        }
+        setQueueNote("");
+        if (analyzed.status === "queued") {
+          setSubmitError(
+            "Servers are busy. Your scan is saved and you can press Run scan again in a moment; you will not lose your place.",
+          );
+          setPhase("idle");
+          return;
+        }
+      }
       void logEvent({
         kind: analyzed.status === "completed" ? "scan_completed" : "scan_partial",
         scanId: result.scanId,
@@ -220,11 +247,12 @@ export default function GuestScan() {
           <strong>Public repos only.</strong> If your repo is private, flip it
           public first, scan it, fix what shows up, and only then share the
           link. Nothing on your machine leaves the browser except the form
-          below. We fetch the public file list and bounded file contents, plus
-          the served page HTML if you add a live URL. We save the owner, repo,
-          commit SHA, file paths, and redacted finding snippets for 24-hour
-          caching. Raw secret values are never stored. Free GitHub quota is
-          shared; quota exhaustion shows as partial, never as a pass.
+          below. We fetch the public file list and one repository archive, read
+          it in memory, plus the served page HTML if you add a live URL. We keep
+          only the owner, repo, commit SHA, file paths, sizes, hashes, and
+          redacted finding snippets. We store no copy of your code. Raw secret
+          values are never stored. Free GitHub quota is shared; we show what is
+          left, and quota exhaustion shows as partial, never as a pass.
         </p>
       </div>
       <form onSubmit={(e) => void onSubmit(e)}>
@@ -289,7 +317,9 @@ export default function GuestScan() {
                 : "Run scan"}
         </button>
       </form>
+      <CapacityMeter waiting={0} running={0} quota={null} />
       {submitError.length > 0 && <p role="alert">{submitError}</p>}
+      {queueNote.length > 0 && <p role="status">{queueNote}</p>}
       {status !== null && <p role="status">Status: {status}{wasCached ? " (cached)" : ""}</p>}
       {progress !== null && (
         <div aria-label="Progress">

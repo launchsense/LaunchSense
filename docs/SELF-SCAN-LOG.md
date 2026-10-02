@@ -26,9 +26,9 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
-### Stage 7: analyzer integrity fix (commit TBD)
+### Stage 7: analyzer integrity fix
 
-Scanned the repository at `1d7d7ba` and after the fixes.
+Scanned the repository at `1d7d7ba`, the commit that carried those fixes, and again after them.
 
 This scan was the response to an independent verification audit, which found that one of our own recent fixes had introduced a critical defect. Details in `docs/SELF-SCAN-LOG.md` are summarised here:
 

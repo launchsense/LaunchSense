@@ -7,8 +7,15 @@ What this release does not do. Everything here is stated so nothing looks finish
 - Public GitHub repos only. Private repos are not readable, so nothing about them is checked or claimed.
 - Guest scans only. There are no accounts yet, so each scan stands alone.
 - GitHub quota is shared. When it runs out, scans show partial with a retry time.
+- One scan makes about four GitHub requests: repository metadata, the latest commit, the file list, and one repository archive.
 - Caps per scan: 200 files, 2 MB in total, 100 KB per file. Skipped files are listed as not checked.
 - Binary files and generated folders like node_modules, dist, and build are skipped.
+
+## Capacity, and what we show you
+
+- The scan page shows how many GitHub requests are left, how many more scans that allows, and when the quota resets.
+- Six scans analyse at the same time. Extra scans queue and are told their place instead of everyone failing together.
+- Every scan has a time budget. When it runs out, the result is partial and the not-checked list says what was left undone.
 
 ## Checks we do not run
 
@@ -41,7 +48,9 @@ What this release does not do. Everything here is stated so nothing looks finish
 
 - No saved projects, no history, no rescan across sessions.
 - No MCP layer and no code upload for private repos. Local tools are the route for private code, and none is bundled here.
-- No monitoring, no scheduled scans, no GitHub App.
+- No monitoring and no scheduled scans.
+- No GitHub App yet. Connected read-only deep scans are on the roadmap, see `ROADMAP.md`.
+- No runtime performance data. GitHub does not expose it.
 - No blog posts published yet.
 
 ## The one rule that overrides all of these

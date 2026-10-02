@@ -140,6 +140,7 @@ export const markProgress = internalMutation({
     scanId: v.id("scans"),
     fetchedFileCount: v.number(),
     totalPlanned: v.number(),
+    phase: v.optional(v.string()),
     now: v.number(),
   },
   returns: v.null(),
@@ -147,7 +148,7 @@ export const markProgress = internalMutation({
     await ctx.db.patch("scans", args.scanId, {
       progressFetched: args.fetchedFileCount,
       progressTotal: args.totalPlanned,
-      progressPhase: "fetching",
+      progressPhase: args.phase ?? "fetching",
       updatedAt: args.now,
     });
     return null;
