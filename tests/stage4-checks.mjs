@@ -90,8 +90,44 @@ describe("buildTopPrompt", () => {
     const top = buildTopPrompt(findings, [], live);
     assert.equal(top.topCount, 3);
     assert.equal(top.restCount, 1);
-    assert.ok(top.prompt.includes("Before your repo goes public"));
+    assert.ok(top.prompt.includes("Before you share this"));
     assert.ok(top.prompt.split("\n").filter((l) => /^[0-9]\. /.test(l)).length === 3);
+  });
+
+  it("gives one slot per rule so three findings of a kind cannot fill the top 3", () => {
+    const many = ["a.ts", "b.ts", "c.ts", "d.ts"].map((p) => ({
+      ruleId: "secret.debug-leftover",
+      path: p,
+      line: 1,
+      severity: "medium",
+      title: "Debug leftover",
+      why: "Leaks internals.",
+    }));
+    many.push({
+      ruleId: "deps.vulnerability",
+      path: "package.json",
+      line: 7,
+      severity: "high",
+      title: "GHSA-x affects leftpad@1.0.0",
+      why: "Known vulnerable version.",
+    });
+    const top = buildTopPrompt(many, [], []);
+    const ruleIds = top.topRuleIds;
+    assert.equal(new Set(ruleIds).size, ruleIds.length, "top 3 must be three different rules");
+    assert.ok(top.topCount < 3 || ruleIds.includes("deps.vulnerability"));
+    assert.ok(top.prompt.includes("places"));
+  });
+
+  it("ranks a bare tracked env file below a real vulnerability", () => {
+    const top = buildTopPrompt(
+      [
+        { ruleId: "secret.tracked-env", path: ".env", line: 1, severity: "high", title: "Env tracked", why: "Readable." },
+        { ruleId: "deps.vulnerability", path: "package.json", line: 3, severity: "high", title: "CVE affects x@1", why: "Known." },
+      ],
+      [],
+      [],
+    );
+    assert.equal(top.topRuleIds[0], "deps.vulnerability");
   });
 
   it("names live problems plainly", () => {

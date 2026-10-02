@@ -48,7 +48,9 @@ export const runScan = action({
       repo,
       sinceMs: now - INFLIGHT_WINDOW_MS,
     });
-    if (inFlight !== null) {
+    // Only reuse an in-flight row once it has a commit pinned, otherwise the
+    // caller would get a scan that cannot be analyzed yet.
+    if (inFlight !== null && inFlight.sha !== undefined) {
       const status = inFlight.status === "completed" || inFlight.status === "partial" ? inFlight.status : "partial";
       return { scanId: inFlight._id, status, cached: true };
     }

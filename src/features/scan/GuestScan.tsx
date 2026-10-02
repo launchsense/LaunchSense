@@ -51,6 +51,9 @@ export default function GuestScan() {
   const [rescanRan, setRescanRan] = useState(false);
   const [rescanNote, setRescanNote] = useState("");
   const [explainNote, setExplainNote] = useState("");
+  // Set when the builder confirms their own share link opened. There is no
+  // server round trip for someone else's view, so we ask instead of guessing.
+  const [shareViewedAt, setShareViewedAt] = useState<number | null>(null);
   const scanState = useQuery(
     api.scans.queries.getScan,
     scanId === null ? "skip" : { scanId },
@@ -181,6 +184,13 @@ export default function GuestScan() {
   }
 
   const scan = scanState?.scan ?? resultsState?.scan ?? null;
+  const progress =
+    phase !== "idle"
+      ? {
+          done: scan?.progressFetched ?? 0,
+          total: scan?.progressTotal ?? (phase === "fetching" ? 1 : 30),
+        }
+      : null;
   const status =
     scan?.status ??
     (phase === "fetching" ? "fetching" : phase === "analyzing" ? "analyzing" : phase === "live" ? "live" : null);
@@ -258,6 +268,21 @@ export default function GuestScan() {
       </form>
       {submitError.length > 0 && <p role="alert">{submitError}</p>}
       {status !== null && <p role="status">Status: {status}{wasCached ? " (cached)" : ""}</p>}
+      {progress !== null && (
+        <div aria-label="Progress">
+          <progress value={progress.done} max={Math.max(1, progress.total)} />
+          <p role="status">
+            {phase === "fetching"
+              ? "Fetching the file list"
+              : phase === "analyzing"
+                ? "Reading files"
+                : phase === "live"
+                  ? "Checking your live app"
+                  : "Working"}{" "}
+            {progress.done} of {progress.total} files
+          </p>
+        </div>
+      )}
       {scan !== null && (
         <article aria-label="Scan result">
           <p>
@@ -287,6 +312,13 @@ export default function GuestScan() {
               shareId={shareId}
               passportId={passportId}
               shareError={shareError}
+              shareViewed={shareViewedAt !== null}
+              onConfirmShareViewed={() => {
+                setShareViewedAt(Date.now());
+                if (shareId !== null && scanId !== null) {
+                  void logEvent({ kind: "share_viewed", scanId, shareId });
+                }
+              }}
             />
           )}
           {analyzed && (
@@ -311,7 +343,7 @@ export default function GuestScan() {
               rescanRan={rescanRan}
               passportIssued={passportId !== null}
               shareCreated={shareId !== null}
-              shareViewed={false}
+              shareViewed={shareId !== null && shareViewedAt !== null}
               findings={resultsState.findings}
               live={resultsState.live}
               partial={scan.status === "partial"}

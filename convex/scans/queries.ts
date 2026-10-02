@@ -45,6 +45,9 @@ const scanFields = {
   analyzerVersion: v.optional(v.string()),
   fetchedFileCount: v.optional(v.number()),
   skippedFileCount: v.optional(v.number()),
+  progressFetched: v.optional(v.number()),
+  progressTotal: v.optional(v.number()),
+  progressPhase: v.optional(v.string()),
   analyzedAt: v.optional(v.number()),
   coverageNote: v.optional(v.string()),
   liveUrl: v.optional(v.string()),
@@ -359,12 +362,15 @@ export const getAnalysisFacts = query({
     const base = treePaths.length > 0 ? treePaths : analyzedPaths;
     const lower = base.map((p) => p.toLowerCase());
     const hasReadme = lower.some((p) => p === "readme.md" || p.startsWith("readme."));
+    // Shared rule with shared/analyzers/hygiene.ts so a repo can never be told
+    // both "no tests" and "you have tests".
     const hasTests = lower.some(
       (p) =>
         p.includes("/__tests__/") ||
         p.includes(".test.") ||
         p.includes(".spec.") ||
-        p.includes("test_") === true,
+        /(^|\/)(test|tests|spec)\//.test(p) ||
+        /^test_.*\.py$/.test(p),
     );
     const hasCI = lower.some((p) => p.startsWith(".github/workflows/"));
     const hasLicense = lower.some((p) => p === "license" || p.startsWith("license.") || p.startsWith("licence"));

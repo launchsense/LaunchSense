@@ -36,6 +36,9 @@ const scanDoc = v.object({
   analyzerVersion: v.optional(v.string()),
   fetchedFileCount: v.optional(v.number()),
   skippedFileCount: v.optional(v.number()),
+  progressFetched: v.optional(v.number()),
+  progressTotal: v.optional(v.number()),
+  progressPhase: v.optional(v.string()),
   analyzedAt: v.optional(v.number()),
   coverageNote: v.optional(v.string()),
   liveUrl: v.optional(v.string()),
@@ -129,6 +132,25 @@ export const createScan = internalMutation({
       createdAt: args.now,
       updatedAt: args.now,
     });
+  },
+});
+
+export const markProgress = internalMutation({
+  args: {
+    scanId: v.id("scans"),
+    fetchedFileCount: v.number(),
+    totalPlanned: v.number(),
+    now: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("scans", args.scanId, {
+      progressFetched: args.fetchedFileCount,
+      progressTotal: args.totalPlanned,
+      progressPhase: "fetching",
+      updatedAt: args.now,
+    });
+    return null;
   },
 });
 

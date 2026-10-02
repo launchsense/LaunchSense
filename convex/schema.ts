@@ -49,6 +49,9 @@ export default defineSchema({
     analyzerVersion: v.optional(v.string()),
     fetchedFileCount: v.optional(v.number()),
     skippedFileCount: v.optional(v.number()),
+    progressFetched: v.optional(v.number()),
+    progressTotal: v.optional(v.number()),
+    progressPhase: v.optional(v.string()),
     analyzedAt: v.optional(v.number()),
     coverageNote: v.optional(v.string()),
     liveUrl: v.optional(v.string()),
@@ -84,7 +87,9 @@ export default defineSchema({
     truncated: v.boolean(),
     fetchedAt: v.number(),
     content: v.string(),
-  }).index("by_repo_sha_path", ["owner", "repo", "sha", "path"]),
+  })
+    .index("by_repo_sha_path", ["owner", "repo", "sha", "path"])
+    .index("by_owner_before", ["owner", "repo", "fetchedAt"]),
   osvCache: defineTable({
     ecosystem: v.string(),
     name: v.string(),

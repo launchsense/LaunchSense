@@ -43,6 +43,9 @@ const fullScanDoc = v.object({
   analyzerVersion: v.optional(v.string()),
   fetchedFileCount: v.optional(v.number()),
   skippedFileCount: v.optional(v.number()),
+  progressFetched: v.optional(v.number()),
+  progressTotal: v.optional(v.number()),
+  progressPhase: v.optional(v.string()),
   analyzedAt: v.optional(v.number()),
   coverageNote: v.optional(v.string()),
   liveUrl: v.optional(v.string()),
@@ -107,6 +110,25 @@ export const getCachedContent = internalQuery({
     const hit = matches[0] ?? null;
     if (hit === null || hit.fetchedAt < args.sinceMs) return null;
     return { content: hit.content, size: hit.size, contentSha: hit.contentSha };
+  },
+});
+
+// Retention is enforced here, not just on read. Called at the start of every
+// analyze run, so cached text is deleted once its window has passed even when
+// no cron is configured.
+export const purgeStaleContents = internalMutation({
+  args: { owner: v.string(), repo: v.string(), beforeMs: v.number() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const stale = await ctx.db
+      .query("fileContents")
+      .withIndex("by_owner_before", (q) =>
+        q.eq("owner", args.owner).eq("repo", args.repo).lt("fetchedAt", args.beforeMs),
+      )
+      .order("asc")
+      .take(500);
+    for (const row of stale) await ctx.db.delete("fileContents", row._id);
+    return stale.length;
   },
 });
 
@@ -283,6 +305,9 @@ export const saveResults = internalMutation({
       analyzerVersion: args.analyzerVersion,
       fetchedFileCount: args.fetchedFileCount,
       skippedFileCount: args.skippedFileCount,
+      progressFetched: args.fetchedFileCount,
+      progressTotal: args.fetchedFileCount + args.skippedFileCount,
+      progressPhase: "done",
       analyzedAt: args.analyzedAt,
       coverageNote: args.coverageNote,
       errorKind: args.errorKind,

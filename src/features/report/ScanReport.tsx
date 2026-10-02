@@ -56,6 +56,8 @@ export default function ScanReport(props: {
   shareId: string | null;
   passportId: string | null;
   shareError: string;
+  shareViewed: boolean;
+  onConfirmShareViewed: () => void;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -77,6 +79,16 @@ export default function ScanReport(props: {
         liveActionItems(props.live, props.mainAction),
       ),
     [props.findings, props.plan, props.live, props.mainAction],
+  );
+
+  // The rest of the list excludes what the top 3 already covers, so the same
+  // item never appears twice on one screen.
+  const restSteps = useMemo(
+    () =>
+      top.topRuleIds.length === 0
+        ? props.plan.steps
+        : props.plan.steps.filter((s) => !top.topRuleIds.includes(s.ruleId)),
+    [props.plan.steps, top.topRuleIds],
   );
 
   function copyFinding(f: ReportFinding) {
@@ -138,13 +150,18 @@ export default function ScanReport(props: {
         </div>
       )}
 
-      {props.plan.steps.length > 0 && (
+      {restSteps.length > 0 && (
         <div aria-label="Fix before you share">
           <h4>The rest of the fix list</h4>
+          <p>
+            {top.topRuleIds.length > 0
+              ? "These are the items after the top 3 above."
+              : "Everything the check found."}
+          </p>
           <ol>
-            {props.plan.steps.map((step) => (
+            {restSteps.map((step) => (
               <li key={step.ruleId}>
-                <strong>{step.order}. {step.title}</strong>
+                <strong>{step.title}</strong>
                 <p>{step.why}</p>
                 <ul>
                   {step.checklist.map((item) => (
@@ -190,6 +207,16 @@ export default function ScanReport(props: {
           <p>
             Passport link: {origin}/p/{props.passportId}
           </p>
+        )}
+        {props.shareId !== null && !props.shareViewed && (
+          <div aria-label="Confirm share works">
+            <p>
+              Open your share link in another tab or on your phone to check it works.
+            </p>
+            <button type="button" onClick={props.onConfirmShareViewed}>
+              {props.shareViewed ? "Confirmed" : "It opened fine"}
+            </button>
+          </div>
         )}
       </div>
     </div>

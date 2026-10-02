@@ -15,12 +15,14 @@ import {
   fingerprintFinding,
   fnv1aHex,
   redactedSnippet,
+  sharedRedact,
 } from "../../shared/redaction";
 import { fetchBlobContent } from "../adapters/github";
 import { queryOsvBatch } from "../adapters/osv";
 
 const MAX_FILES_FETCHED = 200;
 const MAX_TOTAL_BYTES = 2000000;
+const FETCH_CONCURRENCY = 12;
 const CONTENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const OSV_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -178,6 +180,12 @@ export const analyzeScan = action({
       throw new Error("Scan is not ready for analysis yet. Fetch the tree first.");
     }
     const { owner, repo, sha } = scan;
+    // Enforce the cache window by deleting, not just by ignoring on read.
+    await ctx.runMutation(internal.scans.store.purgeStaleContents, {
+      owner,
+      repo,
+      beforeMs: Date.now() - CONTENT_CACHE_TTL_MS,
+    });
     const tree = await ctx.runQuery(internal.scans.internal.getTreeEntries, { owner, repo, sha });
     if (tree === null) {
       throw new Error("File tree is missing. Fetch the tree first.");
@@ -210,58 +218,101 @@ export const analyzeScan = action({
     const files: Array<{ path: string; content: string; size: number }> = [];
     let bytesUsed = 0;
     let rateLimitedAt: number | null = null;
-    for (let i = 0; i < selected.length; i++) {
-      const path = selected[i] ?? "";
+    let processed = 0;
+
+    // Small worker pool. A cold scan is up to 200 files, so fetching them one
+    // at a time was the difference between a 15 second scan and a 60 second one.
+    const queue = selected.filter((path) => {
       if (bytesUsed >= MAX_TOTAL_BYTES) {
         skipped.push({ path, reason: "byte budget (2MB)" });
-        continue;
+        return false;
       }
-      const cached = await ctx.runQuery(internal.scans.store.getCachedContent, {
-        owner,
-        repo,
-        sha,
-        path,
-        sinceMs: Date.now() - CONTENT_CACHE_TTL_MS,
-      });
-      if (cached !== null) {
-        files.push({ path, content: cached.content, size: cached.size });
-        bytesUsed += cached.size;
-        continue;
-      }
-      const blob = await fetchBlobContent(owner, repo, sha, path);
-      if (blob.status === "rate-limited") {
-        rateLimitedAt = blob.resetAtMs;
-        skipped.push({ path, reason: "rate limited" });
-        for (const rest of selected.slice(i + 1)) {
-          skipped.push({ path: rest, reason: "not reached after rate limit" });
+      return true;
+    });
+    let nextIndex = 0;
+    let stopped = false;
+
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        if (stopped) return;
+        const index = nextIndex;
+        nextIndex += 1;
+        const path = queue[index];
+        if (path === undefined) return;
+
+        const cached = await ctx.runQuery(internal.scans.store.getCachedContent, {
+          owner,
+          repo,
+          sha,
+          path,
+          sinceMs: Date.now() - CONTENT_CACHE_TTL_MS,
+        });
+        if (cached !== null) {
+          files.push({ path, content: cached.content, size: cached.size });
+          bytesUsed += cached.size;
+          processed += 1;
+          continue;
         }
-        break;
+
+        const blob = await fetchBlobContent(owner, repo, sha, path);
+        processed += 1;
+        if (processed % 20 === 0) {
+          await ctx.runMutation(internal.scans.internal.markProgress, {
+            scanId: args.scanId,
+            fetchedFileCount: processed,
+            totalPlanned: queue.length,
+            now: Date.now(),
+          });
+        }
+        if (blob.status === "rate-limited") {
+          rateLimitedAt = blob.resetAtMs;
+          stopped = true;
+          skipped.push({ path, reason: "rate limited" });
+          return;
+        }
+        if (blob.status === "too-large") {
+          skipped.push({ path, reason: "over 100KB" });
+          continue;
+        }
+        if (blob.status === "binary") {
+          skipped.push({ path, reason: "binary content" });
+          continue;
+        }
+        if (blob.status !== "ok") {
+          skipped.push({ path, reason: "fetch failed" });
+          continue;
+        }
+        // Cache the redacted text only. Raw file bodies are never persisted, so
+        // a secret that slips past an analyzer pattern still cannot be stored.
+        await ctx.runMutation(internal.scans.store.saveContent, {
+          owner,
+          repo,
+          sha,
+          path,
+          contentSha: blob.contentSha,
+          size: blob.size,
+          truncated: false,
+          fetchedAt: Date.now(),
+          content: sharedRedact(blob.content),
+        });
+        files.push({ path, content: blob.content, size: blob.size });
+        bytesUsed += blob.size;
       }
-      if (blob.status === "too-large") {
-        skipped.push({ path, reason: "over 100KB" });
-        continue;
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(FETCH_CONCURRENCY, Math.max(1, queue.length)) }, () =>
+        worker(),
+      ),
+    );
+    if (stopped) {
+      for (let i = nextIndex; i < queue.length; i++) {
+        const path = queue[i];
+        if (path === undefined) continue;
+        if (!files.some((f) => f.path === path)) {
+          skipped.push({ path, reason: "not reached after rate limit" });
+        }
       }
-      if (blob.status === "binary") {
-        skipped.push({ path, reason: "binary content" });
-        continue;
-      }
-      if (blob.status !== "ok") {
-        skipped.push({ path, reason: "fetch failed" });
-        continue;
-      }
-      await ctx.runMutation(internal.scans.store.saveContent, {
-        owner,
-        repo,
-        sha,
-        path,
-        contentSha: blob.contentSha,
-        size: blob.size,
-        truncated: false,
-        fetchedAt: Date.now(),
-        content: blob.content,
-      });
-      files.push({ path, content: blob.content, size: blob.size });
-      bytesUsed += blob.size;
     }
 
     const evidence: EvidenceItem[] = [];
@@ -399,39 +450,73 @@ export const analyzeScan = action({
     const osvTargets = deps.deps.filter(
       (d) => d.version.length > 0 && OSV_ECOSYSTEMS[d.ecosystem] !== undefined,
     );
+    const osvWindow = osvTargets.slice(0, 50);
     let osvUnknown = 0;
     const vulnCounts = new Map<string, number>();
-    for (const dep of osvTargets.slice(0, 50)) {
+
+    // Cache first, then one batched OSV request for everything still missing.
+    // One call per dependency made a 50 package scan take 50 round trips.
+    const osvResolved = new Map<
+      string,
+      { vulns: Array<{ id: string; summary: string; severity: string }>; unknown: boolean }
+    >();
+    const osvMisses: Array<{ dep: (typeof osvTargets)[number]; ecosystem: string; key: string }> = [];
+
+    for (const dep of osvWindow) {
       const ecosystem = OSV_ECOSYSTEMS[dep.ecosystem] ?? dep.ecosystem;
+      const key = `${dep.name}@${dep.version}`;
       const cachedVuln = await ctx.runQuery(internal.scans.store.getOsvEntry, {
         ecosystem,
         name: dep.name,
         version: dep.version,
         sinceMs: Date.now() - OSV_CACHE_TTL_MS,
       });
-      let vulns: Array<{ id: string; summary: string; severity: string }> = [];
-      let unknown = false;
       if (cachedVuln !== null) {
-        if (cachedVuln.timedOut) unknown = true;
-        else vulns = cachedVuln.vulns;
-      } else {
-        const batch = await queryOsvBatch([{ ecosystem, name: dep.name, version: dep.version }]);
+        osvResolved.set(key, {
+          vulns: cachedVuln.timedOut ? [] : cachedVuln.vulns,
+          unknown: cachedVuln.timedOut,
+        });
+        continue;
+      }
+      osvMisses.push({ dep, ecosystem, key });
+    }
+
+    if (osvMisses.length > 0) {
+      const batch = await queryOsvBatch(
+        osvMisses.map((m) => ({
+          ecosystem: m.ecosystem,
+          name: m.dep.name,
+          version: m.dep.version,
+        })),
+      );
+      for (let i = 0; i < osvMisses.length; i++) {
+        const miss = osvMisses[i];
+        if (miss === undefined) continue;
+        const vulns = batch.timedOut ? [] : batch.results[i] ?? [];
         await ctx.runMutation(internal.scans.store.saveOsvEntry, {
-          ecosystem,
-          name: dep.name,
-          version: dep.version,
+          ecosystem: miss.ecosystem,
+          name: miss.dep.name,
+          version: miss.dep.version,
           checkedAt: Date.now(),
           timedOut: batch.timedOut,
-          vulns: batch.timedOut ? [] : batch.results[0] ?? [],
+          vulns,
         });
-        if (batch.timedOut) unknown = true;
-        else vulns = batch.results[0] ?? [];
+        osvResolved.set(miss.key, { vulns, unknown: batch.timedOut });
       }
-      if (unknown) {
+    }
+
+    for (const dep of osvWindow) {
+      const key = `${dep.name}@${dep.version}`;
+      const resolved = osvResolved.get(key);
+      if (resolved === undefined) {
         osvUnknown++;
         continue;
       }
-      for (const vuln of vulns) {
+      if (resolved.unknown) {
+        osvUnknown++;
+        continue;
+      }
+      for (const vuln of resolved.vulns) {
         const key = `${dep.name}@${dep.version}:${vuln.id}`;
         vulnCounts.set(key, (vulnCounts.get(key) ?? 0) + 1);
         if ((vulnCounts.get(key) ?? 0) > 1) continue;
@@ -488,7 +573,7 @@ export const analyzeScan = action({
     const treeNote = scan.truncated === true ? "tree truncated; " : "";
     const coverageNote =
       `Analyzed ${fetched} files at this commit; skipped ${skippedCount} (${treeNote}` +
-      `OSV checked ${osvTargets.slice(0, 50).length} packages, ${osvUnknown} unknown; ` +
+      `OSV checked ${osvWindow.length} packages, ${osvUnknown} unknown; ` +
       `registry freshness and deps.dev metadata not checked).`;
 
     let status: "completed" | "partial" | "failed" = "completed";

@@ -30,7 +30,7 @@ This reads public repos. It cannot see a private one.
 ## What it does not do
 
 - It never changes your code and never blocks publishing.
-- It never stores raw secret values. Snippets are redacted before storage.
+- It never stores raw secret values or raw file text. Secret patterns are replaced before anything is written.
 - A partial result is never shown as a pass. Unchecked work stays listed as not checked.
 
 ## What is checked
