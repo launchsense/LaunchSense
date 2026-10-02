@@ -102,13 +102,13 @@ describe("extractJson", () => {
 describe("buildNoAgentExport", () => {
   it("includes steps, confirm list, and the not-checked list", () => {
     const text = buildNoAgentExport(
-      "withkeshav/launchsense",
+      "withkeshav/LaunchSense",
       "abc123",
       FINDINGS.map((f) => ({ ...f, path: "a.ts", line: 1, severity: f.severity })),
       { steps: [], notActionable: [] },
       ["binary files"],
     );
-    assert.match(text, /withkeshav\/launchsense/);
+    assert.match(text, /withkeshav\/LaunchSense/);
     assert.match(text, /abc123/);
     assert.match(text, /binary files/);
   });

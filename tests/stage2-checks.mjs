@@ -3,21 +3,21 @@ import assert from "node:assert/strict";
 import { parseGitHubRepoUrl } from "../shared/githubUrl.ts";
 
 describe("parseGitHubRepoUrl", () => {
-  it("accepts a plain owner/repo URL", () => {
-    const result = parseGitHubRepoUrl("https://github.com/withkeshav/launchsense");
+  it("accepts a plain owner/repo URL and preserves the repo's capitalization", () => {
+    const result = parseGitHubRepoUrl("https://github.com/withkeshav/LaunchSense");
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.equal(result.value.owner, "withkeshav");
-      assert.equal(result.value.repo, "launchsense");
-      assert.equal(result.value.normalizedUrl, "https://github.com/withkeshav/launchsense");
+      assert.equal(result.value.repo, "LaunchSense");
+      assert.equal(result.value.normalizedUrl, "https://github.com/withkeshav/LaunchSense");
     }
   });
 
   it("strips .git, trailing slash, and tree suffix", () => {
     for (const url of [
-      "https://github.com/withkeshav/launchsense.git",
-      "https://github.com/withkeshav/launchsense/",
-      "https://github.com/withkeshav/launchsense/tree/main/src",
+      "https://github.com/withkeshav/LaunchSense.git",
+      "https://github.com/withkeshav/LaunchSense/",
+      "https://github.com/withkeshav/LaunchSense/tree/main/src",
     ]) {
       const result = parseGitHubRepoUrl(url);
       assert.equal(result.ok, true, url);
