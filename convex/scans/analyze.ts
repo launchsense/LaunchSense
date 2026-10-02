@@ -164,28 +164,71 @@ export const analyzeScan = action({
   args: { scanId: v.id("scans") },
   returns: v.object({
     scanId: v.id("scans"),
-    status: v.union(v.literal("completed"), v.literal("partial"), v.literal("failed")),
+    status: v.union(
+      v.literal("completed"),
+      v.literal("partial"),
+      v.literal("failed"),
+      v.literal("queued"),
+    ),
     findingCount: v.number(),
     evidenceCount: v.number(),
     fetched: v.number(),
     skipped: v.number(),
+    queuePosition: v.optional(v.number()),
+    queueRunning: v.optional(v.number()),
+    queueLimit: v.optional(v.number()),
   }),
   handler: async (
     ctx,
     args,
   ): Promise<{
     scanId: Id<"scans">;
-    status: "completed" | "partial" | "failed";
+    status: "completed" | "partial" | "failed" | "queued";
     findingCount: number;
     evidenceCount: number;
     fetched: number;
     skipped: number;
+    queuePosition?: number;
+    queueRunning?: number;
+    queueLimit?: number;
   }> => {
     const scan = await ctx.runQuery(internal.scans.store.fetchScan, { scanId: args.scanId });
     if (scan === null || scan.sha === undefined) {
       throw new Error("Scan is not ready for analysis yet. Fetch the tree first.");
     }
     const { owner, repo, sha } = scan;
+
+    // Admission control. Sprint day brings many visitors at once, so a scan
+    // either gets one of the few analysis slots or is told its place and told
+    // to come back. It is better to queue honestly than to let every scan fail
+    // on quota at the same moment.
+    const slot = await ctx.runMutation(internal.scans.quota.claimSlot, {
+      scanId: args.scanId,
+      owner,
+      repo,
+      now: Date.now(),
+    });
+    if (slot.position > 0) {
+      await ctx.runMutation(internal.scans.internal.markProgress, {
+        scanId: args.scanId,
+        fetchedFileCount: 0,
+        totalPlanned: 0,
+        phase: `queued:${slot.position}`,
+        now: Date.now(),
+      });
+      return {
+        scanId: args.scanId,
+        status: "queued",
+        findingCount: 0,
+        evidenceCount: 0,
+        fetched: 0,
+        skipped: 0,
+        queuePosition: slot.position,
+        queueRunning: slot.running,
+        queueLimit: slot.limit,
+      };
+    }
+
     // Enforce the cache window by deleting, not just by ignoring on read.
     await ctx.runMutation(internal.scans.store.purgeStaleContents, {
       owner,
@@ -226,6 +269,14 @@ export const analyzeScan = action({
     // and one that exhausts it on the first visitor.
     const deadline = Date.now() + ANALYZE_DEADLINE_MS;
     const tarball = await fetchRepoTarball(owner, repo, sha);
+    if (tarball.quota !== null) {
+      await ctx.runMutation(internal.scans.quota.recordQuota, {
+        remaining: tarball.quota.remaining,
+        limit: tarball.quota.limit,
+        resetAt: tarball.quota.resetAt,
+        now: Date.now(),
+      });
+    }
     const files: Array<{ path: string; content: string; size: number }> = [];
     let bytesUsed = 0;
     let rateLimitedAt: number | null = null;
@@ -680,6 +731,9 @@ export const analyzeScan = action({
         bucket: f.bucket,
       })),
     });
+
+    // Release the slot before returning so a queued scan can start.
+    await ctx.runMutation(internal.scans.quota.releaseSlot, { scanId: args.scanId });
 
     return {
       scanId: args.scanId,

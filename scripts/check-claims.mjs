@@ -56,7 +56,65 @@ const NEGATIVE_CLAIMS = [
   { phrase: /never\s+(stores|saves|keeps)\s+(raw\s+)?secret/i, structural: noFileBodyStored, why: "a file body column would exist" },
   { phrase: /never\s+block/i, structural: noRepoWritePath, why: "the code would contain a write path" },
   { phrase: /never\s+changes?\s+(your\s+)?code/i, structural: noRepoWritePath, why: "the code would contain a write path" },
+  {
+    // "We store no copy of your code" is the claim the whole privacy page rests
+    // on, in the wording the UI actually uses. It means exactly what
+    // "never stores raw file text" means.
+    phrase: /(no|stores?\s+no|keeps?\s+no)\s+(copy|copies|version|versions)\s+of\s+(your\s+)?(code|source|file|files)/i,
+    structural: noFileBodyStored,
+    why: "a file body column would exist",
+  },
 ];
+
+// RETENTION_CLAIMS. "cached for 24 hours" and "deleted after 24 hours" are the
+// second class of false claim that cost an audit, the first being the deleted
+// file-text column. They are checked against the code: the number in the copy
+// must be the number in a TTL constant, and a deletion must actually exist.
+//
+// The failure this catches is specific and already happened once: the docs kept
+// describing a 24 hour cache of file text that had been deleted, while the UI
+// kept telling users their snippets were cached for 24 hours, with no purge
+// behind either sentence.
+const RETENTION_CLAIMS = [
+  { phrase: /cached?\s+for\s+(\d+)\s*(hour|day|week|month)s?/i, kind: "cache" },
+  { phrase: /deleted?\s+(?:by\s+)?(?:a\s+later\s+\w+\s+)?(?:after|within)\s+(\d+)\s*(hour|day|week|month)s?/i, kind: "retention" },
+  { phrase: /kept?\s+for\s+(\d+)\s*(hour|day|week|month)s?/i, kind: "retention" },
+];
+
+// "for 24 hours" is only meaningful as a retention claim when it is near a
+// cache or deletion word. Elsewhere it is ordinary copy about something else.
+function looksLikeRetention(text) {
+  return /\b(cach\w*|stor\w*|keep\w*|delet\w*|retain\w*|purge\w*|saved|save)\b/i.test(text);
+}
+
+// The TTL a claim is measured against. Kept as whole units in the source so the
+// copy and the code cannot drift apart by a factor of a thousand.
+const TTL_UNITS = { hour: 3600000, day: 86400000, week: 604800000, month: 2592000000 };
+
+function ttlMatchesCopy(copiedNumber, copiedUnit) {
+  const source = readAllSource();
+  const wanted = Number(copiedNumber) * (TTL_UNITS[copiedUnit.toLowerCase()] ?? 0);
+  if (wanted === 0) return false;
+  // Match the right-hand side of a TTL constant, allowing arithmetic form:
+  // `CONTENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000` and `CACHE_TTL_MS = 86400000`.
+  const pattern = /[A-Z_]*(TTL|MAX_AGE|RETENTION)[A-Z_]*\s*=\s*([0-9_]+(?:\s*[*+]\s*[0-9_]+)*)/g;
+  let match;
+  while ((match = pattern.exec(source)) !== null) {
+    const expr = match[2];
+    if (expr === undefined) continue;
+    // Evaluate only digits joined by * or +, which is exactly the form used.
+    if (!/^[0-9_]+(?:\s*[*+]\s*[0-9_]+)*$/.test(expr)) continue;
+    const value = expr.split(/\s*[*+]\s*/).reduce((acc, part) => acc * Number(part.replace(/_/g, "")), 1);
+    if (value === wanted || value * 1000 === wanted) return true;
+  }
+  return false;
+}
+
+// A retention claim needs both a matching TTL and something that deletes.
+function retentionIsEnforced() {
+  return /\b(delete|purge|remove)\w*\s*\(/i.test(readAllSource()) &&
+    /\b(TTL|RETENTION|MAX_AGE)\w*/i.test(readAllSource());
+}
 
 const COPY_GLOBS = ["README.md", "CHANGELOG.md", "docs", "src"];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".progress", "_generated"]);
@@ -74,10 +132,17 @@ function walk(dir, out = []) {
 // Definitions are excluded. `shared/redaction.ts` defines sharedRedact, so
 // including it let the guard pass after the only real call site was deleted.
 const sourceFiles = walk(join(ROOT, "convex")).concat(walk(join(ROOT, "shared")));
-const source = sourceFiles
-  .filter((f) => !/(^|\/)(redaction|projectSignals)\.ts$/.test(f))
-  .map((f) => readFileSync(f, "utf8"))
-  .join("\n");
+
+// Definitions are excluded. `shared/redaction.ts` defines sharedRedact, so
+// including it let the guard pass after the only real call site was deleted.
+function readAllSource() {
+  return sourceFiles
+    .filter((f) => !/(^|\/)(redaction|projectSignals)\.ts$/.test(f))
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n");
+}
+
+const source = readAllSource();
 
 // "never changes your code" and "never blocks publishing" are the same claim:
 // there is no write path to a repository. Proved structurally by finding no
@@ -148,6 +213,25 @@ for (const file of copyFiles()) {
           continue;
         }
         failures.push({ rel, line: i + 1, text: raw.trim(), why: `${claim.why} (no code support)` });
+      }
+      for (const claim of RETENTION_CLAIMS) {
+        const match = line.match(claim.phrase);
+        if (match === null) continue;
+        if (!looksLikeRetention(raw)) continue;
+        checked++;
+        const number = match[1];
+        const unit = match[2];
+        if (number === undefined || unit === undefined) continue;
+        // A retention claim must be backed by a TTL constant with the same value
+        // and by code that deletes. Either alone is not enough: a TTL with no
+        // purge, or a purge with no stated window, is what the audit caught.
+        const ttlOk = ttlMatchesCopy(number, unit);
+        const purgeOk = retentionIsEnforced();
+        if (ttlOk && purgeOk) continue;
+        const why = !ttlOk
+          ? `copy says ${number} ${unit}(s) but no TTL constant matches`
+          : "no purge or deletion code backs the retention claim";
+        failures.push({ rel, line: i + 1, text: raw.trim(), why });
       }
     });
 }

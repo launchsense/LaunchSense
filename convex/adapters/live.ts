@@ -6,6 +6,7 @@
 // never to a pass.
 
 import { validateLiveUrl } from "../../shared/ssrf.ts";
+import { resolvePublicAddress } from "./dnsGuard.ts";
 
 export const LIVE_TIMEOUT_MS = 15000;
 export const LIVE_MAX_HOPS = 3;
@@ -77,6 +78,24 @@ export async function fetchLiveSite(startUrl: string, mainAction: string): Promi
   let attempts = 0;
   for (;;) {
     attempts++;
+    // DNS guard. The literal-host check in shared/ssrf.ts cannot see behind a
+    // public hostname that encodes a private target, so resolve first and reject
+    // if any answer is loopback, link-local, private, CGNAT, or reserved.
+    const target = await resolvePublicAddress(new URL(current).hostname);
+    if (!target.ok) {
+      return {
+        finalUrl: null,
+        https: current.startsWith("https:"),
+        reaches: false,
+        httpStatus: null,
+        nonBlank: null,
+        mainActionFound: null,
+        viewportMeta: null,
+        hops,
+        tooLarge: false,
+        error: `Refused to check this address: ${target.reason}.`,
+      };
+    }
     let response: Response;
     try {
       response = await fetch(current, {

@@ -38,9 +38,17 @@ Run a re-scan. We pin the new commit, run the same checks, and compare. Every fi
 
 If the checker itself changes between your two scans, old findings become unknown instead of fixed. That is deliberate: a different checker cannot honestly claim your bug is gone.
 
-## Caching
+## How much it costs, and what we tell you
 
-The file list and file contents are cached for 24 hours per commit, and vulnerability lookups for 7 days. Re-scanning the same commit costs nothing and returns the same report. Cached contents are replaced when the commit changes.
+One scan makes about four requests to GitHub: repository metadata, the latest commit, the file list, and one repository archive. The archive holds the file contents, so we read them from there instead of asking for each file separately.
+
+Per-file metadata (path, size, hash) is cached for 24 hours per commit and deleted after that. File contents are never cached.
+
+We show the remaining GitHub quota and the reset time on the scan page, and we count how many more scans that allows. When scans arrive faster than the slots available, they queue and you are told your place rather than everyone failing at once.
+
+## Re-scanning
+
+A re-scan of the same commit still reads the repository again. It costs a few GitHub requests, and it returns the same result, because every check is fixed code.
 
 Plain words used in the app:
 

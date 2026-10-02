@@ -119,6 +119,10 @@ export const getCachedMeta = internalQuery({
 // Retention is enforced here, not just on read. Called at the start of every
 // analyze run, so cached text is deleted once its window has passed even when
 // no cron is configured.
+// Migration support. Rows written before the `content` field was removed from
+// the schema still carry file text, because Convex does not drop fields from
+// existing documents. This deletes them in batches.
+
 export const purgeStaleContents = internalMutation({
   args: { owner: v.string(), repo: v.string(), beforeMs: v.number() },
   returns: v.number(),

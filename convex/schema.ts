@@ -152,6 +152,27 @@ export default defineSchema({
   })
     .index("by_passportId", ["passportId"])
     .index("by_scan", ["scanId"]),
+  // Admission control. Many visitors can land at once on sprint day, so scans
+  // queue instead of all hitting GitHub together. One row per waiting scan.
+  scanQueue: defineTable({
+    scanId: v.id("scans"),
+    owner: v.string(),
+    repo: v.string(),
+    queuedAt: v.number(),
+    // Convex forbids optional fields in an index, so a waiting entry uses 0
+    // rather than being absent. Anything non-zero is a started slot.
+    startedAt: v.number(),
+  })
+    .index("by_queue", ["startedAt", "queuedAt"])
+    .index("by_repo", ["owner", "repo"]),
+  // Live GitHub quota mirror, updated by every fetch. Read by the browser so
+  // users can see what is left and when it resets.
+  quotaState: defineTable({
+    remaining: v.number(),
+    limit: v.number(),
+    resetAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_updated", ["updatedAt"]),
   analyticsEvents: defineTable({
     day: v.string(),
     kind: v.union(

@@ -1,4 +1,5 @@
 import { mutation, query } from "../_generated/server";
+import { internal } from "../_generated/api";
 import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
@@ -398,6 +399,46 @@ export const getAnalysisFacts = query({
       entryPoints,
       agentFiles: agentFiles.slice(0, 20),
       envUsages: envUsages.slice(0, 20),
+    };
+  },
+});
+
+// Public, so the landing page can show live quota and queue depth before a
+// visitor starts a scan. Contains no user data.
+export const getCapacity = query({
+  args: {},
+  returns: v.object({
+    quota: v.union(
+      v.object({
+        remaining: v.number(),
+        limit: v.number(),
+        resetAt: v.number(),
+        scansPerHour: v.number(),
+      }),
+      v.null(),
+    ),
+    waiting: v.number(),
+    running: v.number(),
+    limit: v.number(),
+  }),
+  handler: async (ctx): Promise<{
+    quota: {
+      remaining: number;
+      limit: number;
+      resetAt: number;
+      scansPerHour: number;
+    } | null;
+    waiting: number;
+    running: number;
+    limit: number;
+  }> => {
+    const quota = await ctx.runQuery(internal.scans.quota.getQuota, {});
+    const stats = await ctx.runQuery(internal.scans.quota.queueStats, {});
+    return {
+      quota,
+      waiting: stats.waiting,
+      running: stats.running,
+      limit: stats.limit,
     };
   },
 });
