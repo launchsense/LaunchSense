@@ -7,11 +7,22 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 ### Added
 
 - Scan report page with per-finding cards, severity, and a single ordered fix prompt for the top 3.
-- Live app URL check over fetch: HTTPS, response, main action hint, and phone viewport meta.
-- Safe share cards and Passport links that work signed out on a phone, with referral attribution.
-- Re-scan and compare: fixed, still broken, new, back again, and unknown states, with both commit numbers pinned.
+- Live app URL check over fetch: HTTPS, response, main action hint, and phone viewport meta. Redirects, timeouts, and oversized pages show as Unknown, never as a pass.
+- Safe share cards and Passport links that work signed out on a phone, with referral attribution. Public pages carry counts and fix titles only, never paths, lines, or snippets.
+- Re-scan and compare: fixed, still broken, new, back again, and unknown states, with both commit numbers pinned and a cause line on every change.
 - Accept-risk marking on findings you decide to keep.
-- Plain-language docs set: how a scan works, how to read your report, privacy, limits, glossary.
+- Repo DNA map and a Judge Readiness signal with evidence coverage shown.
+- OWASP ASVS 5.0.0 subset mappings with coverage, caveat, and evidence counts. Signals only, no certification claim.
+- Seven serial missions and six achievements, verified from scan state only. No points and no leaderboard.
+- Plain text handoff for a developer friend with no coding agent.
+- Plain words explanations with an AI lane (Gemini, then OpenRouter free, then fixed wording) and output validation that rejects unknown finding ids, dropped findings, and invented claims.
+- Plain-language docs set: how a scan works, how to read your report, about, privacy, limits, glossary.
+
+### Changed
+
+- Repo renamed to LaunchSense.
+- Docs state that only public repos can be read, and that private repos are not supported in this release.
+- Publish guard now blocks internal notes, tool config, secrets, and private-life details on every push.
 
 ## [0.3.0] - 2026-10-02
 

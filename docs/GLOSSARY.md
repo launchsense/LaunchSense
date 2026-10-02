@@ -2,13 +2,38 @@
 
 Each word in one plain line.
 
+## Scanning
+
 - Passport: a small proof card for one scan. It shows counts and the commit, never secrets.
+- Share link: a public page for one scan. It shows counts and fix titles, no paths, no lines, no snippets.
 - Evidence: the proof behind a finding. File, line, and a redacted snippet.
-- Snapshot: the saved result of one scan at one commit.
-- Policy: the rule that decides if a finding needs review before sharing.
-- Partial: a result where some work was skipped. A partial result is never a pass.
-- Fingerprint: the stable ID of a finding. It stays the same when lines shift.
-- Quota: the shared GitHub request budget. When it runs out, scans pause and show a retry time.
+- Fingerprint: the stable ID of a finding. It stays the same when lines shift, so a recheck can tell fixed from still broken.
 - Redacted: secret values replaced before anything is saved.
-- Fix Before You Share: the ordered checklist built from your findings. Secrets first.
-- Not checked: work that was skipped, listed openly so nothing looks finished when it is not.
+- Quota: the shared GitHub request budget. When it runs out, scans pause and show a retry time.
+
+## Results
+
+- Partial: a result where some work was skipped. A partial result is never a pass.
+- Unknown: work that was skipped, so no conclusion is drawn. It never becomes fixed.
+- Not checked: the standing list of what this release does not do.
+- Fix Before You Share: the ordered list built from your findings. Secrets first.
+- Top 3: the three highest ranked items, merged into one prompt you can paste into your coding helper.
+- Accepted risk: a finding you chose to keep. It stays visible and is not counted as a problem to fix.
+
+## Signals
+
+- Repo DNA: the shape of the project. Folders, languages, entry points, what exists and what does not.
+- Judge Readiness: a signal from the files we could read, with evidence coverage shown. Not a certification.
+- Evidence coverage: the share of findings that came from files actually read. Low coverage means less was checked.
+- Coverage: how much of the repo we actually looked at.
+- Policy: the rule that decides if a finding needs review before sharing.
+- Standards mapping: one honest line linking a finding to an OWASP ASVS 5.0.0 requirement, with coverage and a caveat.
+
+## Progress
+
+- Re-scan: running the check again on a new commit and comparing.
+- Compare: the five states every finding lands in. Fixed, still broken, new, back again, unknown.
+- Cause line: why a finding changed. The code changed, the advisory data changed, or the checker changed.
+- Mission: one step in a fixed order. Only one is active at a time.
+- Achievement: a milestone marked earned only when the scan data proves it. No points, no leaderboard.
+- Handoff: plain text you can send to a developer friend who has no coding agent.

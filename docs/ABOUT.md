@@ -2,7 +2,7 @@
 
 LaunchSense helps people check apps they built with AI before sharing them.
 
-It looks at your code and your live app the way a stranger would, and lists problems with proof. It gives one fix prompt for the top 3. It never changes your code.
+It reads a public repo and your live app the way a stranger would, and lists problems with proof. It gives one fix prompt for the top 3, then lets you re-check after you fix. It never changes your code.
 
 ## Who it is for
 
@@ -20,6 +20,24 @@ It reads public repos only. A private repo cannot be scanned, and no local agent
 - It will not block publishing.
 - It will not store raw secret values.
 - It will not call a partial result a pass.
+- It will not claim a certification or a compliance pass.
+- It will not pretend a fetch check proves how a page looks on a phone.
+
+## Why not just a skill in your coding agent
+
+Honest answer, because it is the whole difference.
+
+A skill can already do most of the checking. It can read your repo, run patterns, fetch a public repo, and write you a fix prompt. We are not claiming to analyse better.
+
+Where a skill genuinely falls short:
+
+- **Nobody runs it at the right moment.** A skill fires when you open a chat. The moment that matters is the deadline, usually alone, late.
+- **No memory between people or sessions.** The fix and re-check loop needs the old findings, your accepted-risk decisions, and the previous coverage to survive and be shared.
+- **No shareable artifact.** The result has to become a link a judge or client can open on a phone. Chat text is not that.
+- **No honest coverage accounting.** Counting what was read and marking the rest Unknown needs a fixed checker version and a shared store.
+- **The policy bookkeeping rots.** Mapping evidence to OWASP ASVS requirements with version, coverage, and caveat does not survive inside a prompt file.
+
+Same checks. A memory, a deadline trigger, and an artifact.
 
 ## Who built it
 

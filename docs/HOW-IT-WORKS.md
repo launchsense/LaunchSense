@@ -14,11 +14,26 @@ Private repos are out of scope for now. Local tools such as MCP can read them, b
 ## The steps
 
 1. You paste your repo link plus your live app URL.
-2. We read the repo file list and pin the latest commit.
+2. We read the repo file list and pin the latest commit. Everything after this points at that one commit.
 3. We fetch up to 200 files, up to 2 MB in total.
 4. We fetch the served live page HTML.
 5. Fixed checks run: secrets, risky patterns, dependencies, licenses, and hygiene.
 6. You get one fix prompt for the top 3, then the rest of the list.
+7. Repo DNA, Judge Readiness, standards lines, missions, and the handoff text are computed from the same read.
+
+## What runs and what does not
+
+The checks are fixed code, so the same input always gives the same findings. Explanations in plain words are written separately, by an AI provider when one is configured. AI only rewrites findings in plainer language. It never decides what is a finding, and its output is thrown away if it references anything we did not check.
+
+## After you fix things
+
+Run a re-scan. We pin the new commit, run the same checks, and compare. Every finding lands in one of five states: fixed, still broken, new, back again, or unknown. Unknown means we did not read that file this time, so no conclusion is drawn. Unknown never becomes fixed.
+
+If the checker itself changes between your two scans, old findings become unknown instead of fixed. That is deliberate: a different checker cannot honestly claim your bug is gone.
+
+## Caching
+
+The file list and file contents are cached for 24 hours per commit, and vulnerability lookups for 7 days. Re-scanning the same commit costs nothing and returns the same report. Cached contents are replaced when the commit changes.
 
 Plain words used in the app:
 

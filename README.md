@@ -33,12 +33,31 @@ This reads public repos. It cannot see a private one.
 - It never stores raw secret values. Snippets are redacted before storage.
 - A partial result is never shown as a pass. Unchecked work stays listed as not checked.
 
+## What is checked
+
+- Secrets left in tracked files, like keys, tokens, and passwords.
+- Risky code patterns, like eval, debug leftovers, and string-built database queries.
+- Dependencies, like known vulnerabilities, floating versions, and install scripts.
+- Licenses, like missing terms or copyleft terms that need a human decision.
+- Project hygiene, like README, tests, CI, and duplicate or large files.
+- Your live app, by fetching the served page. HTTPS, does it load, is there content, is the main action visible, is there a phone viewport tag.
+- The shape of your project: Repo DNA, plus a Judge Readiness signal with coverage shown.
+
+## After the scan
+
+- Re-scan on the new commit and compare: fixed, still broken, new, back again, unknown.
+- OWASP ASVS 5.0.0 subset lines with coverage and caveats. Signals, never a certification.
+- Seven missions in order, and achievements earned only when the scan proves them.
+- Plain text handoff for a developer friend with no coding agent.
+- One fix prompt for the top 3, ranked across your code and your live app.
+
 ## Limits
 
 - Public repos only. Private repos cannot be read, and no local agent or MCP setup is included.
-- Guest scans only in this release. Saving and history need sign-in, which is coming later.
+- Guest scans only in this release. Saving and history need sign-in, which is not built.
 - GitHub quota is shared, so heavy use can pause scans until the quota resets.
 - Each scan reads at most 200 files and 2 MB in total. The rest is listed as not checked.
+- Plain words explanations use an AI provider when one is configured. None is configured in this release, so fixed wording is shown.
 - More detail: `docs/LIMITS.md`. Privacy detail: `docs/PRIVACY.md`.
 
 ## Run it locally
@@ -65,10 +84,10 @@ Releases use `npm run deploy` and are done by maintainers only. A git push never
 ## Docs
 
 - `docs/HOW-IT-WORKS.md`: what happens when you scan.
-- `docs/READ-YOUR-REPORT.md`: how to read findings and the fix list.
-- `docs/ABOUT.md`: who LaunchSense is for and what it will not do.
+- `docs/READ-YOUR-REPORT.md`: how to read findings, signals, missions, and the recheck.
+- `docs/ABOUT.md`: who it is for, why not a skill, and what it will not do.
 - `docs/PRIVACY.md`: what we save and what we never save.
-- `docs/LIMITS.md`: quotas, caps, and what stays unchecked.
+- `docs/LIMITS.md`: quotas, caps, and everything unchecked.
 - `docs/GLOSSARY.md`: every special word in one plain line.
 - `CHANGELOG.md`: what changed in each release.
 
