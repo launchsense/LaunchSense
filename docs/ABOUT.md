@@ -6,11 +6,13 @@ It looks at your code and your live app the way a stranger would, and lists prob
 
 ## Who it is for
 
-Builders who ship fast with AI coding tools and want a second set of eyes before the repo goes public. You paste a repo link, get a plain report, hand the fix prompt to your coding helper, fix, then scan again.
+Builders who ship fast with AI coding tools and want a second set of eyes on a public repo before they share the link. You paste a repo link, get a plain report, hand the fix prompt to your coding helper, fix, then scan again.
 
 ## The moment it is built for
 
-The minute before you flip a repo public. That is when a leaked key, a copyleft license, or a missing README stops being a private problem.
+The moment after a repo becomes public and before you share the link. Public means every future reader can see it, including anything already committed. That is when a leaked key, a copyleft license, or a missing README stops being a private problem.
+
+It reads public repos only. A private repo cannot be scanned, and no local agent or MCP setup is included here.
 
 ## What it will not do
 

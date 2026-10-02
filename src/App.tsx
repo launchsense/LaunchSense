@@ -33,8 +33,8 @@ function Home() {
   }
   return <main>
     <p className="eyebrow">LAUNCHSENSE · CHECK BEFORE SHARING</p>
-    <h1>Check your repo before you flip it public.</h1>
-    <p>See your code and your live app the way a stranger would.</p>
+    <h1>Check your public repo before you share it.</h1>
+    <p>See your code and your live app the way a stranger would. Public repos only.</p>
     <section aria-label="Connection status">
       <p role="status">{health ? "Convex is connected." : "Connecting to Convex…"}</p>
       <button disabled={checking || !health} onClick={() => void check()}>{checking ? "Checking…" : "Check connection"}</button>

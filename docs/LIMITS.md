@@ -1,5 +1,6 @@
 # Limits
 
+- Public GitHub repos only. Private repos are not readable, so nothing about them is checked or claimed.
 - Guest scans only. There are no accounts yet, so each scan stands alone.
 - GitHub quota is shared. When it runs out, scans show partial with a retry time.
 - Caps per scan: 200 files, 2 MB in total, 100 KB per file. Skipped files are listed as not checked.

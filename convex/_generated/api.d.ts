@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as adapters_ai from "../adapters/ai.js";
 import type * as adapters_github from "../adapters/github.js";
 import type * as adapters_live from "../adapters/live.js";
 import type * as adapters_osv from "../adapters/osv.js";
@@ -16,6 +17,7 @@ import type * as auth from "../auth.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as scans_actions from "../scans/actions.js";
+import type * as scans_aiExplain from "../scans/aiExplain.js";
 import type * as scans_analyze from "../scans/analyze.js";
 import type * as scans_internal from "../scans/internal.js";
 import type * as scans_livecheck from "../scans/livecheck.js";
@@ -31,6 +33,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "adapters/ai": typeof adapters_ai;
   "adapters/github": typeof adapters_github;
   "adapters/live": typeof adapters_live;
   "adapters/osv": typeof adapters_osv;
@@ -39,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   health: typeof health;
   http: typeof http;
   "scans/actions": typeof scans_actions;
+  "scans/aiExplain": typeof scans_aiExplain;
   "scans/analyze": typeof scans_analyze;
   "scans/internal": typeof scans_internal;
   "scans/livecheck": typeof scans_livecheck;

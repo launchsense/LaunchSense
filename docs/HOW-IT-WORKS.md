@@ -1,6 +1,17 @@
 # How a scan works
 
-Use this right before you flip your repo public. That is the moment a leaked key or a bad license becomes real.
+## What you can scan
+
+Public GitHub repos only. If your repo is private, we cannot read it and there is nothing to check yet.
+
+Two useful moments:
+
+- Your repo is already public and you want to know what a visitor will find. Scan it.
+- Your repo is about to become public. Flip it, scan it, fix what shows up, and only then share the link. Public means every future reader can see it, including anything already committed.
+
+Private repos are out of scope for now. Local tools such as MCP can read them, but that is not built here.
+
+## The steps
 
 1. You paste your repo link plus your live app URL.
 2. We read the repo file list and pin the latest commit.

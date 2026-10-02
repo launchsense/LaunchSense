@@ -6,6 +6,7 @@ import { buildFixPlan } from "../../../shared/reports/fixPlan";
 import type { PlanFinding } from "../../../shared/reports/fixPlan";
 import ScanReport from "../report/ScanReport";
 import CompareView from "../report/CompareView";
+import Stage5Panels from "../report/Stage5Panels";
 
 function shortSha(sha: string): string {
   return sha.slice(0, 7);
@@ -29,6 +30,7 @@ export default function GuestScan() {
   const compareScans = useAction(api.scans.rescan.compareScans);
   const createShare = useAction(api.scans.sharing.createShare);
   const createPassport = useAction(api.scans.sharing.createPassport);
+  const explainScan = useAction(api.scans.aiExplain.explainScan);
   const logEvent = useMutation(api.scans.queries.logEvent);
   const [repoUrl, setRepoUrl] = useState("");
   const [liveUrl, setLiveUrl] = useState("");
@@ -46,7 +48,9 @@ export default function GuestScan() {
   const [passportId, setPassportId] = useState<string | null>(null);
   const [shareError, setShareError] = useState("");
   const [comparePair, setComparePair] = useState<{ from: Id<"scans">; to: Id<"scans"> } | null>(null);
+  const [rescanRan, setRescanRan] = useState(false);
   const [rescanNote, setRescanNote] = useState("");
+  const [explainNote, setExplainNote] = useState("");
   const scanState = useQuery(
     api.scans.queries.getScan,
     scanId === null ? "skip" : { scanId },
@@ -77,6 +81,9 @@ export default function GuestScan() {
       const result = await runScan({ repoUrl: repoUrl.trim() });
       setScanId(result.scanId);
       setWasCached(result.cached);
+      setRescanRan(false);
+      setComparePair(null);
+      setExplainNote("");
       void logEvent({ kind: "scan_started", scanId: result.scanId, refShareId: refShare ?? undefined });
       if (refShare !== null) {
         void logEvent({ kind: "referred_scan_started", scanId: result.scanId, refShareId: refShare });
@@ -138,12 +145,29 @@ export default function GuestScan() {
       await compareScans({ fromScanId: base, toScanId: rescan.scanId });
       setScanId(rescan.scanId);
       setComparePair({ from: base, to: rescan.scanId });
+      setRescanRan(true);
       setPhase("idle");
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Could not rescan. Try again.");
       setPhase("idle");
     }
   }
+  async function onExplain() {
+    if (scanId === null || phase !== "idle") return;
+    setExplainNote("");
+    setPhase("analyzing");
+    try {
+      const result = await explainScan({ scanId });
+      setExplainNote(
+        `${result.note} Explained ${result.explained} item(s).`,
+      );
+    } catch (error) {
+      setExplainNote(error instanceof Error ? error.message : "Could not explain. Try again.");
+    } finally {
+      setPhase("idle");
+    }
+  }
+
   async function onPassport() {
     if (scanId === null) return;
     setShareError("");
@@ -175,16 +199,17 @@ export default function GuestScan() {
 
   return (
     <section aria-label="Guest repository scan">
-      <h2>Check before you go public</h2>
+      <h2>Check your public repo</h2>
       <div role="note" aria-label="Privacy note">
         <p>
-          <strong>Before you run:</strong> we fetch the public file list and
-          bounded file contents. If you add a live URL, we also fetch the
-          served page HTML. Nothing on your machine leaves the browser except
-          the form below. We save the owner, repo, commit SHA, file paths,
-          and redacted finding snippets for 24-hour caching. Raw secret
-          values are never stored. Free GitHub quota is shared; quota
-          exhaustion shows as partial, never as a pass.
+          <strong>Public repos only.</strong> If your repo is private, flip it
+          public first, scan it, fix what shows up, and only then share the
+          link. Nothing on your machine leaves the browser except the form
+          below. We fetch the public file list and bounded file contents, plus
+          the served page HTML if you add a live URL. We save the owner, repo,
+          commit SHA, file paths, and redacted finding snippets for 24-hour
+          caching. Raw secret values are never stored. Free GitHub quota is
+          shared; quota exhaustion shows as partial, never as a pass.
         </p>
       </div>
       <form onSubmit={(e) => void onSubmit(e)}>
@@ -268,9 +293,29 @@ export default function GuestScan() {
             <div aria-label="Rescan">
               <button type="button" disabled={phase !== "idle"} onClick={() => void onRescan()}>
                 {phase !== "idle" ? "Working…" : "Re-scan for new commits"}
+              </button>{" "}
+              <button type="button" disabled={phase !== "idle"} onClick={() => void onExplain()}>
+                Explain in plain words
               </button>
               {rescanNote.length > 0 && <p role="status">{rescanNote}</p>}
+              {explainNote.length > 0 && <p role="status">{explainNote}</p>}
             </div>
+          )}
+          {analyzed && resultsState !== undefined && (
+            <Stage5Panels
+              scanId={scanId as Id<"scans">}
+              plan={plan}
+              owner={scan.owner}
+              repo={scan.repo}
+              sha={scan.sha}
+              rescanRan={rescanRan}
+              passportIssued={passportId !== null}
+              shareCreated={shareId !== null}
+              shareViewed={false}
+              findings={resultsState.findings}
+              live={resultsState.live}
+              partial={scan.status === "partial"}
+            />
           )}
           {compareState !== undefined && compareState !== null && comparePair !== null && (
             <CompareView

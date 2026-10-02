@@ -1,8 +1,16 @@
 # LaunchSense
 
-Check your repo before you flip it public.
+Check your public repo before you show it to anyone.
 
-LaunchSense looks at your code and your live app the way a stranger would, and lists problems with proof. It gives one fix prompt for the top 3. It never changes your code.
+LaunchSense reads public GitHub repos. It looks at your code and your live app the way a stranger would, and lists problems with proof. It gives one fix prompt for the top 3. It never changes your code.
+
+## Public repos only
+
+This reads public repos. It cannot see a private one.
+
+- Repo already public: scan it any time.
+- Repo still private: scan it after you flip it public, before you share the link anywhere.
+- Need to check a private repo: not supported yet. Local tooling such as MCP is the route for that, and it is not built.
 
 ## How to use
 
@@ -27,6 +35,7 @@ LaunchSense looks at your code and your live app the way a stranger would, and l
 
 ## Limits
 
+- Public repos only. Private repos cannot be read, and no local agent or MCP setup is included.
 - Guest scans only in this release. Saving and history need sign-in, which is coming later.
 - GitHub quota is shared, so heavy use can pause scans until the quota resets.
 - Each scan reads at most 200 files and 2 MB in total. The rest is listed as not checked.

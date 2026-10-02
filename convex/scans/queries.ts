@@ -310,6 +310,87 @@ export const getPassportPage = query({
   },
 });
 
+export const getAnalysisFacts = query({
+  args: { scanId: v.id("scans") },
+  returns: v.object({
+    treePaths: v.array(v.string()),
+    analyzedPaths: v.array(v.string()),
+    hasReadme: v.boolean(),
+    hasTests: v.boolean(),
+    hasCI: v.boolean(),
+    hasLicense: v.boolean(),
+    entryPoints: v.array(v.string()),
+    agentFiles: v.array(v.string()),
+    envUsages: v.array(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const scan = await ctx.db.get("scans", args.scanId);
+    if (scan === null || scan.sha === undefined) {
+      return {
+        treePaths: [],
+        analyzedPaths: [],
+        hasReadme: false,
+        hasTests: false,
+        hasCI: false,
+        hasLicense: false,
+        entryPoints: [],
+        agentFiles: [],
+        envUsages: [],
+      };
+    }
+    const sha = scan.sha;
+    const trees = await ctx.db
+      .query("repoTrees")
+      .withIndex("by_repo_sha", (q) =>
+        q.eq("owner", scan.owner).eq("repo", scan.repo).eq("sha", sha),
+      )
+      .order("desc")
+      .take(1);
+    const tree = trees[0] ?? null;
+    const treePaths = tree === null ? [] : tree.entries.filter((e) => e.type === "blob").map((e) => e.path);
+    const contents = await ctx.db
+      .query("fileContents")
+      .withIndex("by_repo_sha_path", (q) =>
+        q.eq("owner", scan.owner).eq("repo", scan.repo).eq("sha", sha),
+      )
+      .order("desc")
+      .take(500);
+    const analyzedPaths = contents.map((c) => c.path);
+    const base = treePaths.length > 0 ? treePaths : analyzedPaths;
+    const lower = base.map((p) => p.toLowerCase());
+    const hasReadme = lower.some((p) => p === "readme.md" || p.startsWith("readme."));
+    const hasTests = lower.some(
+      (p) =>
+        p.includes("/__tests__/") ||
+        p.includes(".test.") ||
+        p.includes(".spec.") ||
+        p.includes("test_") === true,
+    );
+    const hasCI = lower.some((p) => p.startsWith(".github/workflows/"));
+    const hasLicense = lower.some((p) => p === "license" || p.startsWith("license.") || p.startsWith("licence"));
+    const entryPoints = base.filter((p) =>
+      /^(src\/)?(main|app|index)\.(tsx?|jsx?|js|html)$|^convex\/schema\.ts$|^package\.json$|^readme\.md$/i.test(p),
+    );
+    const agentFiles = base.filter((p) =>
+      /(^|\/)(agents\.md|claude\.md|cursor\.md)$|^\.(agents|codex|claude)\//.test(p.toLowerCase()),
+    );
+    const envUsages = contents
+      .filter((c) => /process\.env|import\.meta\.env|\bVITE_/.test(c.content))
+      .map((c) => c.path);
+    return {
+      treePaths: base.slice(0, 2000),
+      analyzedPaths,
+      hasReadme,
+      hasTests,
+      hasCI,
+      hasLicense,
+      entryPoints,
+      agentFiles: agentFiles.slice(0, 20),
+      envUsages: envUsages.slice(0, 20),
+    };
+  },
+});
+
 export const logEvent = mutation({
   args: {
     kind: analyticsKind,
