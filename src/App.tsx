@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
+import GuestScan from "./features/scan/GuestScan";
 
 export default function App() {
   const health = useQuery(api.health.status);
@@ -25,5 +26,6 @@ export default function App() {
       <button disabled={checking || !health} onClick={() => void check()}>{checking ? "Checking…" : "Check connection"}</button>
       <p role="status">{result}</p>
     </section>
+    <GuestScan />
   </main>;
 }

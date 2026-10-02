@@ -8,9 +8,13 @@
  * @module
  */
 
+import type * as adapters_github from "../adapters/github.js";
 import type * as auth from "../auth.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as scans_actions from "../scans/actions.js";
+import type * as scans_internal from "../scans/internal.js";
+import type * as scans_queries from "../scans/queries.js";
 
 import type {
   ApiFromModules,
@@ -19,9 +23,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "adapters/github": typeof adapters_github;
   auth: typeof auth;
   health: typeof health;
   http: typeof http;
+  "scans/actions": typeof scans_actions;
+  "scans/internal": typeof scans_internal;
+  "scans/queries": typeof scans_queries;
 }>;
 
 /**
