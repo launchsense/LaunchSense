@@ -122,6 +122,35 @@ function parseGoMod(path: string, text: string, out: DepsResult): void {
   }
 }
 
+function parsePackageLock(path: string, text: string, out: DepsResult): void {
+  let data: unknown;
+  try {
+    data = JSON.parse(text) as unknown;
+  } catch {
+    return;
+  }
+  if (typeof data !== "object" || data === null) return;
+  const record = data as Record<string, unknown>;
+  const packages = record["packages"];
+  if (typeof packages !== "object" || packages === null) return;
+  const installed = new Map<string, string>();
+  for (const [pathKey, values] of Object.entries(packages as Record<string, unknown>)) {
+    if (pathKey === "" || typeof values !== "object" || values === null) continue;
+    const version = (values as Record<string, unknown>)["version"];
+    if (typeof version !== "string" || version.length === 0) continue;
+    const name = pathKey.split("node_modules/").pop();
+    if (typeof name === "string" && name.length > 0) installed.set(name, version);
+  }
+  for (const entry of out.deps) {
+    if (entry.ecosystem !== "npm") continue;
+    const resolved = installed.get(entry.name);
+    if (resolved === undefined) continue;
+    entry.version = resolved;
+    entry.pinned = true;
+    entry.manifest = path;
+  }
+}
+
 export function parseManifests(
   files: Array<{ path: string; content: string }>,
 ): DepsResult {
@@ -145,6 +174,7 @@ export function parseManifests(
       parseGoMod(file.path, file.content, out);
     } else if (base === "Cargo.toml" || base === "package-lock.json") {
       if (!out.manifests.includes(file.path)) out.manifests.push(file.path);
+      if (base === "package-lock.json") parsePackageLock(file.path, file.content, out);
     }
   }
   return out;

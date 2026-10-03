@@ -453,8 +453,23 @@ export const logEvent = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const now = Date.now();
+    const day = new Date(now).toISOString().slice(0, 10);
+    const limitKey = `${args.kind}:${day}`;
+    const existing = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_key", (q) => q.eq("key", limitKey))
+      .unique();
+    const limit = args.kind === "share_viewed" ? 100 : 50;
+    if (existing !== null && existing.count >= limit) {
+      return null;
+    }
+    if (existing !== null) {
+      await ctx.db.patch("rateLimits", existing._id, { count: existing.count + 1, updatedAt: now });
+    } else {
+      await ctx.db.insert("rateLimits", { key: limitKey, day, count: 1, updatedAt: now });
+    }
     await ctx.db.insert("analyticsEvents", {
-      day: new Date(now).toISOString().slice(0, 10),
+      day,
       kind: args.kind,
       scanId: args.scanId,
       shareId: args.shareId?.slice(0, 64),
@@ -569,6 +584,12 @@ export const setDecision = mutation({
     if (args.fingerprint.length === 0 || args.fingerprint.length > 200) {
       throw new Error("That finding reference is not valid.");
     }
+    const rows = await ctx.db
+      .query("userDecisions")
+      .withIndex("by_scan", (q) => q.eq("scanId", args.scanId))
+      .collect();
+    const exists = rows.some((row) => row.fingerprint === args.fingerprint);
+    if (exists) return null;
     await ctx.db.insert("userDecisions", {
       scanId: args.scanId,
       fingerprint: args.fingerprint,

@@ -30,12 +30,21 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 
 ### Fixed
 
+- Tarball and fallback reads now reserve byte budget before adding a file, so the 2MB cap cannot be crossed by one more entry.
+- Fallback per-file fetches now actually run when the tarball fetch fails or is truncated.
+- The Judge-ready mission now requires a live check that reached the site, not merely the absence of a failed live check.
+- Accepted-risk marks no longer insert duplicate rows.
+- AI explanations are now returned and visible in the report instead of validated and discarded.
+- The footer no longer calls the checks open source while the project license is proprietary.
 - Privacy page described a 24 hour cache of redacted file text that was removed three releases ago. It now describes what is actually stored: paths, sizes, hashes, and redacted snippets.
 - Docs claimed re-scanning the same commit costs nothing. It costs about 4 GitHub requests. Corrected, with the real cost stated.
 - Scan page told users their snippets were cached for 24 hours. No purge existed. Corrected.
 
 ### Changed
 
+- npm dependency records use exact installed versions from `package-lock.json` when that file is present.
+- OpenRouter fallback now uses the real free model id `openrouter/stealth/space-bunny-alpha`.
+- First-party analytics writes are throttled by event kind and day.
 - Claim guard now checks two more things: any sentence claiming there is no stored copy of your code, and any stated cache or retention window. A window must match a TTL constant in the code and be backed by code that deletes. This is why the three defects above cannot come back silently.
 - Repo renamed to LaunchSense.
 - Docs state that only public repos can be read, and that private repos are not supported in this release.

@@ -114,10 +114,14 @@ export function extractTar(
         if (entries.length >= options.maxEntries || totalBytes >= options.maxTotalBytes) {
           truncated = true;
         } else if (size <= options.maxBytesPerFile) {
-          const text = decode(tar.subarray(dataStart, dataEnd));
-          if (text !== null) {
-            entries.push({ path: trimmed, content: text, size });
-            totalBytes += size;
+          if (totalBytes + size > options.maxTotalBytes) {
+            truncated = true;
+          } else {
+            const text = decode(tar.subarray(dataStart, dataEnd));
+            if (text !== null) {
+              entries.push({ path: trimmed, content: text, size });
+              totalBytes += size;
+            }
           }
         }
       }
