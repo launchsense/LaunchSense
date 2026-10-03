@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import GuestScan from "./features/scan/GuestScan";
+import { AuthPanel } from "./features/auth/AuthPanel";
 import SharePage from "./pages/SharePage";
 import PassportPage from "./pages/PassportPage";
 
@@ -36,6 +37,7 @@ function Home() {
         <p role="status">Connecting…</p>
       )}
       <GuestScan />
+      <AuthPanel />
       <footer aria-label="About this product">
         <p>
           Read the{" "}
