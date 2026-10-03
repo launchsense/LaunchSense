@@ -17,6 +17,10 @@ export default defineConfig([
       "postcss.config.js",
       "tailwind.config.js",
       "vite.config.ts",
+      // The corpus harness is a standalone measurement script run with
+      // --experimental-strip-types, not part of the app or the convex build, so it
+      // is not in any tsconfig project. It is still typechecked when run.
+      "tests/corpus-harness.ts",
     ],
   },
   {
