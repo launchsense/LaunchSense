@@ -96,6 +96,7 @@ export async function fetchBlobContent(
   repo: string,
   sha: string,
   path: string,
+  maxBytes = MAX_BYTES_PER_FILE,
 ): Promise<BlobResult> {
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path
     .split("/")
@@ -133,7 +134,7 @@ export async function fetchBlobContent(
   }
   const size = typeof record["size"] === "number" ? record["size"] : 0;
   const contentSha = typeof record["sha"] === "string" ? record["sha"] : "";
-  if (size > MAX_BYTES_PER_FILE) {
+  if (size > maxBytes) {
     return { status: "too-large", content: "", size, contentSha, resetAtMs: null };
   }
   const clean = rawContent.replace(/\s+/g, "");
@@ -145,7 +146,7 @@ export async function fetchBlobContent(
   } catch {
     return { status: "error", content: "", size, contentSha, resetAtMs: null };
   }
-  if (bytes.length > MAX_BYTES_PER_FILE) {
+  if (bytes.length > maxBytes) {
     return { status: "too-large", content: "", size: bytes.length, contentSha, resetAtMs: null };
   }
   for (let i = 0; i < Math.min(bytes.length, 8000); i++) {

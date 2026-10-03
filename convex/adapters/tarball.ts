@@ -20,6 +20,7 @@ const { gunzipSync } = require("node:zlib");
 
 export const MAX_TOTAL_BYTES = 2000000;
 export const MAX_FILES = 200;
+export const MAX_LOCKFILE_BYTES = 500000;
 
 function isRateLimitStatus(status: number, remaining: string | null): boolean {
   if (status === 429) return true;
@@ -111,6 +112,7 @@ export async function fetchRepoTarball(
   const result = extractTar(bytes, gunzipSync, {
     maxEntries: MAX_FILES,
     maxBytesPerFile: MAX_BYTES_PER_FILE,
+    maxLockfileBytes: MAX_LOCKFILE_BYTES,
     maxTotalBytes: MAX_TOTAL_BYTES,
   });
   return {

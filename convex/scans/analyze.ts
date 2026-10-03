@@ -9,7 +9,7 @@ import { scanSecrets } from "../../shared/analyzers/secrets";
 import { analyzeHygiene } from "../../shared/analyzers/hygiene";
 import { parseManifests } from "../../shared/analyzers/deps";
 import { analyzeLicenses } from "../../shared/analyzers/licenses";
-import { severityFor } from "../../shared/policies/severity";
+import { severityForFinding } from "../../shared/policies/severity";
 import type { Severity } from "../../shared/policies/severity";
 import {
   fingerprintFinding,
@@ -17,7 +17,8 @@ import {
   redactedSnippet,
 } from "../../shared/redaction";
 import { fetchBlobContent } from "../adapters/github";
-import { fetchRepoTarball } from "../adapters/tarball";
+import { fetchRepoTarball, MAX_LOCKFILE_BYTES } from "../adapters/tarball";
+import { isLockfilePath } from "../../shared/tar";
 import { queryOsvBatch } from "../adapters/osv";
 
 const MAX_FILES_FETCHED = 200;
@@ -337,7 +338,13 @@ export const analyzeScan = action({
           continue;
         }
 
-        const blob = await fetchBlobContent(owner, repo, sha, path);
+        const blob = await fetchBlobContent(
+          owner,
+          repo,
+          sha,
+          path,
+          isLockfilePath(path) ? MAX_LOCKFILE_BYTES : undefined,
+        );
         processed += 1;
         if (blob.status === "rate-limited") {
           rateLimitedAt = blob.resetAtMs;
@@ -410,7 +417,7 @@ export const analyzeScan = action({
         title: `Review flagged pattern (${match.ruleId})`,
         why: "A risky pattern was seen in a tracked file.",
       };
-      const severity = severityFor(match.ruleId);
+      const severity = severityForFinding(match.ruleId, match.path);
       pushEvidence(evidence, findings, {
         ruleId: match.ruleId,
         path: match.path,
