@@ -222,6 +222,8 @@ builder is about to hit publish.
   automatic reminder and no monitoring in Phase 1, so a stale result stays stale
   until you rescan.
 - A hung advisory lookup is **unknown**, never a pass.
+- The report was found confusing by at least one real user. See M2. We have the
+  signal, not yet the fix.
 - Share links and passports do not expire and cannot be revoked today. The interface
   says so before you create one, not after.
 - Signing in unlocks nothing yet. It says so plainly instead of implying a richer
@@ -233,50 +235,79 @@ Phases are scope. Milestones are proof. Each one starts with the riskiest guess 
 its simplest possible form, and a milestone is not done until a real person, not
 us, has done the thing.
 
-### M1, the return. Not proven.
+### M1, the return. First real data point. Not yet a proven pattern.
 
 **The guess:** a vibe coder who fixes something will come back and rescan.
 
-This is the riskiest guess in the product and nobody has tested it. We know a scan
-works. We do not know that anyone comes back. Every scan is tied to one commit and
-compared with the last one, and that is the main thing we have that CheckVibe and a
-coding-agent skill do not. If nobody comes back, that advantage is worth nothing and
-this is a one-time scanner with extra steps.
+This was the riskiest guess in the product and it has just had its first test
+outside our own hands.
 
-**Plainest test:** one builder, one repo, one real fix, one second scan they choose
-to do. No reminder, no email, no nudge. They come back on their own or it does not
-count.
+**What happened.** A builder outside the team ran a scan, fixed what it found,
+and came back and pressed re-scan on his own, with no reminder from us. He is now
+asking for the MCP integration. One person, one unprompted return.
 
-**When to stop:** if ten builders finish a first scan and fewer than three come back
-on their own, the return loop is not real. Then the story changes before we build
-anything else on top of it.
+**What that proves.** The loop is possible. A real person completed paste, fix,
+rescan without being asked. That is the first sign the thing we claim over
+CheckVibe and over a coding-agent skill is real rather than theoretical.
 
-**Status:** not started. This is the next thing to test, before any new feature.
+**What it does not prove.** Three out of ten is the bar, and this is one. One
+person can be a friend who wanted to be helpful. The return has to happen with
+people who are not close to us, and more than once, before the loop counts as real.
+Status stays "not proven" until the count is there.
 
-### M2, they understand the result. Partly proven.
+**Plainest test:** ten builders finish a first scan. Count how many come back on
+their own, no reminder, no email, no nudge. Record the names and dates before
+asking them, so the ones who did not return are not forgotten.
+
+**When to stop:** fewer than three of ten return on their own, and the return loop
+is not real. The story changes before anything is built on top of it.
+
+**First recorded result, 2026-10-03:** 1 builder, 1 unprompted return. Below the bar
+of 3 of 10, and recorded here rather than rounded up.
+
+### M2, they understand the result. Partly proven, one problem found.
 
 **The guess:** a builder who is not technical reads the answer and understands what
 was checked and what was not.
 
-We have only tested this on ourselves. The plain answer and the "what was not
-checked" list both exist and are held in place by tests, but no outside reader has
-used them yet. The worry is not that the words are confusing. The worry is that
-someone reads the first line, thinks the repo is fine, and stops before reading the
-part that says we only read 200 of 340 files.
+**What happened.** Team members used it, and one piece of feedback was that the
+report or its wording was confusing. That is the first outside signal, and it did
+not come back clean.
+
+This matters more than it looks. Our whole position rests on the reader
+understanding the difference between the clean-looking first line and the line under
+it saying we only read 200 of 340 files. If real readers find the report confusing,
+the strongest claim we have is not landing.
+
+**What is not yet known.** Which part confused them, and whether they
+misread the coverage line specifically or something else. We have the signal, not
+the diagnosis.
 
 **Plainest test:** show the report to five builders who have never seen it and ask
 them what they think it says. If any one of them says "so it's fine", we have not
-got there yet.
+got there yet. Separately, ask the team member who was confused which specific part
+lost them.
 
-### M3, the fix we hand over actually works. Built, not yet proven in use.
+### M3, the fix we hand over actually works. First outside success observed.
 
 **The guess:** pasting the fix prompt into an AI tool really fixes the thing, and
 the next scan shows it as fixed.
 
-The compare works and sorts each finding into fixed, still broken, new, back again,
-or unknown. What we have not seen is whether the prompt is good enough that the AI
-tool fixes it first time. If the next scan mostly says "still broken", people will
-stop trusting the answer.
+**What happened.** A team member used LaunchSense, a licence finding came up, and
+they went and corrected the licence issue. That is the full loop working on a real
+problem in a real repo, by someone who is not us: a finding was read, understood,
+and fixed.
+
+**What that proves.** The prompt is good enough to produce a real fix at least
+once. The finding was legible enough to act on. That is the first evidence the
+handoff is worth anything.
+
+**What it does not prove.** One licence fix is the easiest kind of finding to act
+on, because the fix is short and legal, not technical. We have not yet seen a
+secret or a dependency finding drive the same result. And we have not yet seen the
+next scan show it as fixed.
+
+**Status:** one confirmed fix in the wild. Encourage, and thin.
 
 ### M4, the share link gets used. Not proven.
 
@@ -298,9 +329,33 @@ it has been met.
   triggered by a push, history, score trends, fuller standards maps, SBOM signals.
   Monitoring only makes sense once people come back on their own. If M1 fails, this
   stage is redrawn instead of built.
-- **Phase 3, waits on M4.** A public API with versions, a full MCP setup, teams,
-  roles, audit logs, retention. The Phase 1 MCP routes are the start of this, not the
-  finished version.
+- **Phase 3, was gated on M4. Now moving earlier, and the reason is recorded.** A
+  public API with versions, a full MCP setup, teams, roles, audit logs, retention.
+  The Phase 1 MCP routes are the start of this, not the finished version.
+
+### The MCP decision, and the pressure behind it
+
+Real users asked for MCP before we planned to build it. Two people who used the
+product want their agents to call it. That is genuine pull, and it is the first
+time demand has arrived for something on the far end of the roadmap.
+
+The honest tension: the plan said do not build Phase 3 until M4 is proven, and M4 is
+not proven. But pull is the strongest signal we have, and turning it away to follow
+a plan we wrote before we had users would be the plan serving itself.
+
+What we are doing and why:
+
+- **MCP moves earlier, as a small read-only surface.** It scans a public repo and
+  reads a report. Nothing private, no writes, no account. The Phase 1 routes already
+  exist, so this is finishing them, not starting from nothing.
+- **The gate on M4 still stands for everything else in Phase 3.** Teams, roles,
+  audit logs, and retention all wait. Those are large, and M4 is still unproven.
+- **M1 is still the number that matters.** MCP users are the same people who would
+  rescan. If they come back through an agent instead of the browser, that still
+  counts as a return. Track it the same way.
+
+Recorded so the decision is visible: we are moving one Phase 3 item forward because
+users asked, not because the plan changed its mind.
 
 ## Market
 
@@ -319,6 +374,23 @@ prompts behind the paid plan.
 
 First market on purpose: about 50 vibe coders in my extended network fit this right
 now. They are the first test set and the first word of mouth.
+
+## What real people have done with it so far
+
+Testing so far, stated as what it is rather than what it proves.
+
+- Tested on many of my own repositories, and on a range of other public repos, to
+  shake out the scanner itself.
+- Shared with my team. They ran it on their work, found a licence issue, and
+  corrected it. That is the first fix driven by LaunchSense outside my own hands.
+- One team member came back and pressed re-scan on his own, without being asked. He
+  is now asking for the MCP integration.
+- One piece of feedback: the report or its wording was confusing. Recorded as an
+  open problem under M2, not smoothed over.
+
+What this is not: it is not the M1 proof. The people who returned are close to me,
+which is the easiest possible version of the test. The bar is ten builders, three
+returns, and it has not been run yet.
 
 ## How it is built, for the record
 
