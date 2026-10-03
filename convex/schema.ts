@@ -241,6 +241,17 @@ export default defineSchema({
     installationTargetId: v.string(),
     connectedAt: v.number(),
   }).index("by_user", ["userId"]),
+  featureEntitlements: defineTable({
+    userId: v.id("users"),
+    featureKey: v.literal("rendered_phone_check"),
+    enabled: v.boolean(),
+    source: v.union(v.literal("paid"), v.literal("permitted")),
+    expiresAt: v.optional(v.number()),
+    grantedBy: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_user_feature", ["userId", "featureKey"])
+    .index("by_feature", ["featureKey"]),
   usageMeters: defineTable({
     userId: v.id("users"),
     kind: v.union(v.literal("guest"), v.literal("signed_in"), v.literal("connected")),
