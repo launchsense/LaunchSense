@@ -1,9 +1,10 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import GitHub from "@auth/core/providers/github";
+import Resend from "@auth/core/providers/resend";
 
 // Guest scanning works without this module. When GitHub auth variables are
 // present, this provider creates one internal user per GitHub account.
-// Do not add password, anonymous, or OAuth providers beyond GitHub.
+// Resend is optional email delivery only, not a login password.
 declare const process: { env: Record<string, string | undefined> };
 const providers = [];
 if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
@@ -11,6 +12,14 @@ if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
+    }),
+  );
+}
+if (process.env.AUTH_RESEND_KEY && process.env.AUTH_EMAIL_FROM) {
+  providers.push(
+    Resend({
+      apiKey: process.env.AUTH_RESEND_KEY,
+      from: process.env.AUTH_EMAIL_FROM,
     }),
   );
 }
