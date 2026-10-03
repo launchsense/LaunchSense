@@ -58,8 +58,8 @@ export function DnaPanel(props: { dna: RepoDna; readiness: ReadinessBand }) {
         <h5>Languages</h5>
         <p>{props.dna.languages.map((l) => `${l.language} ${l.files}`).join(", ") || "none"}</p>
       </div>
-      <div aria-label="Judge readiness">
-        <h5>Judge readiness: {props.readiness.label}</h5>
+      <div aria-label="Share readiness">
+        <h5>Share readiness: {props.readiness.label}</h5>
         <ul>
           {props.readiness.reasons.map((r) => (
             <li key={r}>{r}</li>
@@ -75,7 +75,7 @@ export function DnaPanel(props: { dna: RepoDna; readiness: ReadinessBand }) {
         </p>
         <p>
           This is a signal from the files we could read. It is not a certification and it does not
-          judge your product quality.
+          decides whether your product is good.
         </p>
       </div>
     </div>

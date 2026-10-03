@@ -26,7 +26,7 @@ Private repos are out of scope for now. Local tools such as MCP can read them, b
 4. We fetch the served live page HTML.
 5. Fixed checks run: secrets, risky patterns, dependencies, licenses, and hygiene.
 6. You get one fix prompt for the top 3, then the rest of the list.
-7. Repo DNA, Judge Readiness, standards lines, missions, and the handoff text are computed from the same read.
+7. Repo DNA, Share Readiness, standards lines, missions, and the handoff text are computed from the same read.
 
 ## What runs and what does not
 

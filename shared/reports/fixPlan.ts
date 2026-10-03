@@ -131,7 +131,7 @@ const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[
   },
   "license.policy": {
     title: "Confirm the license situation",
-    why: "Judges and users check whether they may reuse the code.",
+    why: "Reviewers and users check whether they may reuse the code.",
     checklist: [
       "Add a LICENSE file or confirm the intended terms with a human.",
       "Make the package license field match the file. This is not legal advice.",

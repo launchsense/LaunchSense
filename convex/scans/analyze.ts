@@ -456,7 +456,7 @@ export const analyzeScan = action({
       hygieneGaps.push({
         ruleId: "hygiene.no-readme",
         title: "No README found",
-        why: "Judges and users decide in seconds whether they understand the project.",
+        why: "Reviewers and users decide in seconds whether they understand the project.",
         detail: "Add a README with what it does and how to run it.",
       });
     }

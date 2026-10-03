@@ -102,7 +102,7 @@ describe("scanSecrets", () => {
   });
 });
 
-describe("judge-ready gate", () => {
+describe("share-ready gate", () => {
   const base = {
     scanRan: true,
     analyzed: true,
@@ -115,7 +115,7 @@ describe("judge-ready gate", () => {
     liveOk: true,
   };
 
-  it("lets a repo with console noise but no high findings reach judge-ready", () => {
+  it("lets a repo with console noise but no high findings reach share-ready", () => {
     const result = buildMissions({ ...base, highSecrets: 0, highOpen: 0 });
     assert.equal(result.missions.find((m) => m.id === "judge-ready")?.done, true);
     assert.equal(result.progress.done, result.progress.total);
@@ -126,7 +126,7 @@ describe("judge-ready gate", () => {
     assert.equal(result.missions.find((m) => m.id === "judge-ready")?.done, false);
   });
 
-  it("does not mark judge-ready without a live check", () => {
+  it("does not mark share-ready without a live check", () => {
     const result = buildMissions({ ...base, highSecrets: 0, highOpen: 0, liveOk: null });
     assert.equal(result.missions.find((m) => m.id === "judge-ready")?.done, false);
   });

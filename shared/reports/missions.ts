@@ -53,7 +53,7 @@ const SEQUENTIAL: Array<{ id: string; title: string; plain: string; done: (f: Mi
   },
   {
     id: "judge-ready",
-    title: "Make the Demo Judge-Ready",
+    title: "Make the Demo Ready to Share",
     // Gate on high findings only. Console noise is low severity and would
     // make this unreachable for a normal AI-built repo.
     plain: "Clear every high severity finding and confirm the live site loads.",
@@ -134,8 +134,8 @@ export function buildMissions(facts: MissionFacts): {
     },
     {
       id: "judge-ready",
-      title: "Judge Ready",
-      plain: "Nothing blocking was left in the files we could read.",
+      title: "Share Ready",
+      plain: "No shared scan was blocked in the files we could read.",
       earned: missions[3]?.done === true,
     },
     {

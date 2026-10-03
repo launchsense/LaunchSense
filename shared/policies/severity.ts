@@ -6,7 +6,7 @@ export type Severity = "high" | "medium" | "low" | "info";
 // Debug noise is not a secret and never blocks a launch. A live debugger
 // statement is different: it halts execution in front of whoever opens the
 // app, so it stays at medium. Keeping these apart is what stops a normal
-// console.log from making the judge-ready gate unreachable.
+// console.log from making the share-ready gate unreachable.
 const HIGH_RULES = new Set([
   "secret.tracked-env",
   "secret.private-key",
