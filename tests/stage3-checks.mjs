@@ -10,7 +10,7 @@ import { scanSecrets } from "../shared/analyzers/secrets.ts";
 import { parseManifests } from "../shared/analyzers/deps.ts";
 import { analyzeLicenses } from "../shared/analyzers/licenses.ts";
 import { buildFixPlan } from "../shared/reports/fixPlan.ts";
-import { severityFor } from "../shared/policies/severity.ts";
+import { severityFor, severityForFinding } from "../shared/policies/severity.ts";
 import { buildMissions } from "../shared/reports/missions.ts";
 
 // Synthetic canaries only. They are built by concatenation so these exact
@@ -89,6 +89,13 @@ describe("scanSecrets", () => {
       { path: "src/b.ts", content: "console.log(2)" },
     ]);
     assert.equal(twoFiles.filter((m) => m.ruleId === "secret.debug-leftover").length, 2);
+  });
+
+  it("keeps secrets high outside tests and informational inside fixtures", () => {
+    assert.equal(severityForFinding("secret.credential-pattern", "src/auth.ts"), "high");
+    assert.equal(severityForFinding("secret.credential-pattern", "tests/stage3-checks.mjs"), "info");
+    assert.equal(severityForFinding("secret.eval-use", "tests/stage3-checks.mjs"), "info");
+    assert.equal(severityForFinding("secret.credential-pattern", "fixtures/example.json"), "info");
   });
 
   it("keeps a debugger statement separate from console noise", () => {

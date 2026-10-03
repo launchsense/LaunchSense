@@ -38,6 +38,15 @@ export function severityFor(ruleId: string): Severity {
   return "info";
 }
 
+export function severityForFinding(ruleId: string, path: string): Severity {
+  const base = severityFor(ruleId);
+  const testLike =
+    /(^|\/)(test|tests|__tests__|fixtures|testdata|examples)(\/|$)/i.test(path) ||
+    /\.(test|spec)\.[a-z0-9]+$/i.test(path);
+  if (testLike && base === "high") return "info";
+  return base;
+}
+
 export function reviewRequired(severity: Severity): boolean {
   return severity === "high" || severity === "medium";
 }

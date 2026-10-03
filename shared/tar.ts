@@ -42,6 +42,11 @@ function readSize(block: Uint8Array): number | null {
   return Number.isSafeInteger(value) ? value : null;
 }
 
+export function isLockfilePath(path: string): boolean {
+  const base = path.split("/").pop() ?? path;
+  return base === "package-lock.json" || base === "yarn.lock" || base === "pnpm-lock.yaml";
+}
+
 function isSafePath(path: string): boolean {
   if (path.length === 0 || path.length > 512) return false;
   if (path.startsWith("/")) return false;
@@ -67,6 +72,7 @@ function decode(bytes: Uint8Array): string | null {
 export interface ExtractOptions {
   maxEntries: number;
   maxBytesPerFile: number;
+  maxLockfileBytes: number;
   maxTotalBytes: number;
 }
 
@@ -111,9 +117,10 @@ export function extractTar(
       const trimmed = full.includes("/") ? full.slice(full.indexOf("/") + 1) : full;
       const isDirEntry = name.endsWith("/");
       if (isSafePath(trimmed) && !isDirEntry) {
+        const fileLimit = isLockfilePath(trimmed) ? options.maxLockfileBytes : options.maxBytesPerFile;
         if (entries.length >= options.maxEntries || totalBytes >= options.maxTotalBytes) {
           truncated = true;
-        } else if (size <= options.maxBytesPerFile) {
+        } else if (size <= fileLimit) {
           if (totalBytes + size > options.maxTotalBytes) {
             truncated = true;
           } else {
