@@ -8,6 +8,7 @@ import ScanReport from "../report/ScanReport";
 import CompareView from "../report/CompareView";
 import Stage5Panels from "../report/Stage5Panels";
 import CapacityMeter from "../report/CapacityMeter";
+import { toUserError } from "./userError";
 
 // This project's own public repo, so a first-time visitor can see a real
 // report without needing a repo of their own to hand.
@@ -169,7 +170,7 @@ export default function GuestScan() {
       }
       setPhase("idle");
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Could not run the scan. Try again.");
+      setSubmitError(toUserError(error, "Could not run the scan. Try again."));
       setPhase("idle");
     }
   }
@@ -222,7 +223,7 @@ export default function GuestScan() {
       setShareId(result.shareId);
       void logEvent({ kind: "share_created", scanId, shareId: result.shareId });
     } catch (error) {
-      setShareError(error instanceof Error ? error.message : "Could not create a share link.");
+      setShareError(toUserError(error, "Could not create a share link. Try again."));
     }
   }
 
@@ -248,7 +249,7 @@ export default function GuestScan() {
       setRescanRan(true);
       setPhase("idle");
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Could not rescan. Try again.");
+      setSubmitError(toUserError(error, "Could not rescan. Try again."));
       setPhase("idle");
     }
   }
@@ -266,7 +267,7 @@ export default function GuestScan() {
       setExplanations(result.explanations);
       setNotActionable(result.notActionable);
     } catch (error) {
-      setExplainNote(error instanceof Error ? error.message : "Could not explain. Try again.");
+      setExplainNote(toUserError(error, "Could not explain. Try again."));
     } finally {
       setPhase("idle");
     }
@@ -280,7 +281,7 @@ export default function GuestScan() {
       setPassportId(result.passportId);
       void logEvent({ kind: "passport_created", scanId });
     } catch (error) {
-      setShareError(error instanceof Error ? error.message : "Could not issue a passport.");
+      setShareError(toUserError(error, "Could not issue a passport. Try again."));
     }
   }
 
@@ -365,11 +366,11 @@ export default function GuestScan() {
         )}
         <button type="submit" disabled={phase !== "idle"}>
           {phase === "fetching"
-            ? "Fetching…"
+            ? "Fetching files"
             : phase === "analyzing"
-              ? "Analyzing…"
+              ? "Analyzing files"
               : phase === "live"
-                ? "Checking site…"
+                ? "Checking live site"
                 : "Run scan"}
         </button>
       </form>
@@ -440,7 +441,7 @@ export default function GuestScan() {
           {analyzed && (
             <div aria-label="Rescan">
               <button type="button" disabled={phase !== "idle"} onClick={() => void onRescan()}>
-                {phase !== "idle" ? "Working…" : "Re-scan for new commits"}
+                {phase !== "idle" ? "Working" : "Re-scan for new commits"}
               </button>{" "}
               <button type="button" disabled={phase !== "idle"} onClick={() => void onExplain()}>
                 Explain in plain words

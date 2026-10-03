@@ -20,7 +20,7 @@ export default function PassportPage({ passportId }: { passportId: string }) {
           })),
         );
 
-  if (page === undefined) return <main><p>Loading passport…</p></main>;
+  if (page === undefined) return <main><p>Loading the passport. Please wait.</p></main>;
   if (page === null || card === null) {
     return (
       <main>
@@ -37,7 +37,7 @@ export default function PassportPage({ passportId }: { passportId: string }) {
       ? "Open high severity findings remain"
       : card.counts.medium > 0
         ? "No high findings, review the medium ones"
-        : "No high or medium findings at this commit";
+        : "No high or medium findings in the files we read at this commit";
 
   return (
     <main>
