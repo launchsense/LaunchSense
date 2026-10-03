@@ -65,7 +65,9 @@ describe("fingerprintFinding", () => {
 describe("scanSecrets", () => {
   it("flags tracked env files but not .env.example, and maps client paths", () => {
     const matches = scanSecrets([
-      { path: ".env", content: "KEY=1" },
+      // A tracked env that carries a real-looking value is a leak. A template with a
+      // placeholder is not, which is why this fixture holds a credential-shaped value.
+      { path: ".env", content: `OPENROUTER_API_KEY=""sk-or-v1-"+"abcdef1234567890abcdef1234567890""` },
       { path: ".env.example", content: "KEY=" },
       { path: "public/app.js", content: `const k = "${AWS_EXAMPLE}";` },
       { path: "src/a.ts", content: "eval(userInput)\ndebugger;\nconsole.log(x)\nclientSecret: process.env.AUTH_SECRET" },
@@ -78,6 +80,13 @@ describe("scanSecrets", () => {
     assert.ok(!matches.some((m) => m.ruleId === "secret.credential-pattern"));
     assert.ok(rules.includes("secret.debugger-statement:src/a.ts"));
     assert.ok(rules.includes("secret.debug-leftover:src/a.ts"));
+  });
+
+  it("does not flag a tracked env that is only a template", () => {
+    const matches = scanSecrets([
+      { path: ".env", content: "LLM_PROVIDER=openrouter\nOPENROUTER_API_KEY=\nDATABASE_URL=sqlite:///./app.db" },
+    ]);
+    assert.ok(!matches.some((m) => m.ruleId === "secret.tracked-env"));
   });
 
   it("reports console noise once per file, not once per line", () => {
