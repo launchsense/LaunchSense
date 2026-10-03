@@ -1,5 +1,5 @@
 // Repo DNA: a shape view of the project from fetched tree data only, plus an
-// explainable Judge Readiness signal with evidence coverage. Signals, not a
+// explainable Share Readiness signal with evidence coverage. Signals, not a
 // certification and not a score out of ten pretending to be objective.
 
 import type { Severity } from "../policies/severity";
@@ -158,10 +158,10 @@ export function buildReadiness(input: ReadinessInput): ReadinessBand {
     band === "ready"
       ? "Looks ready to share"
       : band === "nearly"
-        ? "Nearly ready"
+        ? "Some review needed"
         : band === "not-yet"
-          ? "Not ready to share yet"
-          : "Too much unchecked to say";
+          ? "Fix-blockers found"
+          : "Need more read coverage";
 
   return {
     band,

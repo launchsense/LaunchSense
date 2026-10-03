@@ -41,7 +41,7 @@ This reads public repos. It cannot see a private one.
 - Licenses, like missing terms or copyleft terms that need a human decision.
 - Project hygiene, like README, tests, CI, and duplicate or large files.
 - Your live app, by fetching the served page. HTTPS, does it load, is there content, is the main action visible, is there a phone viewport tag.
-- The shape of your project: Repo DNA, plus a Judge Readiness signal with coverage shown.
+- The shape of your project: Repo DNA, plus a Share Readiness signal with coverage shown.
 
 ## After the scan
 

@@ -13,7 +13,7 @@ The guest scan works today and needs no account.
 - Public repository scan, pinned to one commit.
 - Secret, dependency, licence, and hygiene checks, each with evidence.
 - Repo DNA: shape, languages, entry points, signals for tests, readme, CI, licence.
-- Judge Readiness with evidence coverage, and the reason behind every band.
+- Share Readiness with evidence coverage, and the reason behind every band.
 - Live URL check, including DNS resolution and a redirect-by-redirect address guard.
 - Share links and a read-only passport.
 - Re-scan and compare, so you can see what a fix actually changed.
@@ -96,7 +96,7 @@ Rough order, not a schedule.
 ## What we will not build
 
 - Auto-fixing code in your repository. Read-only is a feature, not a limitation.
-- A certification or a score out of ten. Judge Readiness is a band with
+- A certification or a score out of ten. Share Readiness is a band with
   reasons, not a grade pretending to be objective.
 - Anything that requires an account for the basic scan.
 

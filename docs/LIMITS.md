@@ -27,7 +27,7 @@ What this release does not do. Everything here is stated so nothing looks finish
 
 ## Signals, not verdicts
 
-- Judge Readiness is a signal from the files we could read. It is not a certification and it does not judge product quality.
+- Share Readiness is a signal from the files we could read. It is not a certification and it does not decide the quality of your product.
 - Standards mappings are an OWASP ASVS 5.0.0 subset with version, coverage, and caveat on every line. No mapping claims full coverage it cannot prove.
 - Repo DNA describes shape and structure, nothing about merit.
 
@@ -35,7 +35,7 @@ What this release does not do. Everything here is stated so nothing looks finish
 
 - Read coverage is the share of paths we actually opened. It is not a quality score.
 - Actionable share is the share of findings needing action. It describes the mix of findings, not how much was checked.
-- Judge Readiness is a band with plain reasons attached. Not a certification and not a grade.
+- Share Readiness is a band with plain reasons attached. Not a certification and not a grade.
 
 ## AI explanations
 

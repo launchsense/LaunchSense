@@ -16,7 +16,7 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 - Safe share cards and Passport links that work signed out on a phone, with referral attribution. Public pages carry counts and fix titles only, never paths, lines, or snippets.
 - Re-scan and compare: fixed, still broken, new, back again, and unknown states, with both commit numbers pinned and a cause line on every change.
 - Accept-risk marking on findings you decide to keep.
-- Repo DNA map and a Judge Readiness signal with evidence coverage shown.
+- Repo DNA map and a Share Readiness signal with evidence coverage shown.
 - OWASP ASVS 5.0.0 subset mappings with coverage, caveat, and evidence counts. Signals only, no certification claim.
 - Seven serial missions and six achievements, verified from scan state only. No points and no leaderboard.
 - Plain text handoff for a developer friend with no coding agent.
@@ -32,7 +32,7 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 
 - Tarball and fallback reads now reserve byte budget before adding a file, so the 2MB cap cannot be crossed by one more entry.
 - Fallback per-file fetches now actually run when the tarball fetch fails or is truncated.
-- The Judge-ready mission now requires a live check that reached the site, not merely the absence of a failed live check.
+- The Share-ready mission now requires a live check that reached the site, not merely the absence of a failed live check.
 - Accepted-risk marks no longer insert duplicate rows.
 - AI explanations are now returned and visible in the report instead of validated and discarded.
 - The footer no longer calls the checks open source while the project license is proprietary.

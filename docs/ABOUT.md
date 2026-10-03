@@ -33,7 +33,7 @@ Where a skill genuinely falls short:
 
 - **Nobody runs it at the right moment.** A skill fires when you open a chat. The moment that matters is the deadline, usually alone, late.
 - **No memory between people or sessions.** The fix and re-check loop needs the old findings, your accepted-risk decisions, and the previous coverage to survive and be shared.
-- **No shareable artifact.** The result has to become a link a judge or client can open on a phone. Chat text is not that.
+- **No shareable artifact.** The result has to become a link a reviewer or client can open on a phone. Chat text is not that.
 - **No honest coverage accounting.** Counting what was read and marking the rest Unknown needs a fixed checker version and a shared store.
 - **The policy bookkeeping rots.** Mapping evidence to OWASP ASVS requirements with version, coverage, and caveat does not survive inside a prompt file.
 
