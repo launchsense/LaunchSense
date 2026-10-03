@@ -669,12 +669,15 @@ export const listScanContents = internalQuery({
 export const saveProviderCall = internalMutation({
   args: {
     scanId: v.id("scans"),
-    kind: v.literal("explain"),
+    kind: v.union(v.literal("explain"), v.literal("decide")),
     source: v.union(
       v.literal("gemini"),
       v.literal("ollama"),
       v.literal("openrouter"),
+      v.literal("jev"),
+      v.literal("perplexity"),
       v.literal("deterministic"),
+      v.literal("table"),
     ),
     model: v.optional(v.string()),
     latencyMs: v.number(),

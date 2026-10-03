@@ -73,6 +73,12 @@ const POSITIVE_CLAIMS = [
     why: "a clean result must state its scope in the same sentence",
   },
   { phrase: /\bchecks\s+found\s+nothing\b/i, why: "most of the repo was never read" },
+  // The product promises in three public docs that AI never decides what is a
+  // finding, only the fixed checks do. The decision lane (Jev, Perplexity) may only
+  // ORDER findings the checks already produced. This rule blocks copy that lets a
+  // model claim it chose the work. Verified 2026-10-03.
+  { phrase: /\b(AI|the model) (chooses|decides|selects) which (check|checks|tool|tools|scan)/i, why: "the checks decide findings, never a model" },
+  { phrase: /\bAI[- ](driven|powered) (scan|check) selection\b/i, why: "the checks are fixed and deterministic" },
   // Share links and passports are permanent. No expiresAt, no revoked flag, and
   // no ctx.db.delete anywhere targets either table. Verified 2026-10-03.
   { phrase: /\byou can revoke\b/i, why: "no revoke mutation exists for shares or passports" },
