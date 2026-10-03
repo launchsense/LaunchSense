@@ -27,7 +27,7 @@ export default function SharePage({ shareId }: { shareId: string }) {
   if (page === undefined) return <main><p>Loading the shared scan. Please wait.</p></main>;
   if (page === null || card === null) {
     return (
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <h1>Share link not found</h1>
         <p>This link is wrong or was never created. Ask the sender for a fresh link.</p>
         <p><a href="/">Scan your own repo</a></p>
@@ -36,8 +36,7 @@ export default function SharePage({ shareId }: { shareId: string }) {
   }
 
   return (
-    <main>
-      <p className="eyebrow">LAUNCHSENSE · SHARED SCAN</p>
+    <main id="main-content" tabIndex={-1}>
       <h1>
         {page.scan.owner}/{page.scan.repo}
       </h1>

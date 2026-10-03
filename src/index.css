@@ -1,74 +1,244 @@
-:root { font-family: system-ui, sans-serif; color: #172a24; background: #f5f7f3; }
-* { box-sizing: border-box; }
-body { margin: 0; }
-main { max-width: 720px; margin: 8vh auto; padding: 20px; }
-h1 { font-size: clamp(1.8rem, 6vw, 3rem); line-height: 1.15; }
-h2, h3, h4 { line-height: 1.25; }
-p, li { line-height: 1.6; overflow-wrap: anywhere; }
-.eyebrow { font-size: .75rem; letter-spacing: .12em; }
-section { margin-top: 28px; border-top: 1px solid #cbd4ca; padding-top: 16px; }
-article { border: 1px solid #cbd4ca; border-radius: 8px; padding: 12px 14px; margin: 12px 0; background: #fff; }
-label { display: block; margin: 12px 0 4px; font-weight: 600; }
-input { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #9aa79e; border-radius: 6px; background: #fff; color: inherit; }
-form button { margin-top: 12px; }
-button { font: inherit; background: #174e39; color: white; border: 0; border-radius: 6px; padding: 10px 16px; cursor: pointer; }
-button:disabled { opacity: .6; cursor: wait; }
-button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid #57966c; outline-offset: 2px; }
-button + button { margin-left: 8px; }
-a { color: #174e39; }
-details { margin: 12px 0; }
-summary { cursor: pointer; font-weight: 600; }
-ul, ol { padding-left: 22px; }
-@media (max-width: 420px) {
-  main { margin: 2vh auto; padding: 14px; }
-  button { width: 100%; margin-top: 8px; }
-  button + button { margin-left: 0; }
+/* LaunchSense visual system.
+   Every value is a token. Nothing below hardcodes a colour, so a palette change
+   is one edit. Contrast ratios in the comments were computed, not eyeballed:
+   see tests/contrast-checks.mjs, which fails the build if any pair regresses. */
+
+:root {
+  /* Palette. Roles, not colours, so a swap does not touch component rules. */
+  --paper: #f5f7f3;
+  --surface: #ffffff;
+  --ink: #172a24;
+  --ink-muted: #333344;
+  --ink-faint: #666677;
+  --action: #174e39;
+  --action-text: #ffffff;
+  --line: #cbd4ca;
+  --line-strong: #6b7a71;
+  --focus: #2d7a52;
+  --focus-light: #ffffff;
+
+  /* Type scale. Every step is an obvious jump, so hierarchy reads without
+     relying on the browser default for h2, h3, h4, or h5. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-display: clamp(1.8rem, 6vw, 3rem);
+
+  /* Body measure stays inside the 65 to 75 character band. */
+  --measure: 70ch;
+  --layout: 720px;
+  --layout-wide: 980px;
+  --radius: 10px;
+  --tap: 44px;
 }
 
-.home { max-width: 980px; padding: 24px; margin: 0 auto 8vh; }
-.hero { padding: 40px 0 28px; border-bottom: 1px solid #cbd4ca; }
-.lead { font-size: 1.1rem; max-width: 70ch; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: system-ui, sans-serif; }
+main { max-width: var(--layout); margin: 8vh auto; padding: 20px; }
+
+h1 { font-size: var(--text-display); line-height: 1.15; }
+h2 { font-size: var(--text-2xl); line-height: 1.25; margin: 0 0 12px; }
+h3 { font-size: var(--text-xl); line-height: 1.25; margin: 0 0 10px; }
+h4 { font-size: var(--text-lg); line-height: 1.3; margin: 0 0 8px; }
+h5 { font-size: var(--text-base); line-height: 1.4; margin: 0 0 6px; }
+
+p, li { line-height: 1.6; overflow-wrap: anywhere; }
+p { max-width: var(--measure); }
+
+label { display: block; margin: 12px 0 4px; font-weight: 600; }
+
+input, textarea {
+  width: 100%;
+  font: inherit;
+  padding: 10px 12px;
+  /* 6b7a71 on white is 4.52:1 and on paper 4.19:1, both above the 3:1 that
+     WCAG requires for a control boundary. The old 9aa79e failed at 2.50:1. */
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+form button { margin-top: 12px; }
+
+button {
+  font: inherit;
+  background: var(--action);
+  color: var(--action-text);
+  border: 0;
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+button:disabled { opacity: 0.6; cursor: wait; }
+button + button { margin-left: 8px; }
+
+/* Focus. A single-colour ring cannot pass 3:1 on both the paper background and
+   the dark button green, so the ring is two tones: a dark outline for light
+   surfaces, offset by a light inner edge that stays visible on dark ones.
+   The old 57966c measured 2.74:1 on the button it was outlining. */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--focus-light);
+  border-radius: var(--radius);
+}
+
+a { color: var(--action); }
+details { margin: 12px 0; }
+summary { cursor: pointer; font-weight: 600; min-height: var(--tap); }
+ul, ol { padding-left: 22px; }
+
+section { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 16px; }
+
+/* Skip link. Visually hidden until focused, then pinned to the top so a
+   keyboard user can jump past the menu straight to the report. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--action);
+  color: var(--action-text);
+  padding: 12px 16px;
+  z-index: 10;
+}
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}
+
+.home { max-width: var(--layout-wide); padding: 24px; margin: 0 auto 8vh; }
+.hero { padding: 40px 0 28px; border-bottom: 1px solid var(--line); }
+.lead { font-size: var(--text-md); max-width: var(--measure); }
 .scan-section,
 .connect-section,
 .check-section,
-.limits-section { margin-top: 28px; border-top: 1px solid #cbd4ca; padding-top: 20px; }
-.feature-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-.feature-grid article { margin: 0; background: #fff; }
-.home-footer { margin-top: 36px; border-top: 1px solid #cbd4ca; padding-top: 16px; font-size: .95rem; color: #334; }
-.top-menu { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 20px; border-bottom: 1px solid #cbd4ca; }
-.brand { font-weight: 700; font-size: 1.05rem; color: inherit; text-decoration: none; }
+.limits-section { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 20px; }
+
+/* What it checks. An ordered list of named checks, not six identical cards.
+   The card grid was the generic default and gave every item equal weight. */
+.check-list { margin: 0; padding: 0; list-style: none; max-width: var(--measure); }
+.check-list li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.check-list li:last-child { border-bottom: 0; }
+.check-list strong { display: block; font-size: var(--text-md); }
+
+.article,
+article {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 12px 0;
+  background: var(--surface);
+}
+
+.home-footer {
+  margin-top: 36px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.top-menu {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; font-size: var(--text-md); color: inherit; text-decoration: none; }
 .menu-links { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .menu-links a { text-decoration: none; }
-.menu-links .ghost { background: transparent; color: #174e39; border: 1px solid #9aa79e; padding: 6px 10px; border-radius: 6px; }
-.menu-links .auth-state { color: #667; font-size: .9rem; }
+.menu-links .ghost {
+  background: transparent;
+  color: var(--action);
+  border: 1px solid var(--line-strong);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  min-height: var(--tap);
+}
+.menu-links .auth-state { color: var(--ink-faint); font-size: var(--text-sm); }
 
 /* Result and scope. The verdict and the line saying how much was not read are
    one bordered block, so the reader cannot reach the headline without them. */
 .verdict {
-  border: 1px solid #174e39;
-  border-radius: 12px;
-  background: #fff;
+  border: 1px solid var(--action);
+  border-radius: var(--radius);
+  background: var(--surface);
   padding: 16px 18px;
   margin: 0 0 20px;
 }
-.verdict h3 { margin: 0 0 8px; line-height: 1.3; }
+/* The verdict is the only heading with real size authority, so DOM order and
+   visual order agree. Everything below it is a section label. */
+.verdict h3 { font-size: var(--text-xl); margin: 0 0 8px; line-height: 1.3; }
 .verdict-scope { margin: 0 0 10px; }
-.verdict-counts { margin: 0 0 10px; color: #334; }
+.verdict-counts { margin: 0 0 10px; color: var(--ink-muted); }
 .verdict-stages { margin: 0 0 10px; padding-left: 22px; }
 .verdict-stages li { margin-bottom: 4px; }
 .not-checked { margin-top: 4px; }
-.not-checked summary { color: #174e39; }
-/* The verdict is the only heading with real size authority, so DOM order and
-   visual order agree. Everything below it is a section label. */
-.verdict h3 { font-size: 1.5rem; }
-.panel-caption { margin: 0 0 8px; color: #334; }
+.not-checked summary { color: var(--action); }
+
+.panel-caption { margin: 0 0 8px; color: var(--ink-muted); }
 .share-block { margin-top: 24px; }
 .share-block [aria-label="Before you create a link"] {
-  border: 1px solid #cbd4ca;
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   padding: 12px 14px;
   margin-bottom: 12px;
-  background: #fff;
+  background: var(--surface);
 }
 .share-block [aria-label="Before you create a link"] p { margin: 0 0 6px; }
 
+/* Panels. The tab strip is a real tablist, so it gets tab semantics, arrow key
+   navigation, and a focus state that matches the rest of the interface. */
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs [role="tab"] {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  min-height: var(--tap);
+}
+.tabs [role="tab"][aria-selected="true"] {
+  background: var(--action);
+  color: var(--action-text);
+  border-color: var(--action);
+}
+[role="tabpanel"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Small screens. Buttons go full width so every target clears 44px. */
+@media (max-width: 420px) {
+  main { margin: 2vh auto; padding: 14px; }
+  .home { padding: 14px; }
+  button { width: 100%; margin-top: 8px; }
+  button + button { margin-left: 0; }
+  .tabs [role="tab"] { width: 100%; }
+  .top-menu { flex-wrap: wrap; }
+}
+
+/* Intermediate width. The check list and the report stay readable rather than
+   stretching across a tablet. */
+@media (min-width: 721px) and (max-width: 1023px) {
+  main { max-width: 680px; }
+  .home { max-width: 720px; }
+}

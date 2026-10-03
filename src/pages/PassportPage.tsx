@@ -23,7 +23,7 @@ export default function PassportPage({ passportId }: { passportId: string }) {
   if (page === undefined) return <main><p>Loading the passport. Please wait.</p></main>;
   if (page === null || card === null) {
     return (
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <h1>Passport not found</h1>
         <p>This link is wrong or was never issued.</p>
         <p><a href="/">Scan your own repo</a></p>
@@ -40,8 +40,7 @@ export default function PassportPage({ passportId }: { passportId: string }) {
         : "No high or medium findings in the files we read at this commit";
 
   return (
-    <main>
-      <p className="eyebrow">LAUNCHSENSE · PASSPORT</p>
+    <main id="main-content" tabIndex={-1}>
       <h1>
         {page.scan.owner}/{page.scan.repo}
       </h1>
