@@ -24,3 +24,15 @@ ul, ol { padding-left: 22px; }
   button { width: 100%; margin-top: 8px; }
   button + button { margin-left: 0; }
 }
+
+.home { max-width: 980px; padding: 24px; margin: 0 auto 8vh; }
+.hero { padding: 40px 0 28px; border-bottom: 1px solid #cbd4ca; }
+.lead { font-size: 1.1rem; max-width: 70ch; }
+.scan-section,
+.connect-section,
+.check-section,
+.limits-section { margin-top: 28px; border-top: 1px solid #cbd4ca; padding-top: 20px; }
+.feature-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.feature-grid article { margin: 0; background: #fff; }
+.home-footer { margin-top: 36px; border-top: 1px solid #cbd4ca; padding-top: 16px; font-size: .95rem; color: #334; }
+
