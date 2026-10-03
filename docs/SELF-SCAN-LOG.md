@@ -26,6 +26,44 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
+### Stage recent hardening and roadmap truth
+
+Scanned the repository pushed at `bb72228c38686323f781874dd43b19c7f8731682`, the commit that carries the recent hardening fixes and the roadmap clarification. Status: partial. Fetched 96 files, skipped 1.
+
+Raw counts:
+
+| Severity | Count |
+| --- | ---: |
+| high | 6 |
+| medium | 38 |
+| low | 2 |
+| info | 8 |
+| total | 54 |
+
+By rule:
+
+| Rule | Count | Severity pattern | Triage |
+| --- | ---: | --- | --- |
+| `license.policy` | 1 | high | False positive for our current decision: `LICENSE.txt` is intentionally proprietary review-only. Human decision needed if we later want a grant or a different license. |
+| `deps.vulnerability` | 17 | medium | Deferred to the next dependency patch pass. Records were found in `vite@^8.2.0` (16) and `@auth/core@^0.41.1` (1). Do not call them clean. |
+| `deps.unpinned-version` | 21 | medium | Deferred. Ranges are intentional during the sprint, while `package-lock.json` pins the exact installed versions. Convert to a dependency-pinning policy before ship freeze if owners want it. |
+| `hygiene.large-files` | 1 | info | Deferred. One large file was not examined, so that file is unknown. Needs path-level review before claiming full coverage. |
+| `hygiene.no-ci` | 1 | info | Deferred. No CI workflow is configured in this repo yet. Needs an explicit owner and branch-protection decision. |
+| `hygiene.env-usage` | 6 | info | Acknowledged signal. These are server adapters and public connection examples reading environment names; no raw secret is stored in the repo. |
+| `secret.debug-leftover` | 2 | low | False positives. One is a synthetic fixture in `tests/stage3-checks.mjs`; one is the CLI report line in `scripts/check-claims.mjs`, where stdout is intended behavior. |
+| `secret.eval-use` | 1 | high | False positive. The match is the string fixture in `tests/stage3-checks.mjs` used to verify the analyzer, not production eval. |
+| `secret.credential-pattern` | 4 | high | False positives for this repo. They are synthetic redaction canaries in `tests/stage3-checks.mjs`. |
+
+Not checked box:
+
+> Contents incomplete: 1 files skipped by caps. Findings cover fetched files only.
+
+Coverage note:
+
+> Analyzed 96 files at this commit; skipped 1 (OSV checked 24 packages, 0 unknown; registry freshness and deps.dev metadata not checked).
+
+No findings were deleted or rounded down. The four items marked "false positive" are deliberate fixtures or an intended CLI output. The vulnerability and unpinned dependency findings remain open follow-up work and are not claimed as safe.
+
 ### Stage 7: analyzer integrity fix
 
 Scanned the repository at `1d7d7ba`, the commit that carried those fixes, and again after them.
