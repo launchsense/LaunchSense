@@ -1,6 +1,6 @@
 "use node";
 
-// AI lane: Gemini first, then deterministic fallback.
+// AI lane: Gemini first, then Ollama Cloud, then deterministic fallback.
 // Every failure path is soft. AI explains, it never decides. Keys are read
 // from server-only Convex environment variables and never leave this module.
 
@@ -9,7 +9,13 @@ declare const process: { env: Record<string, string | undefined> };
 export const AI_TIMEOUT_MS = 20000;
 export const AI_MAX_OUTPUT_TOKENS = 1200;
 
-export type AiSource = "gemini" | "deterministic";
+// Ollama Cloud is reachable over an OpenAI-compatible endpoint. The default
+// model is a small mixture-of-experts model with about 3.5B active parameters,
+// so it stays cheap per call. Override with OLLAMA_MODEL if needed.
+export const OLLAMA_BASE_URL = "https://ollama.com/v1";
+export const OLLAMA_DEFAULT_MODEL = "nemotron-3-nano:30b-cloud";
+
+export type AiSource = "gemini" | "ollama" | "deterministic";
 
 export interface AiCallResult {
   ok: boolean;
@@ -116,6 +122,35 @@ function extractGeminiUsage(data: unknown): {
   return { inputTokens: input, outputTokens: output, totalTokens: total };
 }
 
+export function extractOllamaText(data: unknown): string | null {
+  if (typeof data !== "object" || data === null) return null;
+  const choices = (data as Record<string, unknown>)["choices"];
+  if (!Array.isArray(choices) || choices.length === 0) return null;
+  const message = (choices[0] as Record<string, unknown>)["message"];
+  if (typeof message !== "object" || message === null) return null;
+  const content = (message as Record<string, unknown>)["content"];
+  return typeof content === "string" && content.length > 0 ? content : null;
+}
+
+export function extractOllamaUsage(data: unknown): {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+} {
+  if (typeof data !== "object" || data === null) {
+    return { inputTokens: null, outputTokens: null, totalTokens: null };
+  }
+  const usage = (data as Record<string, unknown>)["usage"];
+  if (typeof usage !== "object" || usage === null) {
+    return { inputTokens: null, outputTokens: null, totalTokens: null };
+  }
+  const record = usage as Record<string, unknown>;
+  const input = typeof record["prompt_tokens"] === "number" ? record["prompt_tokens"] : null;
+  const output = typeof record["completion_tokens"] === "number" ? record["completion_tokens"] : null;
+  const total = typeof record["total_tokens"] === "number" ? record["total_tokens"] : null;
+  return { inputTokens: input, outputTokens: output, totalTokens: total };
+}
+
 export async function callAiLane(prompt: string): Promise<AiCallResult> {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey !== undefined && geminiKey.length > 0) {
@@ -146,6 +181,43 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
             latencyMs: Date.now() - started,
             error: null,
             usage: extractGeminiUsage(parsed),
+          };
+        }
+      }
+    }
+  }
+
+  const ollamaKey = process.env.OLLAMA_API_KEY;
+  if (ollamaKey !== undefined && ollamaKey.length > 0) {
+    const model = process.env.OLLAMA_MODEL !== undefined && process.env.OLLAMA_MODEL.length > 0
+      ? process.env.OLLAMA_MODEL
+      : OLLAMA_DEFAULT_MODEL;
+    const started = Date.now();
+    const result = await postJson(
+      `${OLLAMA_BASE_URL}/chat/completions`,
+      { Authorization: `Bearer ${ollamaKey}` },
+      {
+        model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: AI_MAX_OUTPUT_TOKENS,
+        response_format: { type: "json_object" },
+      },
+    );
+    if (result.ok) {
+      const parsed = safeParse(result.text);
+      const text = extractOllamaText(parsed);
+      if (text !== null) {
+        const json = extractJson(text);
+        if (json !== null) {
+          return {
+            ok: true,
+            source: "ollama",
+            json,
+            model,
+            latencyMs: Date.now() - started,
+            error: null,
+            usage: extractOllamaUsage(parsed),
           };
         }
       }

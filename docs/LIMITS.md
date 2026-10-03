@@ -39,7 +39,7 @@ What this release does not do. Everything here is stated so nothing looks finish
 
 ## AI explanations
 
-- Explanations use Google AI Studio / Gemini when a server key is configured. No key is configured in the public release, so plain deterministic wording is shown instead.
+- Explanations use Google AI Studio / Gemini when a server key is configured. If Gemini does not answer, the server tries Ollama Cloud with a small model. If neither is configured or neither answers, plain deterministic wording is shown instead.
 - AI output is rejected when it references an unknown finding, drops an actionable finding, or claims a check we did not run. Rejected output falls back to plain wording.
 - AI never decides what is a finding. Only the fixed checks decide that.
 - Bring your own AI key stays out of this release.
