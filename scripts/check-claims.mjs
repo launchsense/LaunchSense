@@ -48,7 +48,9 @@ const POSITIVE_CLAIMS = [
   // getInstallationToken, projects.listForUser, and entitlements.getMyEntitlements
   // all have zero callers. Verified 2026-10-03. Copy must disclaim, not sell.
   { phrase: /deeper\s+scan/i, why: "sign-in unlocks no deeper scan; the connected path has no callers" },
-  { phrase: /saved\s+history/i, why: "no history store exists" },
+  // Allows the honest denial "there is no saved history". The negation sits
+  // before the phrase, which isWalkedBack's 15 character window cannot see.
+  { phrase: /(?<!no\s)(?<!not\s)saved\s+history/i, why: "no history store exists" },
   // "unlocks nothing" is the honest disclaimer and must stay allowed, so this
   // targets only claims that sign-in grants a real capability.
   { phrase: /unlocks?\s+(private\s+repos?|a\s+deeper\s+scan|full\s+scans?)/i, why: "sign-in unlocks no scan capability today" },
