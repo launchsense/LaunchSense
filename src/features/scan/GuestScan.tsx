@@ -436,6 +436,8 @@ export default function GuestScan() {
               treeTruncated={scan.truncated === true}
               liveProvided={liveUrl.trim().length > 0}
               aiConfigured={explainNote.length > 0 && !/No AI provider/i.test(explainNote)}
+              priorityOrder={scan.priorityOrder ?? []}
+              priorityNote={scan.priorityNote}
             />
           )}
           {analyzed && (

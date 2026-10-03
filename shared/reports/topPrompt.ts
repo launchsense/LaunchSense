@@ -6,6 +6,7 @@ import type { FixStep } from "./fixPlan";
 
 export interface PromptFinding {
   ruleId: string;
+  fingerprint?: string;
   path: string;
   line: number;
   severity: Severity;
@@ -25,6 +26,7 @@ export interface LiveSummary {
 
 export interface RankedItem {
   ruleId: string;
+  fingerprint?: string;
   severity: Severity;
   title: string;
   where: string;
@@ -138,6 +140,13 @@ export function buildTopPrompt(
   steps: FixStep[],
   live: RankedItem[],
   limit = 3,
+  /**
+   * Optional. Fingerprints in the order the decision lane (or the table) put them.
+   * Used ONLY as a tiebreak inside one severity band, so the lane can never lift a
+   * medium finding above a high one. When absent, the existing rule order applies
+   * and nothing changes.
+   */
+  priorityOrder: string[] = [],
 ): TopPrompt {
   const repoItems: RankedItem[] = findings
     .filter((f) => f.severity !== "info")
@@ -145,6 +154,7 @@ export function buildTopPrompt(
       const step = steps.find((s) => s.ruleId === f.ruleId);
       return {
         ruleId: f.ruleId,
+        fingerprint: f.fingerprint,
         severity: f.severity,
         title: f.title,
         where: f.line > 0 ? `${f.path}:${f.line}` : f.path,
@@ -171,9 +181,17 @@ export function buildTopPrompt(
     });
   }
 
+  const rankOf = new Map(priorityOrder.map((fp, i) => [fp, i]));
+
   const ranked = [...byRule.values()].sort((a, b) => {
     const bySeverity = WEIGHT[a.severity] - WEIGHT[b.severity];
     if (bySeverity !== 0) return bySeverity;
+    // Inside one severity band, the stored order decides if it knows both items.
+    // This is the only place the lane can influence what the reader sees first, and
+    // it cannot cross a severity boundary.
+    const ra = rankOf.get(a.fingerprint ?? "");
+    const rb = rankOf.get(b.fingerprint ?? "");
+    if (ra !== undefined && rb !== undefined && ra !== rb) return ra - rb;
     const byRuleRank = ruleRank(a.ruleId) - ruleRank(b.ruleId);
     if (byRuleRank !== 0) return byRuleRank;
     const byCount = b.count - a.count;

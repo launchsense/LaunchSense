@@ -666,6 +666,31 @@ export const listScanContents = internalQuery({
   },
 });
 
+/**
+ * Persist the ordering the decision lane (or the table floor) produced.
+ *
+ * Only the order and its provenance are stored. The findings themselves are never
+ * touched by this, which is the point: the lane orders, the checks decide.
+ */
+export const savePriority = internalMutation({
+  args: {
+    scanId: v.id("scans"),
+    order: v.array(v.string()),
+    source: v.string(),
+    note: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch("scans", args.scanId, {
+      priorityOrder: args.order,
+      prioritySource: args.source,
+      priorityNote: args.note,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
 export const saveProviderCall = internalMutation({
   args: {
     scanId: v.id("scans"),
