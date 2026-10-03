@@ -18,7 +18,7 @@
 // rule cannot turn a real key into a miss.
 
 /** Provider and format shapes. A match here is strong evidence, so entropy is skipped. */
-const PROVIDER_SHAPES: RegExp[] = [
+export const PROVIDER_SHAPES: RegExp[] = [
   /\b(AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b/,                    // AWS access key id
   /\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}/,                // GitHub classic token
   /\bgithub_pat_[A-Za-z0-9_]{20,}/,                          // GitHub fine-grained
@@ -122,16 +122,23 @@ export function looksLikeSecretValue(value: string, wasQuoted = true): boolean {
   if (isKnownIdentifier(t)) return false;
   if (isReferenceOrExpression(t)) return false;
 
-  // A BARE value that is a valid identifier is a name, not a secret.
-  // `token_address`, `encrypted_secret`, `occurrence_key`, `token_result` are all
-  // variable references. A credential written without quotes is a hash, a base64
-  // run, or a prefixed key, never a clean identifier. This was the last false
-  // positive class, found in a crypto codebase on 2026-10-04.
+  // An EVM address is public, checksummed hex, and appears in every contract call
+  // and block explorer. It is not a credential. Found on 2026-10-04 when a contract
+  // address in a crypto backend was flagged.
+  if (/^0x[0-9a-fA-F]{40}$/.test(t)) return false;
+
+  // A bare value that is a valid identifier is a name, not a secret.
+  // `token_address`, `encrypted_secret`, `SARA_MODEL` are all references or config
+  // names. A credential written without quotes is a hash, a base64 run, a prefixed
+  // key, or an address, never a clean identifier.
   if (!wasQuoted) {
     // Pure hex of credential length is a real shape, so it is allowed through.
     const isHex = /^[0-9a-fA-F]{16,}$/.test(t) && new Set(t.toLowerCase()).size > 4;
     if (!isHex && /^[A-Za-z_][A-Za-z0-9_]*$/.test(t)) return false;
   }
+  // A quoted SCREAMING_SNAKE_CASE name with no digit is a constant or a config key,
+  // not a secret. `SARA_MODEL`, `MY_KEY`, `API_KEY` as a value are all names.
+  if (wasQuoted && /^[A-Z][A-Z0-9_]*$/.test(t) && !/[0-9]/.test(t)) return false;
 
   // The generic floor. A quoted literal may be shorter; a bare value may not.
   const floor = wasQuoted ? 8 : 12;

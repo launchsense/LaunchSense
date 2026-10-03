@@ -6,7 +6,7 @@
 // NAME must look like a credential, and the VALUE must look like a credential. The
 // value gate lives in ./secretValue.ts.
 
-import { looksLikeSecretValue } from "./secretValue.ts";
+import { looksLikeSecretValue, PROVIDER_SHAPES } from "./secretValue.ts";
 
 export interface ScannedFile {
   path: string;
@@ -105,6 +105,12 @@ export function isHardcodedCredential(line: string): boolean {
   const trimmed = line.trim();
   if (trimmed.startsWith("#") || trimmed.startsWith("//") || trimmed.startsWith("*")) return false;
 
+  // A provider-shaped key on the line is a credential regardless of what it is
+  // assigned to, or whether it is assigned to anything at all. A bare AWS key in a
+  // list, or a token passed as a positional argument, has no variable name to match.
+  // This runs before the name gate because the name gate cannot see those.
+  if (containsProviderKey(line)) return true;
+
   // Scan EVERY assignment on the line, not just the first. A line can hold an env
   // read and a real literal:
   //   const secret = process.env.SECRET, apiKey = "sk-live-a1b2c3d4e5";
@@ -121,6 +127,23 @@ export function isHardcodedCredential(line: string): boolean {
   return false;
 }
 
+/**
+ * Any provider-shaped key anywhere in the line.
+ *
+ * This is deliberately independent of the variable name. A key can appear in a list,
+ * as a positional argument, in a dict literal, or bare. It checks PROVIDER SHAPES
+ * ONLY, never the generic entropy rule: a generic sweep would flag ORM declarations
+ * and variable references, which the name gate exists to reject.
+ */
+export function containsProviderKey(line: string): boolean {
+  for (const shape of PROVIDER_SHAPES) {
+    if (shape.test(line)) return true;
+  }
+  // A JWT anywhere on the line.
+  if (/[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/.test(line)) return true;
+  return false;
+}
+
 /** Check the value that follows one assignment. Split out so a line can be scanned in full. */
 function valueAtIsCredential(line: string, at: number, opLen: number): boolean {
   let rest = line.slice(at + opLen).trim();
@@ -131,13 +154,14 @@ function valueAtIsCredential(line: string, at: number, opLen: number): boolean {
   // common forms in Python, JS/TS, Go, Ruby, PHP, C#, and shell.
   if (/^(process\.env|os\.getenv|os\.environ|sys\.environ|ENV\[|getenv|_ENV\[|\$env:|configuration\[|System\.getenv|\$\{\{|\$\{|\$\(|%\w+%|\$[A-Za-z_])/i.test(rest)) return false;
 
-  // Take the value: a quoted string, or the first bare token. A bare value is
-  // trimmed of trailing quotes and punctuation, because `assert "Password: x"` and
-  // `token: 'invalid:token',` both leave the delimiter attached otherwise.
-  const quoted = /^(['"])(.*?)\1/.exec(rest);
+  // Take the value: a quoted string anywhere at the start of the remainder, or the
+  // first bare token. Leading punctuation such as `(` from `keys = ("NAME",)` is
+  // stripped first, so the quote is found rather than producing a mangled token.
+  const stripped = rest.replace(/^[([{]+\s*/, "");
+  const quoted = /^(['"])(.*?)\1/.exec(stripped) ?? /^(['"])(.*?)\1/.exec(rest);
   const value = quoted !== null
     ? quoted[2]
-    : (rest.split(/[\s;,)]/)[0] ?? "").replace(/["',;:]+$/, "");
+    : (stripped.split(/[\s;,)]/)[0] ?? "").replace(/["',;:]+$/, "");
 
   // A bare value that is a qualified name is a REFERENCE, not a literal.
   if (quoted === null) {
