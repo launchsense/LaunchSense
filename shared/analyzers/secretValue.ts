@@ -122,6 +122,17 @@ export function looksLikeSecretValue(value: string, wasQuoted = true): boolean {
   if (isKnownIdentifier(t)) return false;
   if (isReferenceOrExpression(t)) return false;
 
+  // A BARE value that is a valid identifier is a name, not a secret.
+  // `token_address`, `encrypted_secret`, `occurrence_key`, `token_result` are all
+  // variable references. A credential written without quotes is a hash, a base64
+  // run, or a prefixed key, never a clean identifier. This was the last false
+  // positive class, found in a crypto codebase on 2026-10-04.
+  if (!wasQuoted) {
+    // Pure hex of credential length is a real shape, so it is allowed through.
+    const isHex = /^[0-9a-fA-F]{16,}$/.test(t) && new Set(t.toLowerCase()).size > 4;
+    if (!isHex && /^[A-Za-z_][A-Za-z0-9_]*$/.test(t)) return false;
+  }
+
   // The generic floor. A quoted literal may be shorter; a bare value may not.
   const floor = wasQuoted ? 8 : 12;
   if (t.length < floor) return false;
