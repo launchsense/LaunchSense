@@ -62,6 +62,10 @@ export default function ScanReport(props: {
   treeTruncated: boolean;
   liveProvided: boolean;
   aiConfigured: boolean;
+  /** Fingerprints in stored priority order. Empty when the lane never ran. */
+  priorityOrder?: string[];
+  /** Which rung produced the order, for the plain-words line under the report. */
+  priorityNote?: string;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -73,6 +77,7 @@ export default function ScanReport(props: {
       buildTopPrompt(
         props.findings.map((f) => ({
           ruleId: f.ruleId,
+          fingerprint: f.fingerprint,
           path: f.path,
           line: f.line,
           severity: f.severity,
@@ -81,8 +86,10 @@ export default function ScanReport(props: {
         })),
         props.plan.steps,
         liveActionItems(props.live, props.mainAction),
+        3,
+        props.priorityOrder,
       ),
-    [props.findings, props.plan, props.live, props.mainAction],
+    [props.findings, props.plan, props.live, props.mainAction, props.priorityOrder],
   );
 
   // The rest of the list excludes what the top 3 already covers, so the same
@@ -218,6 +225,10 @@ export default function ScanReport(props: {
           </p>
           {props.live.errorMessage !== undefined && <p role="alert">{props.live.errorMessage}</p>}
         </div>
+      )}
+
+      {props.priorityNote !== undefined && props.priorityNote.length > 0 && (
+        <p className="priority-note">{props.priorityNote}</p>
       )}
 
       <div aria-label="Findings">

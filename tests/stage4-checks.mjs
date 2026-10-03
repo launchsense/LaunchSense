@@ -76,6 +76,37 @@ describe("newPublicId", () => {
 });
 
 describe("buildTopPrompt", () => {
+  it("uses the stored priority order to break ties inside one severity band", () => {
+    // Two medium findings. Without an order, the rule rank decides. With the stored
+    // order, the lane's ordering decides, because both are the same severity.
+    const findings = [
+      { ruleId: "secret.debug-leftover", fingerprint: "m1", path: "a.ts", line: 1, severity: "medium", title: "Debug", why: "x" },
+      { ruleId: "deps.duplicate", fingerprint: "m2", path: "b.ts", line: 1, severity: "medium", title: "Dup", why: "y" },
+      { ruleId: "hygiene.no-readme", fingerprint: "m3", path: "c.ts", line: 1, severity: "medium", title: "Readme", why: "z" },
+    ];
+    const ranked = buildTopPrompt(findings, [], [], 3, ["m3", "m1", "m2"]);
+    assert.equal(ranked.topRuleIds[0], "hygiene.no-readme", "the stored order should lead");
+  });
+
+  it("the lane can never lift a medium above a high, order or not", () => {
+    const findings = [
+      { ruleId: "deps.duplicate", fingerprint: "high1", path: "a.ts", line: 1, severity: "high", title: "High", why: "x" },
+      { ruleId: "hygiene.no-readme", fingerprint: "med1", path: "b.ts", line: 1, severity: "medium", title: "Med", why: "y" },
+    ];
+    // The order puts the medium first. Severity must still win.
+    const ranked = buildTopPrompt(findings, [], [], 3, ["med1", "high1"]);
+    assert.equal(ranked.topRuleIds[0], "deps.duplicate", "high must stay above medium");
+  });
+
+  it("is unchanged when no order is supplied", () => {
+    const findings = [
+      { ruleId: "secret.tracked-env", fingerprint: "a", path: ".env", line: 1, severity: "high", title: "Env", why: "x" },
+    ];
+    const without = buildTopPrompt(findings, [], [], 3);
+    const withEmpty = buildTopPrompt(findings, [], [], 3, []);
+    assert.deepEqual(without.topRuleIds, withEmpty.topRuleIds);
+  });
+
   it("ranks live items with repo findings and caps at 3", () => {
     const findings = [
       { ruleId: "secret.debug-leftover", path: "a.ts", line: 1, severity: "medium", title: "Debug" },
