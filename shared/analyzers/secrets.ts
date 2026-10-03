@@ -1,6 +1,12 @@
 // Deterministic secret signals. Pure: takes file paths and contents, returns
 // raw matches. The persistence layer redacts snippets and hashes content
 // before anything is stored. Findings carry paths and line numbers only.
+//
+// Two gates must both pass before a hardcoded-credential finding is raised: the
+// NAME must look like a credential, and the VALUE must look like a credential. The
+// value gate lives in ./secretValue.ts.
+
+import { looksLikeSecretValue } from "./secretValue.ts";
 
 export interface ScannedFile {
   path: string;
@@ -25,15 +31,33 @@ function isClientPath(path: string): boolean {
   return path.startsWith("public/") || path.endsWith(".html");
 }
 
-// Values that are never a real secret, even when the name looks like one.
-// A placeholder reads as a "value" to a naive pattern. Flagging it is a false
-// positive, which in a security tool is worse than a miss: it teaches the reader
-// to ignore the tool.
-const PLACEHOLDER_VALUES = new Set([
-  "changeme", "change_me", "placeholder", "your_key", "your-key", "yourkey", "your_key_here",
-  "todo", "tbd", "xxx", "xxxx", "redacted", "dummy", "example", "sample",
-  "none", "null", "undefined", "nil", "empty",
+/** The credential words a variable name can be built from. */
+const CREDENTIAL_WORDS = new Set([
+  "password", "passwd", "pwd", "pass",
+  "secret", "secrets",
+  "key", "keys", "apikey", "publickey", "privatekey",
+  "token", "tokens",
+  "credential", "credentials",
+  "authorization", "auth",
 ]);
+
+/**
+ * Does a variable NAME refer to a credential?
+ *
+ * Splits on underscores, dashes, and camelCase, then checks each whole word. This is
+ * why `apiKey` matches but `monkey` and `keynote` do not: the split is real, not a
+ * substring search. `aws_access_key`, `OPENROUTER_API_KEY`, `client_secret`, and
+ * `refresh_token` all reduce to a credential word.
+ */
+export function nameLooksLikeCredential(name: string): boolean {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")   // camelCase boundary
+    .split(/[_\-\s]+/)
+    .map((w) => w.toLowerCase())
+    .filter((w) => w.length > 0);
+  if (words.length === 0) return false;
+  return words.some((w) => CREDENTIAL_WORDS.has(w));
+}
 
 // Known type annotations. Stripped only when they appear immediately before `=`,
 // because that is a declaration, not an assignment of a secret. Kept as an explicit
@@ -81,49 +105,53 @@ export function isHardcodedCredential(line: string): boolean {
   const trimmed = line.trim();
   if (trimmed.startsWith("#") || trimmed.startsWith("//") || trimmed.startsWith("*")) return false;
 
-  // Name looks like a credential, followed by an assignment.
-  const head = /(password|passwd|pwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret)\s*[:=]\s*/i.exec(line);
-  if (head === null) return false;
+  // Scan EVERY assignment on the line, not just the first. A line can hold an env
+  // read and a real literal:
+  //   const secret = process.env.SECRET, apiKey = "sk-live-a1b2c3d4e5";
+  // Stopping at the first assignment lost the real key.
+  const assignAll = /["']?\s*(?::(?![=:])|=(?![=>])|:=)\s*/g;
+  let assign: RegExpExecArray | null;
+  while ((assign = assignAll.exec(line)) !== null) {
+    const before = line.slice(0, assign.index);
+    const nameMatch = /([A-Za-z0-9_]+)$/.exec(before);
+    if (nameMatch === null) continue;
+    if (!nameLooksLikeCredential(nameMatch[1])) continue;
+    if (valueAtIsCredential(line, assign.index, assign[0].length)) return true;
+  }
+  return false;
+}
 
-  let rest = line.slice(head.index + head[0].length).trim();
+/** Check the value that follows one assignment. Split out so a line can be scanned in full. */
+function valueAtIsCredential(line: string, at: number, opLen: number): boolean {
+  let rest = line.slice(at + opLen).trim();
   rest = stripTypeAnnotation(rest);
   rest = unwrapTypeCast(rest);
 
-  // Read from the environment or injected by CI is not hardcoded.
-  if (/^(process\.env|os\.getenv|os\.environ|getenv|sys\.environ|\$\{\{|\$\{)/.test(rest)) return false;
+  // Read from the environment or injected by CI is not hardcoded. Covers the
+  // common forms in Python, JS/TS, Go, Ruby, PHP, C#, and shell.
+  if (/^(process\.env|os\.getenv|os\.environ|sys\.environ|ENV\[|getenv|_ENV\[|\$env:|configuration\[|System\.getenv|\$\{\{|\$\{|\$\(|%\w+%|\$[A-Za-z_])/i.test(rest)) return false;
 
-  // Take the value: a quoted string, or the first bare token.
+  // Take the value: a quoted string, or the first bare token. A bare value is
+  // trimmed of trailing quotes and punctuation, because `assert "Password: x"` and
+  // `token: 'invalid:token',` both leave the delimiter attached otherwise.
   const quoted = /^(['"])(.*?)\1/.exec(rest);
-  const value = quoted !== null ? quoted[2] : (rest.split(/[\s;,)]/)[0] ?? "");
-
-  if (value.length < 3) return false;
-  if (PLACEHOLDER_VALUES.has(value.toLowerCase())) return false;
+  const value = quoted !== null
+    ? quoted[2]
+    : (rest.split(/[\s;,)]/)[0] ?? "").replace(/["',;:]+$/, "");
 
   // A bare value that is a qualified name is a REFERENCE, not a literal.
-  // `body.cdp_key_secret`, `page.encrypted_secret`, `self.token`. Only applies when
-  // the value was NOT quoted: a quoted dotted string is still a literal.
   if (quoted === null) {
     if (/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$/.test(value)) return false;
     if (/^[A-Za-z_][A-Za-z0-9_]*\(/.test(rest)) return false;
-    // A function or method call on the right side is a value computed at runtime.
     if (/^[A-Za-z_][A-Za-z0-9_.]*\s*\(/.test(value) || /\b[A-Za-z_][A-Za-z0-9_.]*\(/.test(rest)) return false;
-    if (/^(self|cls|body|page|row|req|request|payload|config)\b/.test(value)) return false;
-    // A bare identifier with no digit and no symbol is a name, not a secret.
-    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
-      const hasDigit = /[0-9]/.test(value);
-      const hasMixedCase = /[a-z]/.test(value) && /[A-Z]/.test(value);
-      if (!hasDigit && !hasMixedCase) return false;
-    }
+    if (/^(self|cls|body|page|row|req|request|payload|config|settings|opts|options|this)\b/.test(value)) return false;
   }
 
-  // A line that reads as prose rather than code: a sentence-ending colon followed by
-  // words, or a full sentence the code cannot assign. This is a heuristic and it is
-  // deliberately narrow, because a false negative on a secret is worse than a false
-  // positive. It catches prose inside a multi-line string, which is where the last
-  // false positive on 2026-10-04 came from.
+  // A line that reads as prose rather than code. Deliberately narrow, because a
+  // false negative on a secret is worse than a false positive.
   if (/:\s+it'?s\s|\b(it'?s|there'?s|doesn'?t|isn'?t|won'?t)\b/i.test(rest)) return false;
 
-  return true;
+  return looksLikeSecretValue(value, quoted !== null);
 }
 
 function pushCapped(
