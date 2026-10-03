@@ -248,4 +248,21 @@ export default defineSchema({
     count: v.number(),
     limit: v.number(),
   }).index("by_user_day", ["userId", "day", "kind"]),
+  providerCalls: defineTable({
+    scanId: v.id("scans"),
+    kind: v.union(v.literal("explain")),
+    source: v.union(v.literal("gemini"), v.literal("openrouter"), v.literal("deterministic")),
+    model: v.optional(v.string()),
+    latencyMs: v.number(),
+    promptHash: v.string(),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    totalTokens: v.optional(v.number()),
+    ok: v.boolean(),
+    errorKind: v.optional(v.string()),
+    day: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_scan", ["scanId"])
+    .index("by_day_source", ["day", "source"]),
 });

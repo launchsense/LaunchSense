@@ -665,3 +665,43 @@ export const listScanContents = internalQuery({
     return rows.map((r) => ({ path: r.path, contentSha: r.contentSha }));
   },
 });
+
+export const saveProviderCall = internalMutation({
+  args: {
+    scanId: v.id("scans"),
+    kind: v.literal("explain"),
+    source: v.union(
+      v.literal("gemini"),
+      v.literal("openrouter"),
+      v.literal("deterministic"),
+    ),
+    model: v.optional(v.string()),
+    latencyMs: v.number(),
+    promptHash: v.string(),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    totalTokens: v.optional(v.number()),
+    ok: v.boolean(),
+    errorKind: v.optional(v.string()),
+    now: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.insert("providerCalls", {
+      scanId: args.scanId,
+      kind: args.kind,
+      source: args.source,
+      model: args.model,
+      latencyMs: args.latencyMs,
+      promptHash: args.promptHash,
+      inputTokens: args.inputTokens,
+      outputTokens: args.outputTokens,
+      totalTokens: args.totalTokens,
+      ok: args.ok,
+      errorKind: args.errorKind,
+      day: new Date(args.now).toISOString().slice(0, 10),
+      createdAt: args.now,
+    });
+    return null;
+  },
+});
