@@ -35,6 +35,7 @@ describe("extractTar byte budget", () => {
     const result = extractTar(gzipSync(tar), (data) => gunzipSync(data), {
       maxEntries: 10,
       maxBytesPerFile: 4000,
+      maxLockfileBytes: 4000,
       maxTotalBytes: 3000,
     });
     const total = result.entries.reduce((sum, entry) => sum + entry.size, 0);

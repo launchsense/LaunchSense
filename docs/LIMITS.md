@@ -8,7 +8,7 @@ What this release does not do. Everything here is stated so nothing looks finish
 - Guest scans only. There are no accounts yet, so each scan stands alone.
 - GitHub quota is shared. When it runs out, scans show partial with a retry time.
 - One scan makes about four GitHub requests: repository metadata, the latest commit, the file list, and one repository archive.
-- Caps per scan: 200 files, 2 MB in total, 100 KB per file. Skipped files are listed as not checked.
+- Caps per scan: 200 files, 2 MB in total, 100 KB per file. Lockfiles may be read up to 500 KB so exact installed versions can be checked. Skipped files are listed as not checked.
 - Binary files and generated folders like node_modules, dist, and build are skipped.
 
 ## Capacity, and what we show you
