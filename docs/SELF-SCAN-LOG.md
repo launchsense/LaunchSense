@@ -26,6 +26,46 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
+### Stage IDEA_SCOPE push and Share Readiness rename
+
+Scanned the repository pushed at `4caa8d8313dbafb37584d22189c807d3c6f62b91`. Status: partial. Fetched 97 files, skipped 1.
+
+No new rule categories appeared compared with `bb72228`. The counts are the same, and the only coverage delta is one more fetched path because `IDEA_SCOPE.md` was added.
+
+Raw counts:
+
+| Severity | Count |
+| --- | ---: |
+| high | 6 |
+| medium | 38 |
+| low | 2 |
+| info | 8 |
+| total | 54 |
+
+By rule:
+
+| Rule | Count | Triage |
+| --- | ---: | --- |
+| `license.policy` | 1 | Still false-positive unless we change the current proprietary choice. One human decision. |
+| `deps.vulnerability` | 17 | Still real OSV findings, deferred to the next dependency patch pass. |
+| `deps.unpinned-version` | 21 | Still intentional floating ranges during the sprint; `package-lock.json` pins exact versions. |
+| `hygiene.large-files` | 1 | Still real coverage gap. One file unknown. Needs path-level review. |
+| `hygiene.no-ci` | 1 | Still true. CI workflow is not created yet. |
+| `hygiene.env-usage` | 6 | Acknowledged signal. Server code reading environment names, no stored secrets. |
+| `secret.debug-leftover` | 2 | Still synthetic fixture and intended CLI output. |
+| `secret.eval-use` | 1 | Still synthetic test fixture. |
+| `secret.credential-pattern` | 4 | Still synthetic redaction canaries in the test suite. |
+
+Not checked box:
+
+> Contents incomplete: 1 files skipped by caps. Findings cover fetched files only.
+
+Coverage note:
+
+> Analyzed 97 files at this commit; skipped 1 (OSV checked 24 packages, 0 unknown; registry freshness and deps.dev metadata not checked).
+
+No new finding class was introduced by `IDEA_SCOPE.md` or the Share Readiness rename. Existing findings remain as recorded.
+
 ### Stage recent hardening and roadmap truth
 
 Scanned the repository pushed at `bb72228c38686323f781874dd43b19c7f8731682`, the commit that carries the recent hardening fixes and the roadmap clarification. Status: partial. Fetched 96 files, skipped 1.
