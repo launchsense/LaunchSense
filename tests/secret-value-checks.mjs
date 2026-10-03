@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { looksLikeSecretValue } from "../shared/analyzers/secretValue.ts";
-import { isHardcodedCredential } from "../shared/analyzers/secrets.ts";
+import { isHardcodedCredential, trackedEnvHasLiveValue } from "../shared/analyzers/secrets.ts";
 
 // The value gate. Two acceptance bars:
 //
@@ -132,4 +132,35 @@ describe("looksLikeSecretValue directly", () => {
       assert.equal(looksLikeSecretValue(v), false, `false positive on value: ${v}`);
     });
   }
+});
+
+describe("a tracked env TEMPLATE is not a leak", () => {
+  it("does not flag a template with empty values", () => {
+    const template = [
+      "LLM_PROVIDER=openrouter",
+      "LLM_MODEL=openai/gpt-4o-mini",
+      "OPENROUTER_API_KEY=",
+      "DATABASE_URL=sqlite:///./sara.db",
+    ].join("\n");
+    assert.equal(trackedEnvHasLiveValue(template), false);
+  });
+
+  it("does not flag a template with placeholder values", () => {
+    assert.equal(trackedEnvHasLiveValue("API_KEY=changeme\nSECRET_KEY=your_key_here"), false);
+  });
+
+  it("DOES flag a tracked env with a real credential value", () => {
+    assert.equal(
+      trackedEnvHasLiveValue('OPENROUTER_API_KEY=""sk-or-v1-"+"abcdef1234567890abcdef1234567890""'),
+      true,
+    );
+  });
+
+  it("does not flag a real value under a non-credential name", () => {
+    assert.equal(trackedEnvHasLiveValue("DATABASE_URL=sqlite:///./sara.db\nMODEL=gpt-4o-mini"), false);
+  });
+
+  it("ignores comments and blank lines", () => {
+    assert.equal(trackedEnvHasLiveValue("# API_KEY="sk-or-v1-"+"abcdef1234567890abcdef"\n\n"), false);
+  });
 });

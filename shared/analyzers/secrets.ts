@@ -196,20 +196,51 @@ function pushOncePerFile(
   pushCapped(out, match);
 }
 
+/**
+ * Does a tracked env file hold a VALUE that looks like a live credential?
+ *
+ * A tracked `.env` is only a problem when it carries real values. The common and
+ * correct pattern is a tracked template with empty or placeholder values, while the
+ * real secrets live in `.env.local`, which is gitignored. Flagging the template as a
+ * blocking high finding is a false positive, and it was the last one standing on
+ * sara-wallet on 2026-10-04, where the repo documents this pattern in CONTRIBUTING.md.
+ *
+ * A value counts as real when the name looks like a credential AND the value is not
+ * empty and does not look like a placeholder. Config values such as a provider name, a
+ * model id, or a `sqlite://` URL are not credentials.
+ */
+export function trackedEnvHasLiveValue(content: string): boolean {
+  for (const raw of content.split("\n")) {
+    const line = raw.trim();
+    if (line.length === 0 || line.startsWith("#") || !line.includes("=")) continue;
+    const eq = line.indexOf("=");
+    const key = line.slice(0, eq).trim();
+    const value = line.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
+    if (!nameLooksLikeCredential(key)) continue;
+    if (value.length === 0) continue;
+    // The same value gate the rest of the analyzer uses.
+    if (looksLikeSecretValue(value, true)) return true;
+  }
+  return false;
+}
+
 export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
   const out: RawSecretMatch[] = [];
 
   for (const file of files) {
     const base = basename(file.path);
-    // Tracked environment files leak to everyone with repo access.
-    // .env.example is a template and is explicitly not flagged.
+    // A tracked environment file leaks to everyone with repo access, but only when it
+    // actually carries a value. A tracked TEMPLATE with empty or placeholder values is
+    // the correct pattern, and `.env.local` holds the real values outside the repo.
     if (base.startsWith(".env") && base !== ".env.example") {
-      out.push({
-        ruleId: "secret.tracked-env",
-        path: file.path,
-        line: 1,
-        snippet: "tracked environment file present",
-      });
+      if (trackedEnvHasLiveValue(file.content)) {
+        out.push({
+          ruleId: "secret.tracked-env",
+          path: file.path,
+          line: 1,
+          snippet: "tracked environment file carries a value",
+        });
+      }
       continue;
     }
 
