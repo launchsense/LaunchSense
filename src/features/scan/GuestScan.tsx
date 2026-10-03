@@ -11,7 +11,7 @@ import CapacityMeter from "../report/CapacityMeter";
 
 // This project's own public repo, so a first-time visitor can see a real
 // report without needing a repo of their own to hand.
-const SELF_REPO_URL = "https://github.com/withkeshav/LaunchSense";
+const SELF_REPO_URL = "https://github.com/launchsense/LaunchSense";
 
 function shortSha(sha: string): string {
   return sha.slice(0, 7);
@@ -279,7 +279,7 @@ export default function GuestScan() {
         />
         <p>
           <button type="button" onClick={() => setRepoUrl(SELF_REPO_URL)}>
-            Try this repo
+            Load this repo
           </button>
         </p>
         <p>
