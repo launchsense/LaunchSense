@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isHardcodedCredential } from "../shared/analyzers/secrets.ts";
+import * as F from "./fixtures.mjs";
 
 // Regression guard for a real false-positive bug found on 2026-10-04.
 //
@@ -91,9 +92,9 @@ describe("real hardcoded credentials still fire", () => {
     'api_key = "sk-realvalue12345678"',
     'API_KEY = "a1b2c3d4e5f6g7h8"',
     "PASSWORD = 'hunter2secret'",
-    'OPENROUTER_API_KEY = ""sk-or-v1-"+"abcdef1234567890abcdef1234567890""',
+    F.line("OPENROUTER_API_KEY", F.FAKE_OPENROUTER),
     'CLIENT_SECRET: str = "aVeryLongRealSecretValue"',
-    'access_token = ""ya29."+"a0AfH6SMBxxxxxxxxxxxxx""',
+    F.line("access_token", F.FAKE_GOOGLE_OAUTH),
   ];
   for (const line of realOnes) {
     it(`flags: ${line.trim().slice(0, 40)}...`, () => {
