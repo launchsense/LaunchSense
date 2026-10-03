@@ -1,18 +1,23 @@
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { resetLocalAuthState } from "./resetLocalAuthState";
 
-// Optional, never the first door. A guest can scan any public repo. Signing in
-// unlocks private-repo depth, one selected repo, and later saved history.
+// Optional, never the first door. Today sign-in stores no history and unlocks no
+// extra scan. The guest path is the full product. Every string in this file must
+// describe only what the code does today, never a connected scan that is not
+// wired up yet.
 export function AuthPanel() {
   const { signIn, signOut } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
 
-  if (isLoading) return <p role="status">Checking sign-in status…</p>;
+  if (isLoading) return <p role="status">Checking sign-in status...</p>;
 
   if (isAuthenticated) {
     return (
       <div className="auth-panel" aria-label="Connected account">
-        <p>You are signed in. Connected repo scans will be your next paid step after you install the GitHub App on selected repos.</p>
+        <p>
+          You are signed in. This changes nothing yet. Scans still read public
+          repos only, and nothing is saved to your account.
+        </p>
         <button type="button" onClick={() => void signOut()}>Sign out</button>
       </div>
     );
@@ -20,7 +25,10 @@ export function AuthPanel() {
 
   return (
     <div className="auth-panel" aria-label="Connect GitHub">
-      <p>Want something beyond the guest scan? A connected GitHub App scan is being built. Guest scans do not need login.</p>
+      <p>
+        Guest scans need no login. Connected GitHub App scans are not available
+        yet. Signing in today saves nothing and unlocks nothing.
+      </p>
       <button type="button" onClick={() => {
         resetLocalAuthState();
         signIn("github").catch(() => {

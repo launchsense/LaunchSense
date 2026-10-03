@@ -40,7 +40,7 @@ export default function CapacityMeter(props: {
       <ul>
         <li>
           {running} of {limit} scanning slots busy, {waiting} waiting
-          {waiting > 0 && " (you keep your place in line)"}
+          {waiting > 0 && " (this page holds your place while you wait here)"}
         </li>
         {quota === null ? (
           <li>Quota not measured yet. Your first scan will measure it.</li>

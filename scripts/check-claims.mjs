@@ -44,6 +44,18 @@ const POSITIVE_CLAIMS = [
   { phrase: /\bno\s+issues\s+(found|exist)/i, why: "skipped work is listed as not checked" },
   { phrase: /\ball\s+secrets\b/i, why: "secrets are patterns, not proof" },
   { phrase: /coming\s+soon/i, why: "unbuilt work is named, not promised" },
+  // Sign-in promises. Signing in currently unlocks nothing a user can see:
+  // getInstallationToken, projects.listForUser, and entitlements.getMyEntitlements
+  // all have zero callers. Verified 2026-10-03. Copy must disclaim, not sell.
+  { phrase: /deeper\s+scan/i, why: "sign-in unlocks no deeper scan; the connected path has no callers" },
+  { phrase: /saved\s+history/i, why: "no history store exists" },
+  // "unlocks nothing" is the honest disclaimer and must stay allowed, so this
+  // targets only claims that sign-in grants a real capability.
+  { phrase: /unlocks?\s+(private\s+repos?|a\s+deeper\s+scan|full\s+scans?)/i, why: "sign-in unlocks no scan capability today" },
+  // Durability promises with no mechanism behind them. The queue copy said
+  // "you will not lose your place" while pressing Run scan minted a new scanId
+  // and a new queue row. See .progress/UI-COPY-CONTENT-POLICY-PLAN.md W1.
+  { phrase: /(you\s+will\s+not\s+lose\s+your\s+place|you\s+keep\s+your\s+place)/i, why: "no durable queue ticket exists" },
 ];
 
 const NEGATIVE_CLAIMS = [
