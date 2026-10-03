@@ -9,6 +9,7 @@
  */
 
 import type * as adapters_ai from "../adapters/ai.js";
+import type * as adapters_decision from "../adapters/decision.js";
 import type * as adapters_dnsGuard from "../adapters/dnsGuard.js";
 import type * as adapters_github from "../adapters/github.js";
 import type * as adapters_live from "../adapters/live.js";
@@ -30,6 +31,7 @@ import type * as scans_livecheck from "../scans/livecheck.js";
 import type * as scans_queries from "../scans/queries.js";
 import type * as scans_queue from "../scans/queue.js";
 import type * as scans_quota from "../scans/quota.js";
+import type * as scans_rankScan from "../scans/rankScan.js";
 import type * as scans_rescan from "../scans/rescan.js";
 import type * as scans_sharing from "../scans/sharing.js";
 import type * as scans_store from "../scans/store.js";
@@ -42,6 +44,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "adapters/ai": typeof adapters_ai;
+  "adapters/decision": typeof adapters_decision;
   "adapters/dnsGuard": typeof adapters_dnsGuard;
   "adapters/github": typeof adapters_github;
   "adapters/live": typeof adapters_live;
@@ -63,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "scans/queries": typeof scans_queries;
   "scans/queue": typeof scans_queue;
   "scans/quota": typeof scans_quota;
+  "scans/rankScan": typeof scans_rankScan;
   "scans/rescan": typeof scans_rescan;
   "scans/sharing": typeof scans_sharing;
   "scans/store": typeof scans_store;
