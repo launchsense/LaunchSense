@@ -226,4 +226,26 @@ export default defineSchema({
     decision: v.union(v.literal("accepted_risk")),
     createdAt: v.number(),
   }).index("by_scan", ["scanId"]),
+  projects: defineTable({
+    userId: v.id("users"),
+    owner: v.string(),
+    repo: v.string(),
+    connectedAt: v.number(),
+    lastScanAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
+  connectedInstallations: defineTable({
+    userId: v.id("users"),
+    installationId: v.string(),
+    account: v.string(),
+    repoSelection: v.string(),
+    installationTargetId: v.string(),
+    connectedAt: v.number(),
+  }).index("by_user", ["userId"]),
+  usageMeters: defineTable({
+    userId: v.id("users"),
+    kind: v.union(v.literal("guest"), v.literal("signed_in"), v.literal("connected")),
+    day: v.string(),
+    count: v.number(),
+    limit: v.number(),
+  }).index("by_user_day", ["userId", "day", "kind"]),
 });
