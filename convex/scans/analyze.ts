@@ -286,6 +286,7 @@ export const analyzeScan = action({
       for (const entry of tarball.entries) {
         if (Date.now() > deadline) break;
         if (files.length >= MAX_FILES_FETCHED || bytesUsed >= MAX_TOTAL_BYTES) break;
+        if (bytesUsed + entry.size > MAX_TOTAL_BYTES) break;
         files.push({ path: entry.path, content: entry.content, size: entry.size });
         bytesUsed += entry.size;
         processed += 1;
@@ -299,21 +300,6 @@ export const analyzeScan = action({
           truncated: false,
           fetchedAt: Date.now(),
         });
-      }
-      if (tarball.truncated) {
-        for (const path of candidates) {
-          if (!files.some((f) => f.path === path) && !skipped.some((s) => s.path === path)) {
-            skipped.push({ path, reason: "file cap (200 files) or byte budget (2MB)" });
-          }
-        }
-      }
-    } else if (tarball.status === "too-large") {
-      for (const path of candidates) {
-        skipped.push({ path, reason: "repo tarball over 20MB" });
-      }
-    } else {
-      for (const path of candidates) {
-        skipped.push({ path, reason: "tarball fetch failed" });
       }
     }
 
@@ -369,6 +355,10 @@ export const analyzeScan = action({
         }
         if (blob.status !== "ok") {
           skipped.push({ path, reason: "fetch failed" });
+          continue;
+        }
+        if (bytesUsed + blob.size > MAX_TOTAL_BYTES) {
+          skipped.push({ path, reason: "byte budget (2MB)" });
           continue;
         }
         // Size and content hash only. No file body is persisted anywhere.

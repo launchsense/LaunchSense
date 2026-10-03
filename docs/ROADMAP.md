@@ -27,7 +27,10 @@ on the repositories you choose, and scan deeper than a guest scan can.
 
 Why it is worth building: a guest scan is deliberately bounded. It reads public
 data only, stops at 200 files and about 2MB, and shares the GitHub quota that
-every visitor spends. A connected repository removes those limits.
+every visitor spends. A connected repository removes those limits. It also lets
+LaunchSense read GitHub's own Dependabot and code scanning evidence where those
+exist, so LaunchSense can explain it, rank it, and compare it after a fix instead
+of asking you to reread a security dashboard.
 
 | | Guest scan | Connected scan |
 | --- | --- | --- |

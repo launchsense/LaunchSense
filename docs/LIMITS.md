@@ -20,7 +20,7 @@ What this release does not do. Everything here is stated so nothing looks finish
 ## Checks we do not run
 
 - Dependency freshness and deps.dev data are not checked yet.
-- Vulnerability lookup covers npm, PyPI, and Go. Timeouts show as unknown, never as safe.
+- Vulnerability lookup covers npm, PyPI, and Go. Timeouts show as unknown, never as safe. For npm, exact installed versions are used from `package-lock.json` when that file is present.
 - License notes are signals, not legal advice.
 - Authentication and runtime behaviour are not tested.
 - Rendered layout on a real phone is not checked. The live check only reads served HTML, and the report says so.

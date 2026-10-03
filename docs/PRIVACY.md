@@ -31,6 +31,10 @@ Convex does not drop fields from records that already exist. When we removed the
 
 Our server fetches public repo data from GitHub, either as a file list or as one repository archive. Your browser only sends the URL and shows the results.
 
+## Analytics volume
+
+First-party analytics writes are limited by event kind and day, so this public endpoint cannot write an unbounded stream of rows.
+
 ## Live URL checks
 
 If you give a live app URL, our server makes a plain HTTP request to that address and reads the returned HTML. It refuses to contact loopback, private, link-local, or cloud metadata addresses, including hostnames that resolve to one. It follows up to three redirects and re-checks every hop.

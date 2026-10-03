@@ -39,6 +39,10 @@ Where a skill genuinely falls short:
 
 Same checks. A memory, a deadline trigger, and an artifact.
 
+## Why not just GitHub Security
+
+GitHub Security is the upstream place for dependency and code findings. LaunchSense should not replace it. For a connected repo, LaunchSense can read the same evidence, explain it in plain words, put the top three into one fix prompt, and then compare what changed on the next scan.
+
 ## Who built it
 
 Built by someone who is not a developer, in the sense that this was never the job title.

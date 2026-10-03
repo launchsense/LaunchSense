@@ -57,7 +57,7 @@ const SEQUENTIAL: Array<{ id: string; title: string; plain: string; done: (f: Mi
     // Gate on high findings only. Console noise is low severity and would
     // make this unreachable for a normal AI-built repo.
     plain: "Clear every high severity finding and confirm the live site loads.",
-    done: (f) => f.analyzed && f.highOpen === 0 && f.liveOk !== false,
+    done: (f) => f.analyzed && f.highOpen === 0 && f.liveOk === true,
   },
   {
     id: "rescan-compare",

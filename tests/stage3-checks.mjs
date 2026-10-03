@@ -125,6 +125,11 @@ describe("judge-ready gate", () => {
     const result = buildMissions({ ...base, highSecrets: 1, highOpen: 1 });
     assert.equal(result.missions.find((m) => m.id === "judge-ready")?.done, false);
   });
+
+  it("does not mark judge-ready without a live check", () => {
+    const result = buildMissions({ ...base, highSecrets: 0, highOpen: 0, liveOk: null });
+    assert.equal(result.missions.find((m) => m.id === "judge-ready")?.done, false);
+  });
 });
 
 describe("parseManifests", () => {
@@ -139,6 +144,23 @@ describe("parseManifests", () => {
     assert.ok(result.deps.some((d) => d.name === "pinned" && d.pinned));
     assert.ok(result.duplicates.some((d) => d.startsWith("leftpad")));
     assert.ok(result.installScripts.some((s) => s.script === "postinstall"));
+  });
+
+  it("uses installed lockfile versions when package-lock.json is present", () => {
+    const pkg = JSON.stringify({
+      dependencies: { leftpad: "^1.0.0" },
+    });
+    const lock = JSON.stringify({
+      packages: {
+        "": { dependencies: { leftpad: "^1.0.0" } },
+        "node_modules/leftpad": { version: "1.3.0" },
+      },
+    });
+    const result = parseManifests([
+      { path: "package.json", content: pkg },
+      { path: "package-lock.json", content: lock },
+    ]);
+    assert.ok(result.deps.some((d) => d.name === "leftpad" && d.version === "1.3.0" && d.pinned));
   });
 });
 

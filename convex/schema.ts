@@ -173,6 +173,12 @@ export default defineSchema({
     resetAt: v.number(),
     updatedAt: v.number(),
   }).index("by_updated", ["updatedAt"]),
+  rateLimits: defineTable({
+    key: v.string(),
+    day: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]).index("by_day", ["day"]),
   analyticsEvents: defineTable({
     day: v.string(),
     kind: v.union(

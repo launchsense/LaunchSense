@@ -147,7 +147,7 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
       "https://openrouter.ai/api/v1/chat/completions",
       { Authorization: `Bearer ${routerKey}` },
       {
-        model: "openrouter/free",
+        model: "openrouter/stealth/space-bunny-alpha",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.2,
         max_tokens: AI_MAX_OUTPUT_TOKENS,
@@ -162,7 +162,7 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
             ok: true,
             source: "openrouter",
             json,
-            model: "openrouter/free",
+            model: "openrouter/stealth/space-bunny-alpha",
             latencyMs: Date.now() - started,
             error: null,
           };

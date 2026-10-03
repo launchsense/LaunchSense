@@ -56,6 +56,12 @@ export default function GuestScan() {
   const [rescanRan, setRescanRan] = useState(false);
   const [rescanNote, setRescanNote] = useState("");
   const [explainNote, setExplainNote] = useState("");
+  const [explanations, setExplanations] = useState<
+    Array<{ fingerprint: string; plain: string }>
+  >([]);
+  const [notActionable, setNotActionable] = useState<
+    Array<{ fingerprint: string; reason: string }>
+  >([]);
   // Set when the builder confirms their own share link opened. There is no
   // server round trip for someone else's view, so we ask instead of guessing.
   const [shareViewedAt, setShareViewedAt] = useState<number | null>(null);
@@ -190,12 +196,16 @@ export default function GuestScan() {
   async function onExplain() {
     if (scanId === null || phase !== "idle") return;
     setExplainNote("");
+    setExplanations([]);
+    setNotActionable([]);
     setPhase("analyzing");
     try {
       const result = await explainScan({ scanId });
       setExplainNote(
         `${result.note} Explained ${result.explained} item(s).`,
       );
+      setExplanations(result.explanations);
+      setNotActionable(result.notActionable);
     } catch (error) {
       setExplainNote(error instanceof Error ? error.message : "Could not explain. Try again.");
     } finally {
@@ -391,6 +401,19 @@ export default function GuestScan() {
               )}
               {rescanNote.length > 0 && <p role="status">{rescanNote}</p>}
               {explainNote.length > 0 && <p role="status">{explainNote}</p>}
+              {explanations.length > 0 && (
+                <ul aria-label="Plain-word explanations">
+                  {explanations.slice(0, 8).map((item) => (
+                    <li key={item.fingerprint}>{item.plain}</li>
+                  ))}
+                </ul>
+              )}
+              {explanations.length > 8 && (
+                <p>{explanations.length - 8} more finding(s) are explained in the full report.</p>
+              )}
+              {notActionable.length > 0 && (
+                <p>{notActionable.length} item(s) were reviewed and marked informational.</p>
+              )}
             </div>
           )}
           {analyzed && resultsState !== undefined && (

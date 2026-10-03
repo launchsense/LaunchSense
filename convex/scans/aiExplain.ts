@@ -20,6 +20,8 @@ export const explainScan = action({
     explained: v.number(),
     rejected: v.boolean(),
     note: v.string(),
+    explanations: v.array(v.object({ fingerprint: v.string(), plain: v.string() })),
+    notActionable: v.array(v.object({ fingerprint: v.string(), reason: v.string() })),
   }),
   handler: async (
     ctx,
@@ -30,6 +32,8 @@ export const explainScan = action({
     explained: number;
     rejected: boolean;
     note: string;
+    explanations: Array<{ fingerprint: string; plain: string }>;
+    notActionable: Array<{ fingerprint: string; reason: string }>;
   }> => {
     const scan = await ctx.runQuery(internal.scans.store.fetchScan, { scanId: args.scanId });
     if (scan === null || scan.analyzedAt === undefined) {
@@ -54,17 +58,22 @@ export const explainScan = action({
         explained: plan.explanations.length,
         rejected: false,
         note: "No AI provider answered. Plain wording is shown instead.",
+        explanations: plan.explanations,
+        notActionable: plan.notActionable,
       };
     }
 
     const validated = validateAiPlan(call.json, findings);
     if (!validated.ok) {
+      const fallback = deterministicPlan(findings);
       return {
         scanId: args.scanId,
         source: "deterministic" as const,
-        explained: findings.filter((f) => f.severity !== "info").length,
+        explained: fallback.explanations.length,
         rejected: true,
         note: `AI output was rejected: ${validated.reason}`,
+        explanations: fallback.explanations,
+        notActionable: fallback.notActionable,
       };
     }
 
@@ -74,6 +83,8 @@ export const explainScan = action({
       explained: validated.value.explanations.length,
       rejected: false,
       note: `Explained by ${call.model ?? "the AI provider"}.`,
+      explanations: validated.value.explanations,
+      notActionable: validated.value.notActionable,
     };
   },
 });

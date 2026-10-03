@@ -41,7 +41,7 @@ function Home() {
           Read the{" "}
           <a href={DOCS.howItWorks}>how it works</a>, the{" "}
           <a href={DOCS.limits}>limits</a>, the <a href={DOCS.privacy}>privacy note</a>, and the{" "}
-          <a href={DOCS.about}>about page</a>. The checks are open source and free.
+          <a href={DOCS.about}>about page</a>. The report and docs are public, and the checks are free to use.
         </p>
       </footer>
     </main>
