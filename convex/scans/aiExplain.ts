@@ -15,6 +15,7 @@ export const explainScan = action({
     scanId: v.id("scans"),
     source: v.union(
       v.literal("gemini"),
+      v.literal("ollama"),
       v.literal("deterministic"),
     ),
     explained: v.number(),
@@ -28,7 +29,7 @@ export const explainScan = action({
     args,
   ): Promise<{
     scanId: Id<"scans">;
-    source: "gemini" | "deterministic";
+    source: "gemini" | "ollama" | "deterministic";
     explained: number;
     rejected: boolean;
     note: string;
@@ -50,12 +51,16 @@ export const explainScan = action({
     const prompt = buildExplainPrompt(findings);
     const promptHash = fnv1aHex(prompt);
     const call = await callAiLane(prompt);
-    const recordUsage = async (source: "gemini" | "deterministic", ok: boolean, errorKind?: string) => {
+    const recordUsage = async (source: "gemini" | "ollama" | "deterministic", ok: boolean, errorKind?: string) => {
       await ctx.runMutation(internal.scans.store.saveProviderCall, {
         scanId: args.scanId,
         kind: "explain",
         source,
-        model: source === "gemini" ? "gemini-2.0-flash" : undefined,
+        model: source === "gemini"
+          ? "gemini-2.0-flash"
+          : source === "ollama"
+            ? call.model ?? undefined
+            : undefined,
         latencyMs: call.latencyMs,
         promptHash,
         inputTokens: call.usage.inputTokens ?? undefined,

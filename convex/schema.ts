@@ -262,7 +262,12 @@ export default defineSchema({
   providerCalls: defineTable({
     scanId: v.id("scans"),
     kind: v.union(v.literal("explain")),
-    source: v.union(v.literal("gemini"), v.literal("openrouter"), v.literal("deterministic")),
+    source: v.union(
+      v.literal("gemini"),
+      v.literal("ollama"),
+      v.literal("openrouter"),
+      v.literal("deterministic"),
+    ),
     model: v.optional(v.string()),
     latencyMs: v.number(),
     promptHash: v.string(),

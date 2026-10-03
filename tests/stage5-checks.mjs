@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { validateAiPlan } from "../shared/ai/validate.ts";
 import { deterministicPlan, buildExplainPrompt } from "../shared/ai/deterministic.ts";
-import { extractJson } from "../convex/adapters/ai.ts";
+import { extractJson, extractOllamaText, extractOllamaUsage } from "../convex/adapters/ai.ts";
 import { buildNoAgentExport } from "../shared/reports/noAgentExport.ts";
 import { buildStandards } from "../shared/reports/standards.ts";
 import { buildReadiness, buildRepoDna } from "../shared/reports/repoDna.ts";
@@ -96,6 +96,40 @@ describe("extractJson", () => {
   it("returns null when there is no JSON", () => {
     assert.equal(extractJson("no json here"), null);
     assert.equal(extractJson('{"broken": '), null);
+  });
+});
+
+describe("ollama cloud response parsing", () => {
+  it("reads the assistant message content", () => {
+    const text = extractOllamaText({
+      choices: [{ message: { content: '{"explanations":[],"notActionable":[]}' } }],
+    });
+    assert.equal(text, '{"explanations":[],"notActionable":[]}');
+  });
+
+  it("returns null on shapes it cannot trust", () => {
+    assert.equal(extractOllamaText(null), null);
+    assert.equal(extractOllamaText({ choices: [] }), null);
+    assert.equal(extractOllamaText({ choices: [{ message: {} }] }), null);
+    assert.equal(extractOllamaText({ choices: [{ message: { content: "" } }] }), null);
+  });
+
+  it("reads token usage when present and stays null when absent", () => {
+    assert.deepEqual(extractOllamaUsage({ usage: { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 } }), {
+      inputTokens: 10,
+      outputTokens: 4,
+      totalTokens: 14,
+    });
+    assert.deepEqual(extractOllamaUsage({}), {
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+    });
+    assert.deepEqual(extractOllamaUsage("nope"), {
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+    });
   });
 });
 

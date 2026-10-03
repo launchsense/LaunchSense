@@ -672,6 +672,7 @@ export const saveProviderCall = internalMutation({
     kind: v.literal("explain"),
     source: v.union(
       v.literal("gemini"),
+      v.literal("ollama"),
       v.literal("openrouter"),
       v.literal("deterministic"),
     ),
