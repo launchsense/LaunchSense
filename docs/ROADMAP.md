@@ -61,26 +61,37 @@ Stating this now, so nobody discovers it later.
   does CI pass on the default branch, how long do reviews take, how often do
   releases ship. Runtime speed needs a hosting provider integration, which is a
   separate product.
-- **No stored copy of your code.** This is the decision to revisit. The open
-  question is whether a connected repository is cached so repeat deep scans are
-  instant, or read fresh every time. Caching is faster and means holding code,
-  which changes this privacy page and our liability. The current intent is no
-  storage, which keeps the promise this product is built on. Not settled.
+- **No stored copy of your code.** Settled: connected scans read fresh each time.
+   We keep metadata, evidence, and redacted snippets for the scan record, but no
+   copy of the connected repo itself.
 - **No write access of any kind.** Read-only is the whole design.
 
 ## Planned after that
 
 Rough order, not a schedule.
 
+- **Save and history.** Email sign-in, so you can return to past scans and see
+  what changed. This is not built yet.
 - **Private repositories without the app**, for people who would rather paste a
   short-lived read-only token than install anything. Worth having, and it is a
   support surface we would rather not open first.
+- **Public API and MCP.** A stable way to run the same checks from your tool or
+  coding helper. A guest browser scan will still work without either.
 - **Team view.** Findings across several repositories, so a team sees the same
   rule failing in four places at once.
 - **Rules from users.** A way to add a project-specific check that we do not
   ship, scoped to one repository.
 - **Tracked fix verification.** When a scan sees a fingerprint again after a
   claimed fix, say so plainly rather than leaving the user to compare.
+- **Rendered browser evidence.** Optional rendered checks for the public app
+  when the live page is client-rendered. Only used when fetch evidence cannot
+  support the claim. Browserless is the preferred free tier for now.
+- **Full standards maps and architecture graphs.** Deeper evidence views, still
+  without certification language.
+- **PageSpeed trends.** Optional, only when the user opts in. Missing data shows
+  Unknown.
+- **SBOM signals.** Evidence from software bill of materials, never a verdict by
+  itself.
 
 ## What we will not build
 
