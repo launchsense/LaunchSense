@@ -21,7 +21,11 @@ export function AuthPanel() {
   return (
     <div className="auth-panel" aria-label="Connect GitHub">
       <p>Want something beyond the guest scan? A connected GitHub App scan is being built. Guest scans do not need login.</p>
-      <button type="button" onClick={() => void signIn("github")}>Sign in with GitHub</button>
+      <button type="button" onClick={() => {
+        signIn("github").catch(() => {
+          alert("GitHub sign-in is not configured yet. Please try later.");
+        });
+      }}>Sign in with GitHub</button>
     </div>
   );
 }

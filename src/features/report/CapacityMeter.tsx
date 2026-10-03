@@ -36,7 +36,7 @@ export default function CapacityMeter(props: {
 
   return (
     <div aria-label="Scan capacity">
-      <h4>Right now</h4>
+      <h3>Right now</h3>
       <ul>
         <li>
           {running} of {limit} scanning slots busy, {waiting} waiting

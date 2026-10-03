@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -44,11 +44,13 @@ export default function GuestScan() {
   const [phase, setPhase] = useState<"idle" | "fetching" | "analyzing" | "live">("idle");
   const [submitError, setSubmitError] = useState("");
   const [wasCached, setWasCached] = useState(false);
-  const [refShare] = useState<string | null>(() => {
-    const ref = readRef();
-    if (ref !== null) void logEvent({ kind: "referred_visit", refShareId: ref });
-    return ref;
-  });
+  const [refShare] = useState<string | null>(() => readRef());
+
+  useEffect(() => {
+    if (refShare !== null) {
+      void logEvent({ kind: "referred_visit", refShareId: refShare });
+    }
+  }, [refShare, logEvent]);
   const [shareId, setShareId] = useState<string | null>(null);
   const [passportId, setPassportId] = useState<string | null>(null);
   const [shareError, setShareError] = useState("");
@@ -252,19 +254,6 @@ export default function GuestScan() {
   return (
     <section aria-label="Guest repository scan">
       <h2>Check your public repo</h2>
-      <div role="note" aria-label="Privacy note">
-        <p>
-          <strong>Public repos only.</strong> If your repo is private, flip it
-          public first, scan it, fix what shows up, and only then share the
-          link. Nothing on your machine leaves the browser except the form
-          below. We fetch the public file list and one repository archive, read
-          it in memory, plus the served page HTML if you add a live URL. We keep
-          only the owner, repo, commit SHA, file paths, sizes, hashes, and
-          redacted finding snippets. We store no copy of your code. Raw secret
-          values are never stored. Free GitHub quota is shared; we show what is
-          left, and quota exhaustion shows as partial, never as a pass.
-        </p>
-      </div>
       <form onSubmit={(e) => void onSubmit(e)}>
         <label htmlFor="guest-repo-url">Public GitHub URL</label>
         <input
@@ -327,6 +316,12 @@ export default function GuestScan() {
                 : "Run scan"}
         </button>
       </form>
+      <details>
+        <summary>Privacy note</summary>
+        <p>
+          Public repos only. If your repo is private, flip it public first, scan it, fix what shows up, and only then share the link. We read the file list and one archive in memory. We keep only the owner, repo, commit SHA, file paths, sizes, hashes, and redacted finding snippets. No raw secret values. Quota exhaustion shows as partial, never as a pass.
+        </p>
+      </details>
       <CapacityMeter waiting={0} running={0} quota={null} />
       {submitError.length > 0 && <p role="alert">{submitError}</p>}
       {queueNote.length > 0 && <p role="status">{queueNote}</p>}
