@@ -1,0 +1,136 @@
+// Does a value look like an actual credential?
+//
+// The line-level analyzer decides WHETHER the text assigns to a credential-looking
+// name. This decides whether the VALUE could be a credential at all. Both must be
+// true before a high severity finding is raised.
+//
+// The reason this exists, measured 2026-10-04: on a 6-repo corpus the analyzer
+// produced 9 "hardcoded credential" findings and all 9 were false positives. A false
+// positive in a security tool is worse than a miss, because it teaches the reader to
+// ignore the tool. The old rule only required 3 characters, so `apiKey: 'base'` fired.
+//
+// The rule, in order:
+//   1. Reject known placeholders and non-secret shapes.
+//   2. Accept known provider key formats immediately. Format beats length and entropy.
+//   3. Otherwise require real entropy from the value.
+//
+// Provider formats are checked FIRST and bypass entropy, so tightening the generic
+// rule cannot turn a real key into a miss.
+
+/** Provider and format shapes. A match here is strong evidence, so entropy is skipped. */
+const PROVIDER_SHAPES: RegExp[] = [
+  /\b(AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b/,                    // AWS access key id
+  /\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}/,                // GitHub classic token
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/,                          // GitHub fine-grained
+  /\bxox[baprs]-[A-Za-z0-9-]{10,}/,                          // Slack
+  /\b(sk_live_|sk_test_|rk_live_)[A-Za-z0-9]{10,}/,          // Stripe
+  /\bsk-ant-[A-Za-z0-9-]{10,}/,                              // Anthropic
+  /\bsk-or-v1-[A-Za-z0-9]{16,}/,                             // OpenRouter
+  /\bsk-[A-Za-z0-9]{20,}/,                                   // OpenAI and clones
+  /\bAIza[0-9A-Za-z_-]{30,}/,                                // Google API key
+  /\bya29\.[A-Za-z0-9_-]{10,}/,                              // Google OAuth
+  /\bSG\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,            // SendGrid
+  /\bSK[0-9a-f]{32}\b/i,                                     // Twilio
+  /\bglpat-[A-Za-z0-9_-]{16,}/,                              // GitLab
+  /\bdop_v1_[a-f0-9]{64}\b/,                                 // DigitalOcean
+  /\bnpm_[A-Za-z0-9]{30,}/,                                  // npm
+  /\bwhsec_[A-Za-z0-9]{20,}/,                                // Stripe webhook
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/,                  // PEM block
+];
+
+/** Exact values that are never a secret, whatever the variable is called. */
+const PLACEHOLDER_VALUES = new Set([
+  "", "changeme", "change_me", "change-me", "changethis", "changeit", "change_password",
+  "placeholder", "your_key", "your-key", "yourkey", "your_key_here", "your_api_key",
+  "your-api-key", "your_password_here", "your_secret_here", "your_token_here",
+  "enter_your_key", "enter-key-here", "insert_your_key", "replace_me", "replace-this",
+  "replace_with_yours", "override-me", "your-key-here",
+  "todo", "tbd", "fixme", "xxx", "xxxx", "xxxxx", "******", "***", "...", "---", "___",
+  "redacted", "dummy", "example", "sample", "mock", "fake", "stub", "test", "testing",
+  "demo", "none", "null", "undefined", "nan", "nil", "empty", "default", "unimplemented",
+  "secret", "password", "passwd", "pass", "pwd", "key", "token", "apikey", "api_key",
+  "api-key", "mykey", "my_key", "mysecret", "my_secret", "my_password", "my-token",
+  "foo", "bar", "baz", "hello", "world", "helloworld", "asdf", "asdf1234",
+  "qwerty", "letmein", "admin", "admin123", "root", "user",
+  "abc", "abcd", "abc123", "password1", "password123", "hunter2", "welcome1",
+  "base", "extended", "secretpassword", "string", "number", "boolean", "object",
+  "true", "false", "required", "development", "production",
+]);
+
+function countClasses(value: string): number {
+  let n = 0;
+  if (/[a-z]/.test(value)) n++;
+  if (/[A-Z]/.test(value)) n++;
+  if (/[0-9]/.test(value)) n++;
+  if (/[^A-Za-z0-9]/.test(value)) n++;
+  return n;
+}
+
+function distinctChars(value: string): number {
+  return new Set(value).size;
+}
+
+/** UUID, hash digest, ISO date, or version. Identifiers, never credentials. */
+function isKnownIdentifier(value: string): boolean {
+  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) return true;
+  if (/^\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}$/.test(value)) return true; // bcrypt
+  if (/^\$argon2[a-z0-9]*\$/.test(value)) return true;
+  if (/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?)?/.test(value)) return true; // ISO date
+  if (/^v?\d+\.\d+\.\d+([.-][A-Za-z0-9]+)*$/.test(value)) return true; // version
+  return false;
+}
+
+/** A reference or a computed value, never a literal written into the source. */
+function isReferenceOrExpression(value: string): boolean {
+  if (/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(value)) return false; // PEM is a literal
+  if (/^[$%]/.test(value)) return true;                             // shell, PowerShell
+  if (/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(value)) return true; // a.b
+  if (/[{}[\]]/.test(value)) return true;                          // containers, generics
+  if (/\s/.test(value)) return true;                               // prose has spaces
+  if (/^(https?|postgres|postgresql|mysql|mongodb|redis):\/\//i.test(value)) return true;
+  if (/^(\.{0,2}\/|[A-Za-z]:\\)/.test(value)) return true;         // path
+  return false;
+}
+
+/**
+ * True when the value itself looks like a credential.
+ *
+ * `wasQuoted` matters: a quoted literal is the only place a short secret can live,
+ * while a bare token shorter than 12 characters is almost always an identifier.
+ */
+export function looksLikeSecretValue(value: string, wasQuoted = true): boolean {
+  const t = value.trim();
+  if (t.length === 0) return false;
+
+  // Provider formats are checked FIRST, before any structural rejection, because a
+  // real key can look like a reference or an expression. `ya29.a0Af...`, `SG.a.b`, and
+  // a JWT all contain dots, and rejecting dotted values before this point caused a
+  // false negative on all three.
+  for (const shape of PROVIDER_SHAPES) {
+    if (shape.test(t)) return true;
+  }
+  if (/^[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/.test(t)) return true; // JWT
+
+  const low = t.toLowerCase();
+  if (PLACEHOLDER_VALUES.has(low)) return false;
+  if (/^(.)\1{3,}$/.test(t)) return false;                          // aaaa, xxxx, 0000
+  if (/^(x{3,}|\*{3,}|\.{3,}|-{3,}|_{3,})$/i.test(t)) return false; // masks and elisions
+  if (/^(1234+|abcd+|qwerty+|asdf+)[0-9]*$/i.test(t)) return false; // keyboard runs
+  if (/[<[{][^<[{\]}]*?(your|enter|insert|replace|change|example|key|secret|password|token)[^>\]}]*[>\]}]/i.test(t)) {
+    return false;                                                   // <your-key-here>
+  }
+  if (isKnownIdentifier(t)) return false;
+  if (isReferenceOrExpression(t)) return false;
+
+  // The generic floor. A quoted literal may be shorter; a bare value may not.
+  const floor = wasQuoted ? 8 : 12;
+  if (t.length < floor) return false;
+
+  const classes = countClasses(t);
+  const distinct = distinctChars(t);
+
+  if (t.length >= 20 && distinct >= 10) return true;
+  if (t.length >= 12 && classes >= 2 && distinct >= 8) return true;
+  if (wasQuoted && t.length >= 8 && classes >= 3 && distinct >= 6) return true;
+  return false;
+}
