@@ -8,10 +8,10 @@ import PassportPage from "./pages/PassportPage";
 // Docs live in the repo, not in the bundle, so link to the repo rather than
 // serving a second copy that can drift.
 const DOCS = {
-  howItWorks: "https://github.com/withkeshav/LaunchSense/blob/main/docs/HOW-IT-WORKS.md",
-  limits: "https://github.com/withkeshav/LaunchSense/blob/main/docs/LIMITS.md",
-  privacy: "https://github.com/withkeshav/LaunchSense/blob/main/docs/PRIVACY.md",
-  about: "https://github.com/withkeshav/LaunchSense/blob/main/docs/ABOUT.md",
+  howItWorks: "https://github.com/launchsense/LaunchSense/blob/main/docs/HOW-IT-WORKS.md",
+  limits: "https://github.com/launchsense/LaunchSense/blob/main/docs/LIMITS.md",
+  privacy: "https://github.com/launchsense/LaunchSense/blob/main/docs/PRIVACY.md",
+  about: "https://github.com/launchsense/LaunchSense/blob/main/docs/ABOUT.md",
 };
 
 export default function App() {
