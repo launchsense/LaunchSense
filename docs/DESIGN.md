@@ -38,8 +38,15 @@ alone, about to hit publish, cannot be misled.
 
 ## Tokens
 
-The whole palette, type scale, spacing, and radius live as custom properties on
-`:root`. No component rule hardcodes a colour, so a palette change is one edit.
+The palette, type scale, layout widths, radius, and tap-target size live as custom
+properties on `:root`. No component rule hardcodes a colour, so a palette change is
+one edit, and that is checked: the only hex values in the file are token
+definitions.
+
+Spacing is the exception. Padding and margin values are written directly at each
+rule, because the current layout is simple enough that a spacing scale would be
+invented rather than earned. If the interface grows a third layout, that becomes a
+`--space-*` scale.
 
 ### Colour
 
@@ -78,7 +85,7 @@ separate the headings before.
 
 | Token | Value | Used for |
 |---|---|---|
-| `--text-xs` | `0.75rem` | Reserved, currently unused |
+| `--text-xs` | `0.75rem` | Defined, not yet referenced |
 | `--text-sm` | `0.875rem` | Footer, auth state |
 | `--text-base` | `1rem` | Body, `h5` |
 | `--text-md` | `1.125rem` | Lead paragraph, check-list item names |
@@ -98,12 +105,15 @@ are hard to track back to.
 The single most important component in the product.
 
 ```html
-<section aria-label="Result and scope" class="verdict">
+<section aria-label="Result and scope" className="verdict">
   <h3>Nothing was flagged in the files we read. This is not a clean bill of health.</h3>
-  <p class="verdict-scope">We read 200 of 340 files. The other 140 were not read.</p>
-  <p class="verdict-counts">Findings: 2 high, 1 medium, 0 low, 3 info.</p>
-  <ul class="verdict-stages">...</ul>
-  <details class="not-checked"><summary>What was not checked</summary>...</details>
+  <p className="verdict-scope">We read 200 of 340 files. The other 140 were not read.</p>
+  <p className="verdict-counts">Findings: 2 high, 1 medium, 0 low, 3 info.</p>
+  <ul className="verdict-stages">...</ul>
+  <details className="not-checked">
+    <summary>What was not checked</summary>
+    <ul>...</ul>
+  </details>
 </section>
 ```
 
@@ -203,8 +213,9 @@ Intent does not survive a deadline. These are build failures:
 | No raw error message rendered | `tests/language-checks.mjs` |
 
 The claim guard exists because a copy rule that only lives in a document rots.
-Each of its 12 rules was written against a string that was genuinely in this
-product, and during this build it caught three of our own new strings.
+It carries 33 rules, scanned across `src/`, `shared/reports/`, `docs/`, and the
+root markdown, and it treats these two documents as product copy like any other
+surface.
 
 ## Not verified
 
