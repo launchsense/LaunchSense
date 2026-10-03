@@ -2,6 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import GuestScan from "../features/scan/GuestScan";
 import { AuthPanel } from "../features/auth/AuthPanel";
+import { TopMenu } from "../features/auth/TopMenu";
 
 const DOCS = {
   howItWorks: "https://github.com/launchsense/LaunchSense/blob/main/docs/HOW-IT-WORKS.md",
@@ -15,6 +16,7 @@ export default function Home() {
   const health = useQuery(api.health.status);
   return (
     <main className="home">
+      <TopMenu />
       <header className="hero" aria-labelledby="launchsense-title">
         <p className="eyebrow">LAUNCHSENSE · CHECK BEFORE SHARING</p>
         <h1 id="launchsense-title">Check your public repo before you share it.</h1>
