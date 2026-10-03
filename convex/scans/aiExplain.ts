@@ -7,6 +7,7 @@ import { v } from "convex/values";
 import { callAiLane } from "../adapters/ai";
 import { buildExplainPrompt, deterministicPlan } from "../../shared/ai/deterministic";
 import { validateAiPlan } from "../../shared/ai/validate";
+import { fnv1aHex } from "../../shared/redaction";
 
 export const explainScan = action({
   args: { scanId: v.id("scans") },
@@ -48,9 +49,27 @@ export const explainScan = action({
     }));
 
     const prompt = buildExplainPrompt(findings);
+    const promptHash = fnv1aHex(prompt);
     const call = await callAiLane(prompt);
+    const recordUsage = async (source: "gemini" | "openrouter" | "deterministic", ok: boolean, errorKind?: string) => {
+      await ctx.runMutation(internal.scans.store.saveProviderCall, {
+        scanId: args.scanId,
+        kind: "explain",
+        source,
+        model: source === "gemini" ? "gemini-2.0-flash" : source === "openrouter" ? "openrouter/stealth/space-bunny-alpha" : undefined,
+        latencyMs: call.latencyMs,
+        promptHash,
+        inputTokens: call.usage.inputTokens ?? undefined,
+        outputTokens: call.usage.outputTokens ?? undefined,
+        totalTokens: call.usage.totalTokens ?? undefined,
+        ok,
+        errorKind,
+        now: Date.now(),
+      });
+    };
 
     if (!call.ok) {
+      await recordUsage("deterministic", true, "no_provider");
       const plan = deterministicPlan(findings);
       return {
         scanId: args.scanId,
@@ -65,6 +84,7 @@ export const explainScan = action({
 
     const validated = validateAiPlan(call.json, findings);
     if (!validated.ok) {
+      await recordUsage(call.source, false, "validation_rejected");
       const fallback = deterministicPlan(findings);
       return {
         scanId: args.scanId,
@@ -77,6 +97,7 @@ export const explainScan = action({
       };
     }
 
+    await recordUsage(call.source, true);
     return {
       scanId: args.scanId,
       source: call.source,

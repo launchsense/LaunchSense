@@ -18,6 +18,11 @@ export interface AiCallResult {
   model: string | null;
   latencyMs: number;
   error: string | null;
+  usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+  };
 }
 
 async function postJson(
@@ -106,6 +111,36 @@ function extractOpenRouterText(data: unknown): string | null {
   return typeof content === "string" && content.length > 0 ? content : null;
 }
 
+function extractGeminiUsage(data: unknown): {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+} {
+  if (typeof data !== "object" || data === null) return { inputTokens: null, outputTokens: null, totalTokens: null };
+  const usage = (data as Record<string, unknown>)["usageMetadata"];
+  if (typeof usage !== "object" || usage === null) return { inputTokens: null, outputTokens: null, totalTokens: null };
+  const record = usage as Record<string, unknown>;
+  const input = typeof record["promptTokenCount"] === "number" ? record["promptTokenCount"] : null;
+  const output = typeof record["candidatesTokenCount"] === "number" ? record["candidatesTokenCount"] : null;
+  const total = typeof record["totalTokenCount"] === "number" ? record["totalTokenCount"] : null;
+  return { inputTokens: input, outputTokens: output, totalTokens: total };
+}
+
+function extractOpenRouterUsage(data: unknown): {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+} {
+  if (typeof data !== "object" || data === null) return { inputTokens: null, outputTokens: null, totalTokens: null };
+  const usage = (data as Record<string, unknown>)["usage"];
+  if (typeof usage !== "object" || usage === null) return { inputTokens: null, outputTokens: null, totalTokens: null };
+  const record = usage as Record<string, unknown>;
+  const input = typeof record["prompt_tokens"] === "number" ? record["prompt_tokens"] : null;
+  const output = typeof record["completion_tokens"] === "number" ? record["completion_tokens"] : null;
+  const total = typeof record["total_tokens"] === "number" ? record["total_tokens"] : null;
+  return { inputTokens: input, outputTokens: output, totalTokens: total };
+}
+
 export async function callAiLane(prompt: string): Promise<AiCallResult> {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey !== undefined && geminiKey.length > 0) {
@@ -123,7 +158,8 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
       },
     );
     if (result.ok) {
-      const text = extractGeminiText(safeParse(result.text));
+      const parsed = safeParse(result.text);
+      const text = extractGeminiText(parsed);
       if (text !== null) {
         const json = extractJson(text);
         if (json !== null) {
@@ -134,6 +170,7 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
             model: "gemini-2.0-flash",
             latencyMs: Date.now() - started,
             error: null,
+            usage: extractGeminiUsage(parsed),
           };
         }
       }
@@ -154,7 +191,8 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
       },
     );
     if (result.ok) {
-      const text = extractOpenRouterText(safeParse(result.text));
+      const parsed = safeParse(result.text);
+      const text = extractOpenRouterText(parsed);
       if (text !== null) {
         const json = extractJson(text);
         if (json !== null) {
@@ -165,6 +203,7 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
             model: "openrouter/stealth/space-bunny-alpha",
             latencyMs: Date.now() - started,
             error: null,
+            usage: extractOpenRouterUsage(parsed),
           };
         }
       }
@@ -178,6 +217,7 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
     model: null,
     latencyMs: 0,
     error: "No AI provider available.",
+    usage: { inputTokens: null, outputTokens: null, totalTokens: null },
   };
 }
 
