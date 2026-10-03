@@ -24,7 +24,7 @@ export default function SharePage({ shareId }: { shareId: string }) {
     }
   }, [page, shareId, logEvent]);
 
-  if (page === undefined) return <main><p>Loading shared scan…</p></main>;
+  if (page === undefined) return <main><p>Loading the shared scan. Please wait.</p></main>;
   if (page === null || card === null) {
     return (
       <main>

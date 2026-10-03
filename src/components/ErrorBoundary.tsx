@@ -7,6 +7,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
   }
 
   static getDerivedStateFromError(error: Error) {
+    // The message can carry file paths, hostnames, or upstream API text, so it
+    // is never rendered. The thrown value already reaches error reporting.
     return { error };
   }
 
@@ -15,8 +17,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
       return (
         <main>
           <h2>Something went wrong.</h2>
-          <p>Please refresh the page. If it keeps failing, the scan service may be unavailable.</p>
-          <p><code>{this.state.error.message}</code></p>
+          <p>
+            The page hit an error and stopped. Refresh to try again. If it keeps
+            failing, the scan service may be unavailable.
+          </p>
         </main>
       );
     }
