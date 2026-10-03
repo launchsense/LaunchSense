@@ -65,6 +65,14 @@ const POSITIVE_CLAIMS = [
 { phrase: /\bno\s+findings\s*[.!]/i, qualifier: "not checked", why: "a bare verdict reads as safe; it must name what was not checked" },
   { phrase: /nothing\s+was\s+flagged/i, qualifier: "not checked", why: "a clean result must state its scope in the same sentence" },
   { phrase: /\bchecks\s+found\s+nothing\b/i, why: "most of the repo was never read" },
+  // Share links and passports are permanent. No expiresAt, no revoked flag, and
+  // no ctx.db.delete anywhere targets either table. Verified 2026-10-03.
+  { phrase: /\byou can revoke\b/i, why: "no revoke mutation exists for shares or passports" },
+  { phrase: /\blink (expires|expired)\b/i, why: "no expiresAt exists on shareArtifacts or passportArtifacts" },
+  // Scoped to affirmative withdrawal promises. The honest copy says "There is no
+  // way to take it back", and "no way to" is not a negation the walk-back window
+  // recognises, so this rule must not match it at all.
+  { phrase: /\byou can (take|turn) (it|this|your link) (down|offline)\b/i, why: "a share link cannot be withdrawn today" },
 ];
 
 const NEGATIVE_CLAIMS = [
