@@ -1,5 +1,5 @@
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth } from "@convex-dev/auth/react";
+import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
+import { resetLocalAuthState } from "./resetLocalAuthState";
 
 // Optional, never the first door. A guest can scan any public repo. Signing in
 // unlocks private-repo depth, one selected repo, and later saved history.
@@ -22,8 +22,9 @@ export function AuthPanel() {
     <div className="auth-panel" aria-label="Connect GitHub">
       <p>Want something beyond the guest scan? A connected GitHub App scan is being built. Guest scans do not need login.</p>
       <button type="button" onClick={() => {
+        resetLocalAuthState();
         signIn("github").catch(() => {
-          alert("GitHub sign-in is not configured yet. Please try later.");
+          alert("GitHub sign-in could not start. Please refresh and try again.");
         });
       }}>Sign in with GitHub</button>
     </div>
