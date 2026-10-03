@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import type { FixPlan } from "../../../shared/reports/fixPlan";
 import { buildTopPrompt, liveActionItems } from "../../../shared/reports/topPrompt.ts";
+import { buildVerdict, buildNotCheckedList, SCOPE_LABEL } from "../../../shared/reports/scope";
+import type { ScanStatus } from "../../../shared/reports/scope";
 
 export interface ReportFinding {
   ruleId: string;
@@ -58,6 +60,15 @@ export default function ScanReport(props: {
   shareError: string;
   shareViewed: boolean;
   onConfirmShareViewed: () => void;
+  // Scope inputs. The verdict is meaningless without them, so they are props
+  // rather than something this component looks up later.
+  status: ScanStatus;
+  fetchedFileCount: number;
+  skippedFileCount: number;
+  fileCount: number | undefined;
+  treeTruncated: boolean;
+  liveProvided: boolean;
+  aiConfigured: boolean;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -107,12 +118,57 @@ export default function ScanReport(props: {
   const origin =
     typeof window !== "undefined" ? window.location.origin : "";
 
+  // Verdict and scope are computed together and rendered together. This is the
+  // whole point of the change: a reader cannot reach the headline without the
+  // line that says how much was not read.
+  const verdict = useMemo(
+    () =>
+      buildVerdict({
+        status: props.status,
+        fetched: props.fetchedFileCount,
+        skipped: props.skippedFileCount,
+        total: props.fileCount,
+        findingCount: props.findings.length,
+        truncatedTree: props.treeTruncated,
+      }),
+    [
+      props.status,
+      props.fetchedFileCount,
+      props.skippedFileCount,
+      props.fileCount,
+      props.treeTruncated,
+      props.findings.length,
+    ],
+  );
+  const notChecked = useMemo(
+    () => buildNotCheckedList({ aiConfigured: props.aiConfigured, liveProvided: props.liveProvided }),
+    [props.aiConfigured, props.liveProvided],
+  );
+
   return (
     <div aria-label="Scan report">
-      <h3>Report</h3>
-      <p>
-        Findings: {counts.high} high, {counts.medium} medium, {counts.low} low, {counts.info} info.
-      </p>
+      <section aria-label="Result and scope" className="verdict">
+        <h3>{verdict.headline}</h3>
+        <p className="verdict-scope">{verdict.scope}</p>
+        <p className="verdict-counts">
+          Findings: {counts.high} high, {counts.medium} medium, {counts.low} low, {counts.info} info.
+        </p>
+        <ul className="verdict-stages">
+          {verdict.stages.map((stage) => (
+            <li key={stage.label}>
+              <strong>{stage.label}:</strong> {SCOPE_LABEL[stage.state]}. {stage.detail}
+            </li>
+          ))}
+        </ul>
+        <details className="not-checked">
+          <summary>What was not checked</summary>
+          <ul>
+            {notChecked.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </details>
+      </section>
 
       {top.topCount > 0 && (
         <div aria-label="Top 3 fix prompt">
@@ -176,7 +232,12 @@ export default function ScanReport(props: {
 
       <div aria-label="Findings">
         <h4>Findings</h4>
-        {props.findings.length === 0 && <p>No findings. The checks found nothing to flag.</p>}
+        {props.findings.length === 0 && (
+          <p>
+            Nothing was flagged in the files we read. Not checked files are not passes. The
+            full list of what was not checked sits in the result box above.
+          </p>
+        )}
         {props.findings.map((f) => (
           <article key={f.fingerprint} aria-label={`Finding ${f.title}`}>
             <p>
