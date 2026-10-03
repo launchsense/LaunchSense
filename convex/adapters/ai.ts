@@ -7,7 +7,17 @@
 declare const process: { env: Record<string, string | undefined> };
 
 export const AI_TIMEOUT_MS = 20000;
+// Measured on a real findings prompt, Ollama Cloud took about 78 seconds because
+// the model spends several thousand tokens on reasoning before it writes the
+// answer. It needs its own long ceiling, otherwise the fallback lane is always
+// cut off before it can reply. Gemini answers the same prompt in about 2 seconds,
+// so this cost is only paid when Gemini is unavailable.
+export const OLLAMA_TIMEOUT_MS = 90000;
 export const AI_MAX_OUTPUT_TOKENS = 1200;
+
+// gemini-2.0-flash was retired and now answers 404. 2.5-flash is the current
+// stable fast tier and stays on the Google AI Studio free tier.
+export const GEMINI_MODEL = "gemini-2.5-flash";
 
 // Ollama Cloud is reachable over an OpenAI-compatible endpoint. The default
 // model is a small mixture-of-experts model with about 3.5B active parameters,
@@ -35,13 +45,14 @@ async function postJson(
   url: string,
   headers: Record<string, string>,
   body: unknown,
+  timeoutMs: number = AI_TIMEOUT_MS,
 ): Promise<{ ok: boolean; text: string; error: string | null }> {
   try {
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
       return { ok: false, text: "", error: `HTTP ${response.status}` };
@@ -156,7 +167,7 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
   if (geminiKey !== undefined && geminiKey.length > 0) {
     const started = Date.now();
     const result = await postJson(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
       { "x-goog-api-key": geminiKey },
       {
         contents: [{ parts: [{ text: prompt }] }],
@@ -164,6 +175,10 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
           temperature: 0.2,
           maxOutputTokens: AI_MAX_OUTPUT_TOKENS,
           responseMimeType: "application/json",
+          // Gemini 2.5 defaults to spending output tokens on internal reasoning.
+          // Left on, it consumed the whole budget and returned no JSON at all,
+          // which silently pushed every scan to the plain wording fallback.
+          thinkingConfig: { thinkingBudget: 0 },
         },
       },
     );
@@ -177,7 +192,7 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
             ok: true,
             source: "gemini",
             json,
-            model: "gemini-2.0-flash",
+            model: GEMINI_MODEL,
             latencyMs: Date.now() - started,
             error: null,
             usage: extractGeminiUsage(parsed),
@@ -203,6 +218,7 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
         max_tokens: AI_MAX_OUTPUT_TOKENS,
         response_format: { type: "json_object" },
       },
+      OLLAMA_TIMEOUT_MS,
     );
     if (result.ok) {
       const parsed = safeParse(result.text);
