@@ -131,7 +131,7 @@ export default function GuestScan() {
         setQueueNote("");
         if (analyzed.status === "queued") {
           setSubmitError(
-            "Servers are busy. Your scan is saved and you can press Run scan again in a moment; you will not lose your place.",
+            "Servers are busy. Your scan did not run yet. Wait a moment, then press Run scan to try again.",
           );
           setPhase("idle");
           return;

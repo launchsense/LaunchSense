@@ -36,9 +36,10 @@ export default function Home() {
       </section>
 
       <section className="connect-section" aria-labelledby="connect-title">
-        <h2 id="connect-title">Connect only when you want more.</h2>
+        <h2 id="connect-title">Sign in is optional.</h2>
         <p>
-          Sign in with GitHub only when you want a deeper scan or saved history. The guest path stays open.
+          Signing in does not change your scan today. Guest scans are the full
+          product. Sign in only if you want to be ready for connected scans later.
         </p>
         <AuthPanel />
       </section>

@@ -13,7 +13,7 @@ export function TopMenu() {
         <a href="https://github.com/launchsense/LaunchSense/blob/main/docs/ROADMAP.md">Roadmap</a>
         <a href="https://github.com/launchsense/LaunchSense">GitHub</a>
         {isLoading ? (
-          <span className="auth-state">Checking…</span>
+          <span className="auth-state">Checking...</span>
         ) : isAuthenticated ? (
           <button type="button" className="ghost" onClick={() => void signOut()}>Sign out</button>
         ) : (
