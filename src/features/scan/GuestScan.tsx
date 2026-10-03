@@ -17,6 +17,9 @@ function shortSha(sha: string): string {
   return sha.slice(0, 7);
 }
 
+// The share block renders these URLs after creation.
+const origin = typeof window !== "undefined" ? window.location.origin : "";
+
 function readRef(): string | null {
   try {
     const ref = new URLSearchParams(window.location.search).get("ref");
@@ -69,6 +72,13 @@ export default function GuestScan() {
   const [shareViewedAt, setShareViewedAt] = useState<number | null>(null);
   const [showLive, setShowLive] = useState(false);
   const [queueNote, setQueueNote] = useState("");
+  // A scan that hit the queue and was not admitted. Held so the visitor can
+  // resume it in place rather than starting over at the back of the line.
+  const [queuedScan, setQueuedScan] = useState<{
+    scanId: Id<"scans">;
+    position: number;
+    limit: number;
+  } | null>(null);
   const scanState = useQuery(
     api.scans.queries.getScan,
     scanId === null ? "skip" : { scanId },
@@ -94,6 +104,7 @@ export default function GuestScan() {
       setSubmitError("Paste a public GitHub repository URL to start.");
       return;
     }
+    setQueuedScan(null);
     setPhase("fetching");
     try {
       const result = await runScan({ repoUrl: repoUrl.trim() });
@@ -130,9 +141,15 @@ export default function GuestScan() {
         }
         setQueueNote("");
         if (analyzed.status === "queued") {
-          setSubmitError(
-            "Servers are busy. Your scan did not run yet. Wait a moment, then press Run scan to try again.",
-          );
+          // Keep the queued scan so the visitor can resume it in place. The
+          // queue row is keyed by this scanId, so calling analyzeScan again
+          // with the same id keeps their position. Calling runScan instead
+          // would mint a new scan and drop them to the back of the line.
+          setQueuedScan({
+            scanId: result.scanId,
+            position: analyzed.queuePosition ?? 1,
+            limit: analyzed.queueLimit ?? 6,
+          });
           setPhase("idle");
           return;
         }
@@ -154,6 +171,46 @@ export default function GuestScan() {
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Could not run the scan. Try again.");
       setPhase("idle");
+    }
+  }
+
+  // Resumes the queued scan in place. The queue row is keyed by scanId, so
+  // calling analyzeScan with the same id preserves the visitor's position.
+  // This must never call runScan: that mints a new scan and a new queue row,
+  // which is the bug this path exists to avoid.
+  async function onResume() {
+    if (queuedScan === null) return;
+    setSubmitError("");
+    setPhase("analyzing");
+    try {
+      let result = await analyzeScan({ scanId: queuedScan.scanId });
+      for (let attempt = 0; attempt < 20 && result.status === "queued"; attempt++) {
+        setQueueNote(
+          `Still waiting. You are number ${result.queuePosition ?? queuedScan.position} in line. Holding your place.`,
+        );
+        await new Promise((r) => setTimeout(r, 3000));
+        result = await analyzeScan({ scanId: queuedScan.scanId });
+      }
+      setQueueNote("");
+      if (result.status === "queued") {
+        setPhase("idle");
+        return;
+      }
+      setScanId(queuedScan.scanId);
+      setQueuedScan(null);
+      setWasCached(false);
+      setRescanRan(false);
+      setComparePair(null);
+      void logEvent({
+        kind: result.status === "completed" ? "scan_completed" : "scan_partial",
+        scanId: queuedScan.scanId,
+      });
+      setPhase("idle");
+    } catch {
+      // The scan row or its commit is gone, so there is nothing to resume.
+      setQueuedScan(null);
+      setPhase("idle");
+      setSubmitError("That waiting scan is gone. Press Run scan to start a new one.");
     }
   }
 
@@ -323,6 +380,19 @@ export default function GuestScan() {
         </p>
       </details>
       <CapacityMeter waiting={0} running={0} quota={null} />
+      {queuedScan !== null && (
+        <div aria-label="Waiting scan">
+          <p>
+            Servers are busy. Your scan is saved in waiting place{" "}
+            {queuedScan.position} of {queuedScan.limit}. Press the button below and it
+            picks up from that same place. Pressing Run scan instead starts a new scan
+            at the back of the line.
+          </p>
+          <button type="button" disabled={phase !== "idle"} onClick={() => void onResume()}>
+            {phase !== "idle" ? "Waiting..." : "Keep waiting in place"}
+          </button>
+        </div>
+      )}
       {submitError.length > 0 && <p role="alert">{submitError}</p>}
       {queueNote.length > 0 && <p role="status">{queueNote}</p>}
       {status !== null && <p role="status">Status: {status}{wasCached ? " (cached)" : ""}</p>}
@@ -358,12 +428,6 @@ export default function GuestScan() {
               plan={plan}
               live={resultsState.live}
               mainAction={scan.mainAction ?? null}
-              onShare={() => void onShare()}
-              onPassport={() => void onPassport()}
-              shareId={shareId}
-              passportId={passportId}
-              shareError={shareError}
-              shareViewed={shareViewedAt !== null}
               status={scan.status}
               fetchedFileCount={scan.fetchedFileCount ?? 0}
               skippedFileCount={scan.skippedFileCount ?? 0}
@@ -371,12 +435,6 @@ export default function GuestScan() {
               treeTruncated={scan.truncated === true}
               liveProvided={liveUrl.trim().length > 0}
               aiConfigured={explainNote.length > 0 && !/No AI provider/i.test(explainNote)}
-              onConfirmShareViewed={() => {
-                setShareViewedAt(Date.now());
-                if (shareId !== null && scanId !== null) {
-                  void logEvent({ kind: "share_viewed", scanId, shareId });
-                }
-              }}
             />
           )}
           {analyzed && (
@@ -408,6 +466,50 @@ export default function GuestScan() {
               )}
               {notActionable.length > 0 && (
                 <p>{notActionable.length} item(s) were reviewed and marked informational.</p>
+              )}
+            </div>
+          )}
+          {analyzed && (
+            <div aria-label="Share and passport" className="share-block">
+              <h4>Share</h4>
+              <div aria-label="Before you create a link">
+                <p>Before you create a link, know this.</p>
+                <p>Anyone with the link can open it. No sign in is needed.</p>
+                <p>The link does not expire. There is no way to take it back.</p>
+                <p>
+                  It shows your repo name, the commit, finding counts, titles, and
+                  short explanations.
+                </p>
+                <p>It never shows file paths, line numbers, code, or secret values.</p>
+              </div>
+              <button type="button" onClick={() => void onShare()}>Create share link</button>{" "}
+              <button type="button" onClick={() => void onPassport()}>Issue passport</button>
+              {shareError.length > 0 && <p role="alert">{shareError}</p>}
+              {shareId !== null && (
+                <p>
+                  Share link: {origin}/s/{shareId}
+                </p>
+              )}
+              {passportId !== null && (
+                <p>
+                  Passport link: {origin}/p/{passportId}
+                </p>
+              )}
+              {shareId !== null && shareViewedAt === null && (
+                <div aria-label="Confirm share works">
+                  <p>
+                    Open your share link in another tab or on your phone to check it
+                    works.
+                  </p>
+                  <button type="button" onClick={() => {
+                    setShareViewedAt(Date.now());
+                    if (shareId !== null && scanId !== null) {
+                      void logEvent({ kind: "share_viewed", scanId, shareId });
+                    }
+                  }}>
+                    It opened fine
+                  </button>
+                </div>
               )}
             </div>
           )}

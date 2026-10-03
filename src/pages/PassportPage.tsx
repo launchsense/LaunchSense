@@ -75,7 +75,10 @@ export default function PassportPage({ passportId }: { passportId: string }) {
       )}
       {page.scan.coverageNote !== undefined && <p>{page.scan.coverageNote}</p>}
       <p>
-        This page shows counts and titles only. No code, no file paths, no secret values.
+        This passport covers {page.scan.owner}/{page.scan.repo} at one commit, checked on one
+        date. It shows finding counts, titles, and the scan status. It does not contain
+        code, file paths, or secret values. Anyone with this link can open it, and the
+        link stays live. The person who made it cannot take it back.
       </p>
       <p>
         <a href="/">Scan your own repo</a>

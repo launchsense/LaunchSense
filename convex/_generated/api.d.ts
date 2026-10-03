@@ -16,6 +16,7 @@ import type * as adapters_osv from "../adapters/osv.js";
 import type * as adapters_share from "../adapters/share.js";
 import type * as adapters_tarball from "../adapters/tarball.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as entitlements from "../entitlements.js";
 import type * as github_app from "../github/app.js";
 import type * as health from "../health.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "adapters/share": typeof adapters_share;
   "adapters/tarball": typeof adapters_tarball;
   auth: typeof auth;
+  crons: typeof crons;
   entitlements: typeof entitlements;
   "github/app": typeof github_app;
   health: typeof health;

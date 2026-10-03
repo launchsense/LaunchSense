@@ -59,7 +59,10 @@ export function DnaPanel(props: { dna: RepoDna; readiness: ReadinessBand }) {
         <p>{props.dna.languages.map((l) => `${l.language} ${l.files}`).join(", ") || "none"}</p>
       </div>
       <div aria-label="Share readiness">
-        <h5>Share readiness: {props.readiness.label}</h5>
+        <p className="panel-caption">
+          Supporting signal: {props.readiness.label}. The verdict is in the result box
+          at the top of the report.
+        </p>
         <ul>
           {props.readiness.reasons.map((r) => (
             <li key={r}>{r}</li>
@@ -75,7 +78,7 @@ export function DnaPanel(props: { dna: RepoDna; readiness: ReadinessBand }) {
         </p>
         <p>
           This is a signal from the files we could read. It is not a certification and it does not
-          decides whether your product is good.
+          decide whether your product is good.
         </p>
       </div>
     </div>

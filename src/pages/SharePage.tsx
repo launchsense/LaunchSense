@@ -45,6 +45,17 @@ export default function SharePage({ shareId }: { shareId: string }) {
         Findings: {card.counts.high} high, {card.counts.medium} medium,{" "}
         {card.counts.low} low, {card.counts.info} info.
       </p>
+      <div aria-label="About this shared result">
+        <p>
+          This is a shared LaunchSense result for one scan of {page.scan.owner}/
+          {page.scan.repo}. It shows counts, titles, and short explanations. It does not
+          contain code, file paths, or secret values.
+        </p>
+        <p>
+          Anyone with this link can open it. The link stays live, and the person who
+          made it cannot take it back.
+        </p>
+      </div>
       {card.steps.length > 0 && (
         <div aria-label="Shared fix list">
           <h2>Fix before sharing</h2>

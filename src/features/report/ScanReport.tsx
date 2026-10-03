@@ -53,13 +53,6 @@ export default function ScanReport(props: {
   plan: FixPlan;
   live: LiveInfo | null;
   mainAction: string | null;
-  onShare: () => void;
-  onPassport: () => void;
-  shareId: string | null;
-  passportId: string | null;
-  shareError: string;
-  shareViewed: boolean;
-  onConfirmShareViewed: () => void;
   // Scope inputs. The verdict is meaningless without them, so they are props
   // rather than something this component looks up later.
   status: ScanStatus;
@@ -114,9 +107,6 @@ export default function ScanReport(props: {
       setPromptCopied(ok);
     });
   }
-
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "";
 
   // Verdict and scope are computed together and rendered together. This is the
   // whole point of the change: a reader cannot reach the headline without the
@@ -180,6 +170,30 @@ export default function ScanReport(props: {
         </div>
       )}
 
+      {restSteps.length > 0 && (
+        <div aria-label="Fix before you share">
+          <h4>The rest of the fix list</h4>
+          <p>
+            {top.topRuleIds.length > 0
+              ? "These are the items after the top 3 above."
+              : "Everything the check found."}
+          </p>
+          <ol>
+            {restSteps.map((step) => (
+              <li key={step.ruleId}>
+                <strong>{step.title}</strong>
+                <p>{step.why}</p>
+                <ul>
+                  {step.checklist.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       {props.live !== null && (
         <div aria-label="Live site check">
           <h4>What a stranger hits on your live app</h4>
@@ -203,30 +217,6 @@ export default function ScanReport(props: {
             It only reads the served HTML.
           </p>
           {props.live.errorMessage !== undefined && <p role="alert">{props.live.errorMessage}</p>}
-        </div>
-      )}
-
-      {restSteps.length > 0 && (
-        <div aria-label="Fix before you share">
-          <h4>The rest of the fix list</h4>
-          <p>
-            {top.topRuleIds.length > 0
-              ? "These are the items after the top 3 above."
-              : "Everything the check found."}
-          </p>
-          <ol>
-            {restSteps.map((step) => (
-              <li key={step.ruleId}>
-                <strong>{step.title}</strong>
-                <p>{step.why}</p>
-                <ul>
-                  {step.checklist.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ol>
         </div>
       )}
 
@@ -254,32 +244,6 @@ export default function ScanReport(props: {
         ))}
       </div>
 
-      <div aria-label="Share and passport">
-        <h4>Share</h4>
-        <button type="button" onClick={props.onShare}>Create share link</button>{" "}
-        <button type="button" onClick={props.onPassport}>Issue passport</button>
-        {props.shareError.length > 0 && <p role="alert">{props.shareError}</p>}
-        {props.shareId !== null && (
-          <p>
-            Share link: {origin}/s/{props.shareId}
-          </p>
-        )}
-        {props.passportId !== null && (
-          <p>
-            Passport link: {origin}/p/{props.passportId}
-          </p>
-        )}
-        {props.shareId !== null && !props.shareViewed && (
-          <div aria-label="Confirm share works">
-            <p>
-              Open your share link in another tab or on your phone to check it works.
-            </p>
-            <button type="button" onClick={props.onConfirmShareViewed}>
-              {props.shareViewed ? "Confirmed" : "It opened fine"}
-            </button>
-          </div>
-        )}
       </div>
-    </div>
   );
 }

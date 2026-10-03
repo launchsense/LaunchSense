@@ -1,11 +1,19 @@
 import { internalMutation, internalQuery } from "../_generated/server";
 import { v } from "convex/values";
+import { isAbandonedQueuedRow } from "../../shared/queue";
 
 // Admission control. MAX_CONCURRENT_ANALYSES is deliberately small: one scan is
 // roughly 4 GitHub requests, so 6 concurrent scans is about 24 requests of the
 // 5000 an hour a token gives, and it keeps every visitor inside a short action.
 const MAX_CONCURRENT_ANALYSES = 6;
 const STALE_RUNNING_MS = 180000;
+// A waiting row older than this is abandoned. The honest client wait is about
+// 60 seconds (20 retries at 3s), so 10 minutes covers a visitor who tabs away
+// and comes back, while bounding how long one abandonment can inflate the
+// reported queue position.
+const ABANDONED_WAITING_MS = 600000;
+// Bound one sweep so a large backlog cannot produce an oversized transaction.
+const SWEEP_BATCH = 100;
 
 export const claimSlot = internalMutation({
   args: { scanId: v.id("scans"), owner: v.string(), repo: v.string(), now: v.number() },
@@ -55,6 +63,47 @@ export const claimSlot = internalMutation({
     }
 
     return { position: 0, running, limit: MAX_CONCURRENT_ANALYSES };
+  },
+});
+
+// Sweeps queue rows nobody will ever claim.
+//
+// Before this existed, a visitor who hit the queue, waited, and gave up left a
+// waiting row behind forever. That row was counted in "ahead" forever, so every
+// later visitor saw a position inflated by one per abandonment. Nothing in the
+// codebase deleted it: releaseSlot only runs on the success path, and the
+// queued early return in analyzeScan never reaches it.
+//
+// Two rules keep this safe under Convex transaction semantics:
+//   1. NEVER delete a row whose startedAt !== 0 as observed inside this
+//      mutation. That value is what a concurrent claimSlot sets, so this is the
+//      single invariant a reviewer needs to check.
+//   2. Convex mutations serialize. If a claimSlot promotes a row while this
+//      sweep runs, one of the two retries, and the retried sweep re-reads the
+//      now-started row and skips it.
+export const sweepAbandonedQueue = internalMutation({
+  args: {},
+  returns: v.object({ removed: v.number() }),
+  handler: async (ctx): Promise<{ removed: number }> => {
+    const now = Date.now();
+    const waiting = await ctx.db
+      .query("scanQueue")
+      .withIndex("by_queue", (q) => q.eq("startedAt", 0))
+      .order("asc")
+      .take(SWEEP_BATCH);
+    let removed = 0;
+    for (const row of waiting) {
+      // Re-check on the row as read in this transaction. Never trust a filter
+      // computed earlier in the same mutation.
+      const live = await ctx.db.get("scanQueue", row._id);
+      if (live === null) continue;
+      if (!isAbandonedQueuedRow({ startedAt: live.startedAt, queuedAt: live.queuedAt }, now, ABANDONED_WAITING_MS)) {
+        continue;
+      }
+      await ctx.db.delete("scanQueue", live._id);
+      removed++;
+    }
+    return { removed };
   },
 });
 
