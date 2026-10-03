@@ -68,13 +68,14 @@ describe("scanSecrets", () => {
       { path: ".env", content: "KEY=1" },
       { path: ".env.example", content: "KEY=" },
       { path: "public/app.js", content: `const k = "${AWS_EXAMPLE}";` },
-      { path: "src/a.ts", content: "eval(userInput)\ndebugger;\nconsole.log(x)" },
+      { path: "src/a.ts", content: "eval(userInput)\ndebugger;\nconsole.log(x)\nclientSecret: process.env.AUTH_SECRET" },
     ]);
     const rules = matches.map((m) => `${m.ruleId}:${m.path}`);
     assert.ok(rules.includes("secret.tracked-env:.env"));
     assert.ok(!rules.some((r) => r.endsWith(".env.example")));
     assert.ok(rules.includes("secret.client-exposure:public/app.js"));
     assert.ok(rules.includes("secret.eval-use:src/a.ts"));
+    assert.ok(!matches.some((m) => m.ruleId === "secret.credential-pattern"));
     assert.ok(rules.includes("secret.debugger-statement:src/a.ts"));
     assert.ok(rules.includes("secret.debug-leftover:src/a.ts"));
   });

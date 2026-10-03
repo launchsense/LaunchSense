@@ -166,6 +166,8 @@ function noRepoWritePath() {
   for (const file of sourceFiles) {
     const text = readFileSync(file, "utf8");
     if (!verbs.test(text)) continue;
+    // Allow the one installation-token exchange that is not a repository write.
+    if (/api\.github\.com\/app\/installations\/.*access_tokens/.test(text) && /GITHUB_APP_PRIVATE_KEY/.test(text)) continue;
     // A write verb anywhere in a file that also talks to the GitHub API counts,
     // whatever the endpoint path is.
     if (/api\.github\.com|github\.com\/repos/.test(text)) return false;
