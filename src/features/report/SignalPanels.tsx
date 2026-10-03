@@ -97,7 +97,7 @@ export function StandardsPanel(props: { mappings: StandardMapping[] }) {
               {m.requirementId} {m.title}
             </strong>{" "}
             ({m.coverage}): {m.status}
-            {m.evidenceCount > 0 && ` · ${m.evidenceCount} evidence item(s)`}
+            {m.evidenceCount > 0 && ` (${m.evidenceCount} evidence items)`}
             <p>{m.caveat}</p>
           </li>
         ))}

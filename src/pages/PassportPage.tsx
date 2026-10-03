@@ -47,7 +47,7 @@ export default function PassportPage({ passportId }: { passportId: string }) {
       <p>
         Commit <strong>{shortSha(page.scan.sha)}</strong>
         {page.scan.analyzedAt !== undefined &&
-          ` · checked ${new Date(page.scan.analyzedAt).toISOString().slice(0, 10)}`}
+          `, checked ${new Date(page.scan.analyzedAt).toISOString().slice(0, 10)}`}
       </p>
       <p>Scan status: {page.scan.status}.</p>
       <p>

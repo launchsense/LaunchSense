@@ -41,6 +41,15 @@ describe("style rules", () => {
       assert.doesNotMatch(text, /\u2026/, `${file} contains the ellipsis character`);
     }
   });
+
+  it("uses no middle dot between facts, which is a named AI tell", () => {
+    // frontend-design names "meta strings joined with middle dots (A, B, C)" as a
+    // generic default. Removed from 8 sites on 2026-10-04. Use a comma, a slash, or
+    // a parenthetical instead.
+    for (const { file, text } of allSource) {
+      assert.doesNotMatch(text, /\u00b7/, `${file} joins facts with a middle dot`);
+    }
+  });
 });
 
 describe("no overstatement survives", () => {
