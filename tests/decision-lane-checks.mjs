@@ -9,6 +9,7 @@ import {
   rankState,
 } from "../shared/reports/priority.ts";
 import { looksLikeSecret, validateQuestions, decisionRungs } from "../convex/adapters/decision.ts";
+import * as FX from "./fixtures.mjs";
 
 // The decision lane. Two things must hold:
 //   1. It can only ORDER findings the checks already found. It never decides what
@@ -103,11 +104,11 @@ describe("the lane can never override severity", () => {
 
 describe("fail-closed on secrets", () => {
   it("refuses a state carrying an AWS key", () => {
-    assert.equal(looksLikeSecret({ content: "const k = '"AKIA"+"IOSFODNN7EXAMPLE"'" }), "aws key");
+    assert.equal(looksLikeSecret({ content: `const k = '${FX.FAKE_AWS}'` }), "aws key");
   });
 
   it("refuses a github token, a bearer token, and a private key block", () => {
-    assert.equal(looksLikeSecret(""ghp_"+"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789""), "github token");
+    assert.equal(looksLikeSecret(`ghp_${"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"}`), "github token");
     assert.equal(looksLikeSecret("Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456"), "bearer token");
     assert.equal(looksLikeSecret("-----BEGIN RSA PRIVATE KEY-----"), "private key block");
   });
@@ -118,9 +119,9 @@ describe("fail-closed on secrets", () => {
   });
 
   it("never returns the secret value itself, only a label", () => {
-    const label = looksLikeSecret(""AKIA"+"IOSFODNN7EXAMPLE"");
+    const label = looksLikeSecret(FX.FAKE_AWS);
     assert.equal(label, "aws key");
-    assert.ok(!String(label).includes("AKIA"));
+    assert.ok(!String(label).includes(FX.FAKE_AWS.slice(0, 4)));
   });
 });
 

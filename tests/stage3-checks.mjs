@@ -7,6 +7,7 @@ import {
 } from "../shared/redaction.ts";
 import { ANALYZER_VERSION } from "../shared/analyzers/version.ts";
 import { scanSecrets } from "../shared/analyzers/secrets.ts";
+import * as F from "./fixtures.mjs";
 import { parseManifests } from "../shared/analyzers/deps.ts";
 import { analyzeLicenses } from "../shared/analyzers/licenses.ts";
 import { buildFixPlan } from "../shared/reports/fixPlan.ts";
@@ -67,7 +68,7 @@ describe("scanSecrets", () => {
     const matches = scanSecrets([
       // A tracked env that carries a real-looking value is a leak. A template with a
       // placeholder is not, which is why this fixture holds a credential-shaped value.
-      { path: ".env", content: `OPENROUTER_API_KEY=""sk-or-v1-"+"abcdef1234567890abcdef1234567890""` },
+      { path: ".env", content: F.line("OPENROUTER_API_KEY", F.FAKE_OPENROUTER) },
       { path: ".env.example", content: "KEY=" },
       { path: "public/app.js", content: `const k = "${AWS_EXAMPLE}";` },
       { path: "src/a.ts", content: "eval(userInput)\ndebugger;\nconsole.log(x)\nclientSecret: process.env.AUTH_SECRET" },
