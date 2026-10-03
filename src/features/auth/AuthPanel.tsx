@@ -12,7 +12,7 @@ export function AuthPanel() {
   if (isAuthenticated) {
     return (
       <div className="auth-panel" aria-label="Connected account">
-        <p>You are connected. LaunchSense keeps one selected repo, read-only, and it never stores your code.</p>
+        <p>You are signed in. Connected repo scans will be your next paid step after you install the GitHub App on selected repos.</p>
         <button type="button" onClick={() => void signOut()}>Sign out</button>
       </div>
     );
@@ -20,8 +20,8 @@ export function AuthPanel() {
 
   return (
     <div className="auth-panel" aria-label="Connect GitHub">
-      <p>Want a deeper scan on your own repo? Sign in with GitHub only when you are ready.</p>
-      <button type="button" onClick={() => void signIn("github")}>Connect GitHub</button>
+      <p>Want something beyond the guest scan? A connected GitHub App scan is being built. Guest scans do not need login.</p>
+      <button type="button" onClick={() => void signIn("github")}>Sign in with GitHub</button>
     </div>
   );
 }
