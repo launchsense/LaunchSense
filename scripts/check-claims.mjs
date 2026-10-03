@@ -56,6 +56,15 @@ const POSITIVE_CLAIMS = [
   // "you will not lose your place" while pressing Run scan minted a new scanId
   // and a new queue row. See .progress/UI-COPY-CONTENT-POLICY-PLAN.md W1.
   { phrase: /(you\s+will\s+not\s+lose\s+your\s+place|you\s+keep\s+your\s+place)/i, why: "no durable queue ticket exists" },
+  // Verdict wording. "No findings. The checks found nothing to flag." read as a
+  // clean bill of health while the scope sat far below it. A verdict must carry
+  // its own scope. See .progress/UI-COPY-CONTENT-POLICY-PLAN.md W2.
+  // A verdict phrase is only a defect when the line does not also carry its scope.
+// The guard reads one line at a time, so a qualifier on the next line cannot be
+// seen by a regex lookahead. `qualifier` is checked against the whole line.
+{ phrase: /\bno\s+findings\s*[.!]/i, qualifier: "not checked", why: "a bare verdict reads as safe; it must name what was not checked" },
+  { phrase: /nothing\s+was\s+flagged/i, qualifier: "not checked", why: "a clean result must state its scope in the same sentence" },
+  { phrase: /\bchecks\s+found\s+nothing\b/i, why: "most of the repo was never read" },
 ];
 
 const NEGATIVE_CLAIMS = [
@@ -216,6 +225,8 @@ for (const file of copyFiles()) {
         checked++;
         // "This is not a certification" walks the claim back, so it is honest.
         if (isWalkedBack(line, match)) continue;
+        // A verdict is allowed when its scope is named on the same line.
+        if (claim.qualifier !== undefined && line.toLowerCase().includes(claim.qualifier)) continue;
         failures.push({ rel, line: i + 1, text: raw.trim(), why: claim.why });
       }
       for (const claim of NEGATIVE_CLAIMS) {

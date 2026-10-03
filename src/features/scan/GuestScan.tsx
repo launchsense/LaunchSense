@@ -348,17 +348,10 @@ export default function GuestScan() {
             {scan.sha !== undefined && <> · commit {shortSha(scan.sha)}</>}
             {scan.defaultBranch !== undefined && <> · branch {scan.defaultBranch}</>}
           </p>
-          {scan.fileCount !== undefined && (
-            <p>{scan.fileCount} paths in tree{scan.truncated === true ? " (truncated)" : ""}.</p>
-          )}
-          {scan.fetchedFileCount !== undefined && (
-            <p>Analyzed {scan.fetchedFileCount} files, skipped {scan.skippedFileCount ?? 0}.</p>
-          )}
           {scan.errorMessage !== undefined && <p role="alert">{scan.errorMessage}</p>}
           {scan.rateLimitResetAt !== undefined && (
             <p>Quota resets at {new Date(scan.rateLimitResetAt).toLocaleTimeString()}.</p>
           )}
-          {scan.coverageNote !== undefined && <p>{scan.coverageNote}</p>}
           {analyzed && resultsState !== undefined && (
             <ScanReport
               findings={resultsState.findings}
@@ -371,6 +364,13 @@ export default function GuestScan() {
               passportId={passportId}
               shareError={shareError}
               shareViewed={shareViewedAt !== null}
+              status={scan.status}
+              fetchedFileCount={scan.fetchedFileCount ?? 0}
+              skippedFileCount={scan.skippedFileCount ?? 0}
+              fileCount={scan.fileCount}
+              treeTruncated={scan.truncated === true}
+              liveProvided={liveUrl.trim().length > 0}
+              aiConfigured={explainNote.length > 0 && !/No AI provider/i.test(explainNote)}
               onConfirmShareViewed={() => {
                 setShareViewedAt(Date.now());
                 if (shareId !== null && scanId !== null) {
@@ -437,16 +437,6 @@ export default function GuestScan() {
               toScanId={comparePair.to}
             />
           )}
-          <div aria-label="What was not checked">
-            <p>
-              <strong>Not checked:</strong> file contents beyond the 200-file /
-              2MB caps, binary and generated files, dependency freshness,
-              deps.dev metadata, and AI explanations.{" "}
-              {scan.status === "partial"
-                ? "This is a partial result. Unlisted files were not examined."
-                : "Deterministic checks only."}
-            </p>
-          </div>
           {scanState !== undefined && scanState.samplePaths.length > 0 && (
             <details>
               <summary>First {scanState.samplePaths.length} paths (of {scanState.storedEntries} stored)</summary>
