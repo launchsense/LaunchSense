@@ -198,6 +198,7 @@ article {
 .not-checked summary { color: var(--action); }
 
 .panel-caption { margin: 0 0 8px; color: var(--ink-muted); }
+.priority-note { margin: 0 0 12px; color: var(--ink-muted); font-size: var(--text-sm); }
 .share-block { margin-top: 24px; }
 .share-block [aria-label="Before you create a link"] {
   border: 1px solid var(--line);

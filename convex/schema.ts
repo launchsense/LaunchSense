@@ -54,6 +54,11 @@ export default defineSchema({
     progressPhase: v.optional(v.string()),
     analyzedAt: v.optional(v.number()),
     coverageNote: v.optional(v.string()),
+    /** Ordered actional fingerprints, most urgent first, from the decision lane or the table floor. */
+    priorityOrder: v.optional(v.array(v.string())),
+    /** Which rung produced the order: jev, perplexity, or table. Never a model name. */
+    prioritySource: v.optional(v.string()),
+    priorityNote: v.optional(v.string()),
     liveUrl: v.optional(v.string()),
     mainAction: v.optional(v.string()),
     rescanOf: v.optional(v.id("scans")),

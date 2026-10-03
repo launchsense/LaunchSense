@@ -729,6 +729,26 @@ export const analyzeScan = action({
       })),
     });
 
+    // Ask the decision lane to order the findings, then persist the order on the
+    // scan. This runs AFTER saveResults so a finding set already exists, and it can
+    // never change that set: the lane only returns an ordering. A failed or absent
+    // lane leaves the table order, which is deterministic, so this step is safe to
+    // fail and the scan is complete either way.
+    try {
+      const ranked = await ctx.runAction(internal.scans.rankScan.rankScan, {
+        scanId: args.scanId,
+      });
+      await ctx.runMutation(internal.scans.store.savePriority, {
+        scanId: args.scanId,
+        order: ranked.order,
+        source: ranked.source,
+        note: ranked.note,
+      });
+    } catch {
+      // The lane is an enhancement, not a dependency. The table floor already
+      // ordered the findings; nothing here can fail the scan.
+    }
+
     // Release the slot before returning so a queued scan can start.
     await ctx.runMutation(internal.scans.quota.releaseSlot, { scanId: args.scanId });
 
