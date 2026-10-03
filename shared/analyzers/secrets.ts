@@ -95,7 +95,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
         continue;
       }
       if (
-        /(password|passwd|pwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret)\s*[:=]\s*['"]?[^\s'";,]{3,}/i.test(
+        /(password|passwd|pwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret)\s*[:=]\s*(?!process\.env)['"]?[^\s'";,]{3,}/i.test(
           line,
         )
       ) {

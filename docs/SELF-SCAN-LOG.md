@@ -26,6 +26,44 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
+### Stage GitHub App token helper
+
+Scanned `b2eb4469b0515a5d9900bce56982a3ca87e2b087`. Status: partial, 99 fetched, 1 skipped.
+
+Raw counts:
+
+| Severity | Count |
+| --- | ---: |
+| high | 7 |
+| medium | 38 |
+| low | 2 |
+| info | 10 |
+| total | 57 |
+
+New findings versus `4caa8d8`:
+
+- `convex/auth.ts:13` false-positive `secret.credential-pattern` because the scanner flagged `clientSecret: process.env.AUTH_GITHUB_SECRET` even though the value is an environment reference, not a literal secret. Fixed in analyzer to require a non-`process.env` value.
+- Two `hygiene.env-usage` info rows and one `credential-pattern` test fixture delta from the GitHub auth wiring. Those are expected.
+- No new real vulnerability category appeared.
+
+Not-checked box:
+
+> Contents incomplete: 1 files skipped by caps. Findings cover fetched files only.
+
+Coverage note:
+
+> Analyzed 99 files at this commit; skipped 1 (OSV checked 24 packages, 0 unknown; registry freshness and deps.dev metadata not checked).
+
+Triage summary:
+
+- license.policy: true as stated. LaunchSense is proprietary, not open source.
+- deps.vulnerability: still real OSV records for vite and @auth/core; deferred to next dependency patch pass.
+- deps.unpinned-version: true by design in the current package ranges; exact install versions are pinned by lockfile.
+- secret.credential-pattern: five hits, all synthetic fixture/test strings except one false positive from `process.env`, now fixed.
+- secret.eval-use: false positive from synthetic test content.
+- hygiene.no-ci: still true. CI is not configured.
+- hygiene.large-files: still true. Needs path review.
+
 ### Stage IDEA_SCOPE push and Share Readiness rename
 
 Scanned the repository pushed at `4caa8d8313dbafb37584d22189c807d3c6f62b91`. Status: partial. Fetched 97 files, skipped 1.
