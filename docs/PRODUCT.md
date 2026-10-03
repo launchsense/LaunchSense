@@ -103,11 +103,15 @@ and never decides anything.
 - **Live app, optional.** HTTPS, reachability, non-blank response, main-action hint,
   viewport meta. Fetch-only. It reads served HTML and cannot prove how a page looks
   on a phone, and the report says so.
-- **Repo DNA and Judge Readiness.** A tree and language map, plus an explainable
+- **Repo DNA and Share readiness.** A tree and language map, plus an explainable
   readiness band with read-coverage attached. Signals only, never certification.
 
-Caps are stated in the interface, not buried: 200 files, about 2MB, 100KB per file,
-500 stored tree entries.
+Caps are stated in the interface, not buried: 200 files, about 2MB, 100KB per file
+when a single file is read, and 5000 stored tree entries.
+
+One naming note, since it appears in older planning: the readiness band is called
+`Judge Readiness` in the internal plan and `Share readiness` in the shipped
+interface. It is the same single signal. This document uses the shipped name.
 
 ## The AI lane
 
@@ -166,6 +170,9 @@ builder is about to hit publish.
 - Public repos only. No private repository path yet.
 - 200 files and about 2MB per guest scan.
 - No browser rendering. The live check reads served HTML, not a rendered phone.
+- The check runs when you press Run, or from the read-only MCP endpoints. There is no
+  automatic reminder and no monitoring in Phase 1, so a stale result stays stale
+  until you rescan.
 - A hung advisory lookup is **unknown**, never a pass.
 - Share links and passports do not expire and cannot be revoked today. The interface
   says so before you create one, not after.
@@ -175,10 +182,14 @@ builder is about to hit publish.
 ## Where it goes
 
 - **Phase 1, live now.** Guest scan, plain report, one merged fix prompt, rescan
-  compare, share and passport, Repo DNA, Judge Readiness, serial missions.
+  compare, share and passport, Repo DNA, Share readiness, serial missions, plus
+  read-only MCP endpoints and a local adapter script. The MCP surface is small on
+  purpose and exists to prove the contract, not to be the product.
 - **Phase 2.** GitHub App on a selected repo, monitoring, push-triggered checks,
   history, score trends, full standards maps, SBOM signals.
-- **Phase 3.** Public API, MCP, teams, roles, audit logs, retention.
+- **Phase 3.** A versioned public API, a full MCP integration, teams, roles, audit
+  logs, retention. The Phase 1 MCP routes above are the seed for this, not the
+  finished version.
 
 ## Market
 
@@ -203,10 +214,12 @@ React and Vite on the front end. Convex for database, backend, and hosting. GitH
 holds the source. 192 automated tests run on every change, and a claim guard fails
 the build on copy that asserts something the code cannot back.
 
-The guard is not decoration. It blocks 12 classes of unsupported claim, and each
-rule was written against a string that was genuinely in this product. It caught
-three of our own new strings during this build, including one that was honest but
-phrased in a way the guard could not yet understand.
+The guard is not decoration. It carries 33 rules across three classes: unsupported
+claims, safety promises that must be backed by the code, and retention numbers that
+must match a real cache constant. Each rule was written against a string that was
+genuinely in this product. During this build the guard caught three of our own new
+strings, including two that were honest but phrased in a way the guard could not yet
+understand. It now scans this document too.
 
 ## What is not built, plainly
 
