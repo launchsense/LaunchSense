@@ -41,8 +41,8 @@ const SEQUENTIAL: Array<{ id: string; title: string; plain: string; done: (f: Mi
   },
   {
     id: "secure-project",
-    title: "Secure Your Project",
-    plain: "Fix every high severity secret finding.",
+    title: "Clear high severity secrets",
+    plain: "Fix every high severity secret finding in the files we could read. Skipped files stay unchecked.",
     done: (f) => f.analyzed && f.highSecrets === 0,
   },
   {
@@ -73,7 +73,7 @@ const SEQUENTIAL: Array<{ id: string; title: string; plain: string; done: (f: Mi
   },
   {
     id: "safe-share",
-    title: "Create Safe Share Card",
+    title: "Create a share link",
     plain: "Create a share link and confirm it opens.",
     done: (f) => f.shareCreated && f.shareViewed,
   },
@@ -111,7 +111,7 @@ export function buildMissions(facts: MissionFacts): {
     {
       id: "first-report",
       title: "First Report",
-      plain: "You produced a full report.",
+      plain: "You produced a report with its not-checked list.",
       earned: missions[0]?.done === true,
     },
     {
@@ -122,19 +122,19 @@ export function buildMissions(facts: MissionFacts): {
     },
     {
       id: "clean-compare",
-      title: "Clean Compare",
-      plain: "Your rescan showed nothing still broken.",
+      title: "Rescan compared",
+      plain: "Your rescan compared two commits with no high findings still open. Unknown items stay unknown.",
       earned: facts.rescanRan && facts.highOpen === 0,
     },
     {
       id: "shared-safely",
-      title: "Shared Safely",
-      plain: "You shared a scan that carried no secrets.",
+      title: "Share link opened",
+      plain: "You created a share link and confirmed it opens. This does not mean the repo is safe to share.",
       earned: facts.shareCreated,
     },
     {
       id: "judge-ready",
-      title: "Share Ready",
+      title: "Blockers reviewed",
       plain: "No shared scan was blocked in the files we could read.",
       earned: missions[3]?.done === true,
     },

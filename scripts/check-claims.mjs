@@ -63,7 +63,13 @@ const POSITIVE_CLAIMS = [
 // The guard reads one line at a time, so a qualifier on the next line cannot be
 // seen by a regex lookahead. `qualifier` is checked against the whole line.
 { phrase: /\bno\s+findings\s*[.!]/i, qualifier: "not checked", why: "a bare verdict reads as safe; it must name what was not checked" },
-  { phrase: /nothing\s+was\s+flagged/i, qualifier: "not checked", why: "a clean result must state its scope in the same sentence" },
+  // Accepts either an explicit not-checked qualifier or the verdict block's own
+  // negative framing, which carries the same meaning in fewer words.
+  {
+    phrase: /nothing\s+was\s+flagged/i,
+    qualifier: /\b(not checked|not a clean bill of health|did read)\b/i,
+    why: "a clean result must state its scope in the same sentence",
+  },
   { phrase: /\bchecks\s+found\s+nothing\b/i, why: "most of the repo was never read" },
   // Share links and passports are permanent. No expiresAt, no revoked flag, and
   // no ctx.db.delete anywhere targets either table. Verified 2026-10-03.
@@ -73,6 +79,14 @@ const POSITIVE_CLAIMS = [
   // way to take it back", and "no way to" is not a negation the walk-back window
   // recognises, so this rule must not match it at all.
   { phrase: /\byou can (take|turn) (it|this|your link) (down|offline)\b/i, why: "a share link cannot be withdrawn today" },
+  // Mission and achievement wording. Each of these awarded a state the scan
+  // could not verify. See .progress/UI-COPY-CONTENT-POLICY-PLAN.md W6.
+  { phrase: /\bsecure your project\b/i, why: "a verdict, not a mission; high findings clear while others remain" },
+  { phrase: /\bshared\s+safely\b/i, why: "earned on shareCreated alone, with no verification of findings" },
+  { phrase: /\bcarried no secrets\b/i, why: "creation is all that is checked, not the scan contents" },
+  { phrase: /\bclean\s+compare\b/i, why: "unknown items stay unknown after a rescan" },
+  { phrase: /safe and cheap/i, why: "scans are partial and no price is stated" },
+  { phrase: /without exposing secrets/i, why: "the share page states what it does and does not contain" },
 ];
 
 const NEGATIVE_CLAIMS = [
@@ -145,7 +159,10 @@ function retentionIsEnforced() {
     /\b(TTL|RETENTION|MAX_AGE)\w*/i.test(readAllSource());
 }
 
-const COPY_GLOBS = ["README.md", "CHANGELOG.md", "docs", "src"];
+// shared/reports holds the mission, achievement, standards, and export strings
+// that render verbatim in the UI. Without it the guard passed while
+// "Shared Safely" and "carried no secrets" sat in missions.ts.
+const COPY_GLOBS = ["README.md", "CHANGELOG.md", "docs", "src", "shared/reports"];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".progress", "_generated"]);
 
 function walk(dir, out = []) {
@@ -233,8 +250,14 @@ for (const file of copyFiles()) {
         checked++;
         // "This is not a certification" walks the claim back, so it is honest.
         if (isWalkedBack(line, match)) continue;
-        // A verdict is allowed when its scope is named on the same line.
-        if (claim.qualifier !== undefined && line.toLowerCase().includes(claim.qualifier)) continue;
+        // A verdict is allowed when its scope is named on the same line. The
+        // qualifier may be a plain substring or a pattern.
+        if (claim.qualifier !== undefined) {
+          const hit = typeof claim.qualifier === "string"
+            ? line.toLowerCase().includes(claim.qualifier)
+            : claim.qualifier.test(line);
+          if (hit) continue;
+        }
         failures.push({ rel, line: i + 1, text: raw.trim(), why: claim.why });
       }
       for (const claim of NEGATIVE_CLAIMS) {

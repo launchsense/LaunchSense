@@ -26,7 +26,9 @@ export function buildNoAgentExport(
   out.push("");
 
   if (plan.steps.length === 0) {
-    out.push("Nothing flagged. Re-scan after your next set of changes.");
+    out.push(
+      "Nothing flagged in the files we could read. Not checked files are not passes. Re-scan after your next set of changes.",
+    );
   }
 
   for (const step of plan.steps) {

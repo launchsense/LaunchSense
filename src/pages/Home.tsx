@@ -24,7 +24,7 @@ export default function Home() {
         <p className="lead">
           Paste a repo link. LaunchSense reads what it can, shows proof for every finding, and helps you recheck after a fix.
         </p>
-        {health === undefined && <p role="status">Connecting…</p>}
+        {health === undefined && <p role="status">Connecting...</p>}
       </header>
 
       <section className="scan-section" aria-labelledby="scan-title">
@@ -49,7 +49,11 @@ export default function Home() {
         <div className="feature-grid">
           <article>
             <h3>Security</h3>
-            <p>Secrets, risky patterns, eval, SQL shapes, and hardcoded keys are reported with redacted proof.</p>
+            <p>
+              Secrets, risky patterns, eval, SQL shapes, and hardcoded keys are reported
+              with proof. Redacted means the secret value is hidden and only the kind of
+              finding is shown.
+            </p>
           </article>
           <article>
             <h3>Dependencies</h3>
@@ -68,8 +72,12 @@ export default function Home() {
             <p>Re-scan after a fix and compare the commit, so fixed, still broken, new, and unknown findings are clear.</p>
           </article>
           <article>
-            <h3>Safe share</h3>
-            <p>Share a redacted report page and a passport without exposing secrets, tokens, or private details.</p>
+            <h3>Share with care</h3>
+            <p>
+              Share a page that shows counts, titles, and short explanations. It hides
+              file paths, line numbers, and code. Links stay live once created, so read
+              the page before you send it.
+            </p>
           </article>
         </div>
       </section>
