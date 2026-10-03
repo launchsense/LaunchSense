@@ -85,11 +85,13 @@ Rough order, not a schedule.
   claimed fix, say so plainly rather than leaving the user to compare.
 - **Rendered browser evidence.** Optional rendered checks for the public app
   when the live page is client-rendered. Only used when fetch evidence cannot
-  support the claim. Browserless is the preferred free tier for now.
+  support the claim. Browserless is the preferred free tier for now. Rendered
+  checks are credit-metered and limited to paid plans and permitted testers.
+  They are never part of the guest scan.
 - **Full standards maps and architecture graphs.** Deeper evidence views, still
   without certification language.
 - **PageSpeed trends.** Optional, only when the user opts in. Missing data shows
-  Unknown.
+  Unknown. PageSpeed checks are also credit-metered.
 - **SBOM signals.** Evidence from software bill of materials, never a verdict by
   itself.
 
