@@ -21,114 +21,117 @@ serves that: the verdict and its coverage sit together, "unknown" never renders 
 So the design goal is not delight. It is that a tired, nontechnical person at 1am,
 alone, about to hit publish, cannot be misled.
 
-## Design principles
+## The rules we design by
 
-1. **Scope is never below the verdict.** The line saying how much was not read sits
-   inside the same bordered block as the headline. Not beneath the report, not in a
-   footnote, not behind a link.
-2. **One dominant element per screen.** The verdict is the only heading with real
-   size authority, so visual order matches reading order.
-3. **Signals, never verdicts.** A readiness band is a band, not a score. A standards
-   mapping is a line with a caveat, not a certification.
+1. **The coverage line never sits below the answer.** The sentence saying how much
+   was not read stays inside the same box as the headline. Not further down the page,
+   not in a footnote, not behind a link.
+2. **One clear thing per screen.** The answer is the biggest text on the page, so
+   what stands out matches what you read first.
+3. **A signal is not a score.** Readiness is a band, not a mark out of ten. A
+   standards line is a line with a caveat, not a certificate.
 4. **Say what did not happen.** Empty, partial, failed, and unknown each get their
-   own distinct state and their own wording.
-5. **Buttons name their action.** `Run scan`, not `Get started`.
-6. **Honest before impressive.** No urgency framing, no trophy, no confetti on a
-   clean result.
+   own words. A check that did not run never looks like a check that passed.
+5. **Buttons say what they do.** `Run scan`, not `Get started`.
+6. **Honest beats impressive.** No fake urgency, no trophy, no celebration when the
+   result is clean.
 
-## Tokens
+## Colours and sizes
 
-The palette, type scale, layout widths, radius, and tap-target size live as custom
-properties on `:root`. No component rule hardcodes a colour, so a palette change is
-one edit, and that is checked: the only hex values in the file are token
-definitions.
+Every colour, text size, page width, and corner roundness is set once at the top of
+`src/index.css` and reused everywhere. Change it in one place and the whole product
+follows. A test checks that no colour is written anywhere else.
 
-Spacing is the exception. Padding and margin values are written directly at each
-rule, because the current layout is simple enough that a spacing scale would be
-invented rather than earned. If the interface grows a third layout, that becomes a
-`--space-*` scale.
+Spacing is the one exception. Padding and margin are written where they are used,
+because the layout is simple and inventing a spacing scale now would be tidier on
+paper and useless in practice. If a third layout arrives, it becomes a set of
+`--space-*` values.
 
-### Colour
+### Colours
 
-| Token | Value | Role | Ratio where used |
+"Ratio" is how easy the colour pair is to read. The goal is 4.5 to 1 or better for
+text, and 3 to 1 for a line or border you have to see.
+
+| Name | Value | Where it is used | Ratio |
 |---|---|---|---|
 | `--paper` | `#f5f7f3` | Page background | 13.98:1 with ink |
 | `--surface` | `#ffffff` | Cards, panels, inputs | 15.07:1 with ink |
 | `--ink` | `#172a24` | Body text | 13.98:1 on paper |
 | `--ink-muted` | `#333344` | Captions, counts, footer | 11.47:1 on paper |
-| `--ink-faint` | `#666677` | Auth state text | 5.22:1 on paper |
-| `--action` | `#174e39` | Buttons, links, verdict border | 9.61:1 with white text |
-| `--action-text` | `#ffffff` | Button label | 9.61:1 on action |
-| `--line` | `#cbd4ca` | Dividers, decorative borders | decorative only |
-| `--line-strong` | `#6b7a71` | Input and ghost button borders | 4.52:1 on white |
+| `--ink-faint` | `#666677` | Sign-in status text | 5.22:1 on paper |
+| `--action` | `#174e39` | Buttons, links, answer box border | 9.61:1 with white text |
+| `--action-text` | `#ffffff` | Button text | 9.61:1 on the button |
+| `--line` | `#cbd4ca` | Dividers between sections | decorative only |
+| `--line-strong` | `#6b7a71` | Input borders, ghost button borders | 4.52:1 on white |
 | `--focus` | `#2d7a52` | Focus outline | 4.85:1 on paper |
 | `--focus-light` | `#ffffff` | Focus inner edge | 9.61:1 on action |
 
-### Contrast, measured not estimated
+### Contrast, worked out not guessed
 
-Two failures were found and fixed in this build, both by computing the ratio rather
-than eyeballing it:
+Two pairs were failing, and both were caught by working out the ratio instead of
+trusting how they looked:
 
-- Input borders were `#9aa79e`, which measured **2.50:1** on white. WCAG requires
-  3:1 for a control boundary. Now `#6b7a71` at **4.52:1**.
-- The focus ring was `#57966c`, which measured **2.74:1** against the dark button
-  green it was outlining. See focus handling below.
+- Input borders were `#9aa79e`, which came out at **2.50:1** on white. A border you
+  have to see needs at least 3:1. Now `#6b7a71` at **4.52:1**.
+- The focus ring was `#57966c`, which came out at **2.74:1** against the dark green
+  button it was outlining. That is fixed below.
 
-Every text pair passes 4.5:1 and every non-text boundary passes 3:1. `--line` sits
-below 3:1 on purpose: it is a decorative divider, never the only boundary of a
-control.
+Every text pair passes 4.5:1 and every border you have to see passes 3:1. `--line`
+is below 3:1 on purpose. It is only a divider, and it is never the only thing
+marking where a control is.
 
-### Type scale
+### Text sizes
 
-One system family. Size carries hierarchy, because weight and colour alone did not
-separate the headings before.
+One font. Size does the ranking, because weight and colour alone were not enough to
+separate the headings.
 
-**The typeface: Public Sans.** Not yet applied in `src/index.css` (which still says
-`system-ui, sans-serif`); this is the decision to apply in the next UI pass.
+**The font: Public Sans.** Not applied in `src/index.css` yet (it still says
+`system-ui, sans-serif`). This is the choice to apply in the next UI pass.
 
 Why this one:
 
-- It is the typeface the US government built for public information, so its whole
-  design brief is "legible to a non-expert who is mildly anxious." That is this
-  product's exact reader.
-- It is neutral without being the startup default. `Inter` is the single most
-  common AI-generated interface font right now, and `system-ui` is the average the
-  agent reaches for when nothing is chosen. Both were rejected on purpose.
-- It is open source under the SIL Open Font License, so it ships inside the build.
+- It is the font the US government built for public information, so its whole job is
+  "readable by someone who is not an expert and is a little worried." That is exactly
+  our reader.
+- It is plain without being the default everyone reaches for. `Inter` is the most
+  common font in AI-made interfaces right now, and `system-ui` is what gets used when
+  nobody chose. Both were turned down on purpose.
+- It is free and open, so it ships inside the build.
 
-**Self-host it, never a CDN.** The package is `@fontsource/public-sans`, imported in
-`src/main.tsx`. This matters beyond performance: a Google Fonts or similar CDN link
-sends every visitor's IP to a third party on every page load, which directly
-contradicts the privacy section of `PRODUCT.md`. Self-hosting keeps that claim true.
+**Keep the font on our own server, never a CDN.** The package is
+`@fontsource/public-sans`, imported in `src/main.tsx`. This is not only about speed.
+A Google Fonts link, or any font loaded from someone else's server, sends every
+visitor's IP address to a third party on every page load. That would make the privacy
+section of `PRODUCT.md` false. Keeping the font local keeps that promise true.
 
 ```css
 --font-sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 body { font-family: var(--font-sans); }
 ```
 
-Weights to load: 400 regular, 600 semibold, 700 bold. Nothing else. Every extra
-weight is bytes and a wider range of accidental emphasis.
+Load three weights only: 400 regular, 600 semibold, 700 bold. Every extra weight is
+more to download and more chances to emphasise the wrong thing.
 
-| Token | Value | Used for |
-|---|---|---|
-| `--text-xs` | `0.75rem` | Defined, not yet referenced |
-| `--text-sm` | `0.875rem` | Footer, auth state |
-| `--text-base` | `1rem` | Body, `h5` |
-| `--text-md` | `1.125rem` | Lead paragraph, check-list item names |
-| `--text-lg` | `1.25rem` | `h4` |
-| `--text-xl` | `1.5rem` | `h3`, the verdict headline |
-| `--text-2xl` | `2rem` | `h2`, section titles |
-| `--text-display` | `clamp(1.8rem, 6vw, 3rem)` | `h1` only |
+| Size | Used for |
+|---|---|
+| `--text-xs` `0.75rem` | Set, not used yet |
+| `--text-sm` `0.875rem` | Footer, sign-in status |
+| `--text-base` `1rem` | Body text, `h5` |
+| `--text-md` `1.125rem` | Opening paragraph, check-list item names |
+| `--text-lg` `1.25rem` | `h4` |
+| `--text-xl` `1.5rem` | `h3`, the answer headline |
+| `--text-2xl` `2rem` | `h2`, section titles |
+| `--text-display` `clamp(1.8rem, 6vw, 3rem)` | `h1` only |
 
-Before this pass, `h2`, `h3`, `h4`, and `h5` had no author font-size at all and fell
-back to browser defaults. That is why every report heading once looked equally loud.
+Before this pass, `h2`, `h3`, `h4`, and `h5` had no size set at all, so the browser
+picked. That is why every heading in the report once looked equally loud.
 
-Body measure is `--measure: 70ch`, inside the 65 to 75 character band. Longer lines
-are hard to track back to.
+Body text is capped at `--measure: 70ch`, between 65 and 75 characters a line. Longer
+lines are hard to read back to the start of.
 
-## The verdict block
+## The answer box
 
-The single most important component in the product.
+The single most important part of the product.
 
 ```html
 <section aria-label="Result and scope" className="verdict">
@@ -143,124 +146,137 @@ The single most important component in the product.
 </section>
 ```
 
-The `aria-label="Result and scope"` is not decoration. A test asserts the headline
-and the scope line are siblings inside that one region, and that the scope follows
-the headline with nothing meaningful between them.
+The `aria-label="Result and scope"` is not just a label. A test checks that the
+headline and the coverage line sit together in that one box, with nothing important
+between them.
 
-Per-stage lines use only the four states, labelled `Checked`, `Partial`,
-`Not checked`, `Unknown`. No other word is permitted in that list.
+The lines under it use only four words: `Checked`, `Partial`, `Not checked`,
+`Unknown`. No other word is allowed there.
 
-## Report order
+## The order of the report
 
-Ordering is a trust decision, so it is fixed and tested:
+The order is a trust decision, so it is fixed and a test holds it in place:
 
-1. Verdict and scope, together.
-2. Top 3 fix prompt.
+1. The answer and what was not checked, together.
+2. The three things to fix first, as one prompt.
 3. The rest of the fix list.
 4. Live app check.
-5. Findings, with path and line evidence.
+5. All findings, each with its file and line.
 6. Re-scan and explain.
-7. Share, with the permanence disclosure above the buttons.
-8. Framework signals.
+7. Share, with the "this link cannot be taken back" notice above the buttons.
+8. The signals and missions panels.
 
-Two defects were fixed here. The live panel used to sit between the top 3 and the
-rest of the list, splitting the sentence "These are the items after the top 3
-above." And the share block used to sit above re-scan, so the page implied "share
-now" before "fix, then re-scan."
+Two things were wrong here and are fixed. The live-app panel used to sit between the
+top three and the rest of the list, cutting the sentence "These are the items after
+the top 3 above" in half. And the share buttons used to sit above the re-scan
+buttons, which told the reader to share before they had fixed anything.
 
-## What it checks, and what it checks is not cards
+## What it checks, and why it is not a row of cards
 
-The home page check list was six identical cards in `auto-fit minmax(220px, 1fr)`.
-That is the generic default, and it gave six different kinds of check exactly equal
-visual weight.
+The home page check list used to be six identical cards. Every card looked the same,
+so "we check your secrets" had the same weight as "we check your README". That is
+false. Secrets matter more.
 
-It is now an ordered list with a named item and a rule between entries. Weight
-follows meaning: secrets first, because that is what actually hurts.
+It is now a plain list, each line naming one real check, with a thin rule between
+them. Secrets come first because that is what actually hurts someone.
 
-## Accessibility
+## Getting around, and reading it
 
-Verified by reading source. Not verified with a real screen reader or a physical
-device, and that gap is stated rather than papered over.
+This part was checked by reading the code. It has **not** been tested with a screen
+reader or on a real phone, and that gap is stated here instead of hidden.
 
-- **Skip link.** First focusable element on every route, targeting `#main-content`
-  with `tabIndex={-1}` so the anchor lands somewhere focusable.
-- **Focus.** Covers `button`, `input`, `textarea`, `a`, `summary`, and `[role=tab]`.
-  The ring is two-tone: a dark `2px` outline for light surfaces, offset by a white
-  `box-shadow` edge that stays visible on the dark button green. No single colour
-  can pass 3:1 on both.
-- **Real tabs.** The panel strip is `role="tablist"` with `role="tab"`,
-  `aria-selected`, `aria-controls`, a roving tabindex, and arrow keys plus Home and
-  End that wrap and move focus. It was previously a `nav` of `aria-pressed` buttons,
-  which is the wrong pattern and had no arrow keys.
-- **Tap targets.** 44px minimum on buttons, summaries, and tabs.
-- **Reduced motion.** `prefers-reduced-motion: reduce` kills animation and smooth
-  scrolling.
+- **Skip link.** The first thing a keyboard reaches on any page, jumping straight to
+  the content.
+- **Focus.** A clear outline on every control: buttons, inputs, text boxes, links,
+  the details toggles, and the panel tabs. The ring is two colours, because one
+  colour cannot be seen clearly on both the light page and the dark green button.
+- **Panel tabs.** The four panel buttons work like real tabs: arrow keys move
+  between them, Home and End jump to the ends, and the focus follows. Before this
+  they were plain buttons with no keyboard movement.
+- **Tap targets.** Every button, toggle, and tab is at least 44px tall, which is the
+  smallest a finger reliably hits.
+- **Reduced motion.** If the visitor has asked their system to reduce motion, the
+  animation and smooth scrolling are turned off.
+- **One `main` per page**, and status and error messages are announced to screen
+  readers.
+- **Real buttons**, no clickable boxes, and every input has a label.
+
+### What has not been checked
+
+Said plainly, because the next person should not upgrade these into facts:
+
+- No screen reader has been run.
+- No keyboard walkthrough in a real browser.
+- No zoom test at 200%.
+- No test on a real phone or tablet.
+- No real screenshots.
+
+The colour ratios are trustworthy because they are worked out from the exact values
+the site ships. Everything else needs a browser and a person.
 - **Landmarks.** One `main` per page, with `role="status"` for progress and
   `role="alert"` for errors.
 - **Semantics.** Real `button` elements, no clickable `div`s, every input labelled.
 
-## Responsiveness
+## Responsive behaviour
 
-Two breakpoints, plus the fluid base.
+Three widths, plus the fluid base.
 
-- **420px and below.** Buttons go full width, tabs stack, the top menu wraps.
-- **721px to 1023px.** Content narrows to 680px on the report and 720px on the home
-  page, so line length stays readable on a tablet instead of stretching.
-- **Base.** Body is fluid, `--measure` caps the measure, `--layout` caps the report
-  at 720px, `--layout-wide` the home page at 980px.
+- **420px and below.** Buttons go full width, panels stack, the top menu wraps.
+- **721px to 1023px.** Content narrows so lines stay readable on a tablet rather
+  than stretching across it.
+- **Base.** Body text is fluid. `--measure` caps line length, `--layout` caps the
+  report at 720px, `--layout-wide` the home page at 980px.
 
-## Language rules
+## How it talks
 
-These are interface rules, not just content guidance.
+These are rules for the words on screen, not just for documents.
 
 - No em dashes or en dashes anywhere.
-- No single-character ellipsis. Loading states are words: `Fetching files`,
+- No single-character ellipsis. Waiting is shown in words: `Fetching files`,
   `Analyzing files`, `Checking live site`.
-- No tracked all-caps eyebrow above a heading. Removed from all three pages.
-- Section numbers only when the sequence carries information.
-- Raw backend error messages are never rendered. `src/features/scan/userError.ts` is
-  the single boundary: it allowlists the few throws written for humans and returns a
-  plain sentence for everything else, because a raw message can carry file paths,
-  hostnames, or upstream API text.
+- No small all-caps label above a heading. Removed from all three pages.
+- Numbered sections only when the order actually means something.
+- No raw error text from the backend, ever. `src/features/scan/userError.ts` is the
+  one place that reads an error message. It passes through the few messages written
+  for people and returns a plain sentence for everything else, because a raw message
+  can carry file paths, hostnames, or text from another service.
 
-## Enforced, not intended
+## Held in place by tests, not by intention
 
-Intent does not survive a deadline. These are build failures:
+Good intentions do not survive a deadline. These are build failures:
 
-| Rule | Enforced by |
+| Rule | Held by |
 |---|---|
-| No em dash or ellipsis in source | `tests/language-checks.mjs` |
+| No em dash or ellipsis in the code | `tests/language-checks.mjs` |
 | Removed overstatements stay removed | `tests/language-checks.mjs` |
-| Verdict and scope adjacent | `tests/scope-checks.mjs` |
-| Report order fixed | `tests/share-truth-checks.mjs` |
-| Tab semantics and arrow keys | `tests/a11y-checks.mjs` |
-| Contrast thresholds | `tests/contrast-checks.mjs` |
-| No copy claiming expiry or revocation the backend lacks | `scripts/check-claims.mjs` |
-| No raw error message rendered | `tests/language-checks.mjs` |
+| The answer and its coverage line stay together | `tests/scope-checks.mjs` |
+| The report order stays fixed | `tests/share-truth-checks.mjs` |
+| Tabs work with arrow keys | `tests/a11y-checks.mjs` |
+| Colour contrast thresholds | `tests/contrast-checks.mjs` |
+| No copy promising expiry or revocation the code does not have | `scripts/check-claims.mjs` |
+| No raw error message shown to a user | `tests/language-checks.mjs` |
 
-The claim guard exists because a copy rule that only lives in a document rots.
-It carries 33 rules, scanned across `src/`, `shared/reports/`, `docs/`, and the
-root markdown, and it treats these two documents as product copy like any other
-surface.
+The copy guard matters because a rule that lives only in a document rots. It carries
+33 rules, and it reads these two documents like it reads the interface.
 
-## Not verified
+## What has not been checked
 
-Stated plainly rather than implied:
+Said plainly, because the next person should not upgrade these into facts:
 
-- No screen reader run.
-- No keyboard traversal in a real browser.
-- No zoom or reflow test at 200%.
-- No physical touch device.
-- No real browser screenshots.
+- No screen reader has been run.
+- No keyboard walkthrough in a real browser.
+- No zoom test at 200%.
+- No test on a real phone or tablet.
+- No real screenshots.
 
-Contrast numbers are computed from the same hex values the CSS ships, so those are
-trustworthy. Everything else needs a browser and a person.
+The colour ratios are trustworthy because they are worked out from the exact values
+the site ships. Everything else needs a browser and a person.
 
 ## References
 
-Named products to copy from and to avoid, per component. "Take X, ignore Y" is the
-point: a reference without a boundary is how a project drifts into someone else's
-brand.
+Named examples to borrow from, with the boundary said out loud. "Take X, ignore Y"
+is the point. A reference without a boundary is how a project drifts into looking
+like someone else's product.
 
 ### The verdict block: take from a medical test result, ignore the lab aesthetic
 

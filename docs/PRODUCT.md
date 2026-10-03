@@ -31,43 +31,41 @@ The moment that matters is narrow and specific: the app works, it has to go live
 and the quiet worry starts. That is when a leaked key, a copyleft licence, or a
 missing README stops being a private problem and becomes permanent.
 
-## The forces on this decision
+## What is really going on in their head
 
-Why does the check get skipped when the worry is real? Four forces, and only two
-of them matter enough to design against.
+Why does someone skip the check when the worry is real? Four things are happening
+at once. Two of them help us. Two of them fight us, and those two are the ones the
+whole product is designed around.
 
-**Push: the repo is going public and the builder cannot unsee what is in it.** Once
-the link is shared, every future reader can see every commit that ever existed. This
-is the force that creates the visit. It is real and it needs no help from us.
+**Working for us: the repo is about to be public.** The moment they share the link,
+anyone can reopen every version of it forever. That worry is what brings them to a
+checker. We do not have to create it. It is already there.
 
-**Pull: one fix prompt handed to the AI tool they already trust.** They are not
-looking for a security workflow. They want the next instruction to paste into
-Cursor or Claude. Giving them that in one copy is what makes the tool usable by
-someone who does not read security output.
+**Working for us: they already trust their AI tool.** They do not want a security
+process. They want the next thing to paste into Cursor or Claude. If we can hand
+them one ready instruction, the whole thing works for someone who would never read
+a security report.
 
-**Anxiety, and this is the one that decides the outcome.** Two fears pull in
-opposite directions. The first is "what if it finds something awful." The second,
-and the stronger one, is "what if it tells me a wall of things and I cannot tell
-which matter." A scanner that produces anxiety without a clear next step gets
-closed and never reopened. This is why the report opens with one verdict and three
-ordered actions, not a findings list.
+**Fighting us: the fear cuts both ways.** One fear is "what if it finds something
+bad." The bigger fear is "what if it dumps a hundred things on me and I cannot tell
+which one matters." A tool that scares someone without giving them a clear next
+step gets closed and never reopened. This is why the report opens with one plain
+answer and three things to do, and not with a long list.
 
-**Habit: deploy and hope.** This is the force that actually loses. The builder has
-shipped this way every time and nothing bad happened yet, so the habit has been
-rewarded. A tool that asks them to change a habit at the last minute will be
-skipped, not used. This is why the product does not ask for an account, does not
-ask for a private repo, and does not ask for a workflow. It asks for one paste, at
-the moment they were already hesitating.
+**Fighting us: the habit.** They have deployed without checking every time, and
+nothing bad happened. That habit has been rewarded. Ask them to change it at the
+last minute and they will skip you. So we do not ask for an account, we do not ask
+for a private repo, and we do not ask them to learn a process. We ask for one paste,
+at the exact moment they were already nervous.
 
-What we do about the two that matter:
+What we do about the two that fight us:
 
-| Force | What the product does |
+| The problem | What the product does |
 |---|---|
-| Anxiety about a wall of output | One verdict, then three ordered actions, then the rest. Severity decides order, not the order we found things. |
-| The deploy-and-hope habit | No account, no install, one paste. And the fix prompt is the deliverable, not the report. |
+| A hundred findings they cannot sort | One plain answer, then the three things to fix first, then the rest. Worst things first, not the order we happened to find them. |
+| The deploy-and-hope habit | No account, nothing to install, one paste. And the thing they walk away with is the fix prompt, not the report. |
 
-The push and the pull are working for us. The anxiety and the habit are working
-against us. Most of the design exists to fight the second pair.
+Most of this product exists to beat those last two.
 
 ## Who it is for
 
@@ -239,78 +237,80 @@ us, has done the thing.
 
 **The guess:** a vibe coder who fixes something will come back and rescan.
 
-This is the riskiest assumption in the product and it is currently unproven. We
-have tested that a scan works. We have not tested that anyone returns. Every scan
-is pinned to one commit and compares against the last, which is the differentiator
-we claim over CheckVibe and over a coding-agent skill. If nobody returns, that
-differentiator is worth nothing and this is a one-shot scanner with extra steps.
+This is the riskiest guess in the product and nobody has tested it. We know a scan
+works. We do not know that anyone comes back. Every scan is tied to one commit and
+compared with the last one, and that is the main thing we have that CheckVibe and a
+coding-agent skill do not. If nobody comes back, that advantage is worth nothing and
+this is a one-time scanner with extra steps.
 
-**Simplest form:** one builder, one repo, one real fix, one voluntary second scan,
-unprompted. No reminder, no email, no mission card. They come back on their own.
+**Plainest test:** one builder, one repo, one real fix, one second scan they choose
+to do. No reminder, no email, no nudge. They come back on their own or it does not
+count.
 
-**Kill condition:** if ten builders complete a first scan and we cannot get three of
-them to do a second scan unprompted, the return loop is not real and the product
-positioning has to change before we build anything else on top of it.
+**When to stop:** if ten builders finish a first scan and fewer than three come back
+on their own, the return loop is not real. Then the story changes before we build
+anything else on top of it.
 
-**Status:** not started. This is the next thing to test, ahead of any new feature.
+**Status:** not started. This is the next thing to test, before any new feature.
 
-### M2, comprehension. Partly proven.
+### M2, they understand the result. Partly proven.
 
-**The guess:** a nontechnical builder reads the verdict and understands what was
-and was not checked.
+**The guess:** a builder who is not technical reads the answer and understands what
+was checked and what was not.
 
-Tested against ourselves, not against outsiders. The verdict-and-scope block exists
-and is enforced by tests, but no external reader has been observed using it. The
-risk is not that the words are unclear. The risk is that a user reads "nothing was
-flagged" and stops before reaching "we read 200 of 340 files".
+We have only tested this on ourselves. The plain answer and the "what was not
+checked" list both exist and are held in place by tests, but no outside reader has
+used them yet. The worry is not that the words are confusing. The worry is that
+someone reads the first line, thinks the repo is fine, and stops before reading the
+part that says we only read 200 of 340 files.
 
-**Simplest form:** show the report to five builders who have never seen it and ask
-what they think it means. If any of them says "so it's fine", the milestone is not
-met.
+**Plainest test:** show the report to five builders who have never seen it and ask
+them what they think it says. If any one of them says "so it's fine", we have not
+got there yet.
 
-### M3, the fix actually lands. Structurally proven, behaviourally unknown.
+### M3, the fix we hand over actually works. Built, not yet proven in use.
 
-**The guess:** handing the fix prompt to an AI tool produces a real fix and the
-rescan shows it as fixed.
+**The guess:** pasting the fix prompt into an AI tool really fixes the thing, and
+the next scan shows it as fixed.
 
-The compare engine works and sorts findings into fixed, still broken, new, back
-again, and unknown. What is unproven is whether the prompt is good enough that the
-AI tool resolves the finding on the first try. A compare that mostly says "still
-broken" would train the user to stop trusting it.
+The compare works and sorts each finding into fixed, still broken, new, back again,
+or unknown. What we have not seen is whether the prompt is good enough that the AI
+tool fixes it first time. If the next scan mostly says "still broken", people will
+stop trusting the answer.
 
-### M4, the share artifact gets used. Not proven.
+### M4, the share link gets used. Not proven.
 
-**The guess:** a builder shares the link with someone who actually opens it and
-finds it useful.
+**The guess:** a builder sends the link to someone who opens it and finds it useful.
 
-The share page works and leaks nothing. Whether anyone sends it, or a recipient
-cares, is untested.
+The share page works and gives nothing private away. Whether anyone sends it, or
+whether the person who gets it cares, we have not seen.
 
 ## Where it goes after the milestones
 
-These are scope phases, not proofs. Do not start one before its prerequisite
-milestone is met.
+These are stages of building, not proof. Do not start one until the milestone before
+it has been met.
 
-- **Phase 1, live now.** Guest scan, plain report, one merged fix prompt, rescan
-  compare, share and passport, Repo DNA, Share readiness, serial missions, plus
-  read-only MCP endpoints and a local adapter script. The MCP surface is small on
-  purpose and exists to prove the contract, not to be the product.
-- **Phase 2, gated on M1.** GitHub App on a selected repo, monitoring,
-  push-triggered checks, history, score trends, full standards maps, SBOM signals.
-  Monitoring only makes sense if the return loop is real. If M1 fails, this phase
-  is re-scoped, not built.
-- **Phase 3, gated on M4.** A versioned public API, a full MCP integration, teams,
-  roles, audit logs, retention. The Phase 1 MCP routes are the seed, not the
+- **Phase 1, live now.** Guest scan, plain report, one fix prompt, rescan compare,
+  share and passport, Repo DNA, Share readiness, and missions. Also read-only MCP
+  endpoints and a small adapter script. The MCP part is kept small on purpose. It is
+  there to show the shape works, not to be the product.
+- **Phase 2, waits on M1.** GitHub App on a repo you choose, monitoring, checks
+  triggered by a push, history, score trends, fuller standards maps, SBOM signals.
+  Monitoring only makes sense once people come back on their own. If M1 fails, this
+  stage is redrawn instead of built.
+- **Phase 3, waits on M4.** A public API with versions, a full MCP setup, teams,
+  roles, audit logs, retention. The Phase 1 MCP routes are the start of this, not the
   finished version.
 
 ## Market
 
-Tailwind, with a number attached. CodeRabbit compared 470 open-source pull
-requests, 320 AI co-authored and 150 human only. AI-authored pull requests carried
-10.83 issues each against 6.45 for human ones, about 1.7x more.
+There is real evidence behind this, with a number. CodeRabbit looked at 470 open
+source pull requests, 320 written with AI and 150 written by hand. The AI ones
+carried 10.83 issues each, against 6.45 for the hand-written ones, about 1.7 times
+more.
 Source: `https://www.coderabbit.ai/blog/state-of-ai-vs-human-code-generation-report`
 
-Timing matters as much as the number. AI coding tools went from new to normal in
+The timing matters as much as the number. AI coding tools went from new to normal in
 about a year. Speed went up. Checking stayed manual, and manual is where it gets
 skipped. Same person, more code, same hour. That gap is the opening.
 
