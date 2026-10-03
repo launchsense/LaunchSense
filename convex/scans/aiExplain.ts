@@ -15,7 +15,6 @@ export const explainScan = action({
     scanId: v.id("scans"),
     source: v.union(
       v.literal("gemini"),
-      v.literal("openrouter"),
       v.literal("deterministic"),
     ),
     explained: v.number(),
@@ -29,7 +28,7 @@ export const explainScan = action({
     args,
   ): Promise<{
     scanId: Id<"scans">;
-    source: "gemini" | "openrouter" | "deterministic";
+    source: "gemini" | "deterministic";
     explained: number;
     rejected: boolean;
     note: string;
@@ -51,12 +50,12 @@ export const explainScan = action({
     const prompt = buildExplainPrompt(findings);
     const promptHash = fnv1aHex(prompt);
     const call = await callAiLane(prompt);
-    const recordUsage = async (source: "gemini" | "openrouter" | "deterministic", ok: boolean, errorKind?: string) => {
+    const recordUsage = async (source: "gemini" | "deterministic", ok: boolean, errorKind?: string) => {
       await ctx.runMutation(internal.scans.store.saveProviderCall, {
         scanId: args.scanId,
         kind: "explain",
         source,
-        model: source === "gemini" ? "gemini-2.0-flash" : source === "openrouter" ? "openrouter/stealth/space-bunny-alpha" : undefined,
+        model: source === "gemini" ? "gemini-2.0-flash" : undefined,
         latencyMs: call.latencyMs,
         promptHash,
         inputTokens: call.usage.inputTokens ?? undefined,

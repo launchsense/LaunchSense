@@ -1,6 +1,6 @@
 "use node";
 
-// AI lane: Gemini first, then OpenRouter free, then deterministic fallback.
+// AI lane: Gemini first, then deterministic fallback.
 // Every failure path is soft. AI explains, it never decides. Keys are read
 // from server-only Convex environment variables and never leave this module.
 
@@ -9,7 +9,7 @@ declare const process: { env: Record<string, string | undefined> };
 export const AI_TIMEOUT_MS = 20000;
 export const AI_MAX_OUTPUT_TOKENS = 1200;
 
-export type AiSource = "gemini" | "openrouter" | "deterministic";
+export type AiSource = "gemini" | "deterministic";
 
 export interface AiCallResult {
   ok: boolean;
@@ -101,16 +101,6 @@ function extractGeminiText(data: unknown): string | null {
   return out.length > 0 ? out : null;
 }
 
-function extractOpenRouterText(data: unknown): string | null {
-  if (typeof data !== "object" || data === null) return null;
-  const choices = (data as Record<string, unknown>)["choices"];
-  if (!Array.isArray(choices) || choices.length === 0) return null;
-  const message = (choices[0] as Record<string, unknown>)["message"];
-  if (typeof message !== "object" || message === null) return null;
-  const content = (message as Record<string, unknown>)["content"];
-  return typeof content === "string" && content.length > 0 ? content : null;
-}
-
 function extractGeminiUsage(data: unknown): {
   inputTokens: number | null;
   outputTokens: number | null;
@@ -123,21 +113,6 @@ function extractGeminiUsage(data: unknown): {
   const input = typeof record["promptTokenCount"] === "number" ? record["promptTokenCount"] : null;
   const output = typeof record["candidatesTokenCount"] === "number" ? record["candidatesTokenCount"] : null;
   const total = typeof record["totalTokenCount"] === "number" ? record["totalTokenCount"] : null;
-  return { inputTokens: input, outputTokens: output, totalTokens: total };
-}
-
-function extractOpenRouterUsage(data: unknown): {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-} {
-  if (typeof data !== "object" || data === null) return { inputTokens: null, outputTokens: null, totalTokens: null };
-  const usage = (data as Record<string, unknown>)["usage"];
-  if (typeof usage !== "object" || usage === null) return { inputTokens: null, outputTokens: null, totalTokens: null };
-  const record = usage as Record<string, unknown>;
-  const input = typeof record["prompt_tokens"] === "number" ? record["prompt_tokens"] : null;
-  const output = typeof record["completion_tokens"] === "number" ? record["completion_tokens"] : null;
-  const total = typeof record["total_tokens"] === "number" ? record["total_tokens"] : null;
   return { inputTokens: input, outputTokens: output, totalTokens: total };
 }
 
@@ -171,39 +146,6 @@ export async function callAiLane(prompt: string): Promise<AiCallResult> {
             latencyMs: Date.now() - started,
             error: null,
             usage: extractGeminiUsage(parsed),
-          };
-        }
-      }
-    }
-  }
-
-  const routerKey = process.env.OPENROUTER_API_KEY;
-  if (routerKey !== undefined && routerKey.length > 0) {
-    const started = Date.now();
-    const result = await postJson(
-      "https://openrouter.ai/api/v1/chat/completions",
-      { Authorization: `Bearer ${routerKey}` },
-      {
-        model: "openrouter/stealth/space-bunny-alpha",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
-        max_tokens: AI_MAX_OUTPUT_TOKENS,
-      },
-    );
-    if (result.ok) {
-      const parsed = safeParse(result.text);
-      const text = extractOpenRouterText(parsed);
-      if (text !== null) {
-        const json = extractJson(text);
-        if (json !== null) {
-          return {
-            ok: true,
-            source: "openrouter",
-            json,
-            model: "openrouter/stealth/space-bunny-alpha",
-            latencyMs: Date.now() - started,
-            error: null,
-            usage: extractOpenRouterUsage(parsed),
           };
         }
       }
