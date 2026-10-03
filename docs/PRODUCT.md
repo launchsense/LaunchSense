@@ -31,6 +31,44 @@ The moment that matters is narrow and specific: the app works, it has to go live
 and the quiet worry starts. That is when a leaked key, a copyleft licence, or a
 missing README stops being a private problem and becomes permanent.
 
+## The forces on this decision
+
+Why does the check get skipped when the worry is real? Four forces, and only two
+of them matter enough to design against.
+
+**Push: the repo is going public and the builder cannot unsee what is in it.** Once
+the link is shared, every future reader can see every commit that ever existed. This
+is the force that creates the visit. It is real and it needs no help from us.
+
+**Pull: one fix prompt handed to the AI tool they already trust.** They are not
+looking for a security workflow. They want the next instruction to paste into
+Cursor or Claude. Giving them that in one copy is what makes the tool usable by
+someone who does not read security output.
+
+**Anxiety, and this is the one that decides the outcome.** Two fears pull in
+opposite directions. The first is "what if it finds something awful." The second,
+and the stronger one, is "what if it tells me a wall of things and I cannot tell
+which matter." A scanner that produces anxiety without a clear next step gets
+closed and never reopened. This is why the report opens with one verdict and three
+ordered actions, not a findings list.
+
+**Habit: deploy and hope.** This is the force that actually loses. The builder has
+shipped this way every time and nothing bad happened yet, so the habit has been
+rewarded. A tool that asks them to change a habit at the last minute will be
+skipped, not used. This is why the product does not ask for an account, does not
+ask for a private repo, and does not ask for a workflow. It asks for one paste, at
+the moment they were already hesitating.
+
+What we do about the two that matter:
+
+| Force | What the product does |
+|---|---|
+| Anxiety about a wall of output | One verdict, then three ordered actions, then the rest. Severity decides order, not the order we found things. |
+| The deploy-and-hope habit | No account, no install, one paste. And the fix prompt is the deliverable, not the report. |
+
+The push and the pull are working for us. The anxiety and the habit are working
+against us. Most of the design exists to fight the second pair.
+
 ## Who it is for
 
 Vibe coders. Builders who ship fast with AI coding tools and want a second set of
@@ -39,6 +77,18 @@ eyes on a public repo before they share the link.
 They have no security team and are not going to hire one. On this decision they
 trust their AI coding tool, Cursor or Claude or v0, and the builder community
 around them. They do not read policies, licences, or security warnings.
+
+## The job, in one sentence
+
+> My app finally works and I am about to share the repo link. I want to know what
+> is actually wrong with it, in words I understand, so I can fix the things that
+> matter before anyone else can see them.
+
+That is the whole job. The moment is not "I need a security tool." The moment is
+"this is about to be public and I am not sure what is in it."
+
+Everything below is checked against that sentence. If a feature does not help a
+builder fix the things that matter before someone else sees them, it is not the job.
 
 ## What they hire it for
 
@@ -179,16 +229,78 @@ builder is about to hit publish.
 - Signing in unlocks nothing yet. It says so plainly instead of implying a richer
   scan is one click away.
 
-## Where it goes
+## Milestones, riskiest first
+
+Phases are scope. Milestones are proof. Each one starts with the riskiest guess in
+its simplest possible form, and a milestone is not done until a real person, not
+us, has done the thing.
+
+### M1, the return. Not proven.
+
+**The guess:** a vibe coder who fixes something will come back and rescan.
+
+This is the riskiest assumption in the product and it is currently unproven. We
+have tested that a scan works. We have not tested that anyone returns. Every scan
+is pinned to one commit and compares against the last, which is the differentiator
+we claim over CheckVibe and over a coding-agent skill. If nobody returns, that
+differentiator is worth nothing and this is a one-shot scanner with extra steps.
+
+**Simplest form:** one builder, one repo, one real fix, one voluntary second scan,
+unprompted. No reminder, no email, no mission card. They come back on their own.
+
+**Kill condition:** if ten builders complete a first scan and we cannot get three of
+them to do a second scan unprompted, the return loop is not real and the product
+positioning has to change before we build anything else on top of it.
+
+**Status:** not started. This is the next thing to test, ahead of any new feature.
+
+### M2, comprehension. Partly proven.
+
+**The guess:** a nontechnical builder reads the verdict and understands what was
+and was not checked.
+
+Tested against ourselves, not against outsiders. The verdict-and-scope block exists
+and is enforced by tests, but no external reader has been observed using it. The
+risk is not that the words are unclear. The risk is that a user reads "nothing was
+flagged" and stops before reaching "we read 200 of 340 files".
+
+**Simplest form:** show the report to five builders who have never seen it and ask
+what they think it means. If any of them says "so it's fine", the milestone is not
+met.
+
+### M3, the fix actually lands. Structurally proven, behaviourally unknown.
+
+**The guess:** handing the fix prompt to an AI tool produces a real fix and the
+rescan shows it as fixed.
+
+The compare engine works and sorts findings into fixed, still broken, new, back
+again, and unknown. What is unproven is whether the prompt is good enough that the
+AI tool resolves the finding on the first try. A compare that mostly says "still
+broken" would train the user to stop trusting it.
+
+### M4, the share artifact gets used. Not proven.
+
+**The guess:** a builder shares the link with someone who actually opens it and
+finds it useful.
+
+The share page works and leaks nothing. Whether anyone sends it, or a recipient
+cares, is untested.
+
+## Where it goes after the milestones
+
+These are scope phases, not proofs. Do not start one before its prerequisite
+milestone is met.
 
 - **Phase 1, live now.** Guest scan, plain report, one merged fix prompt, rescan
   compare, share and passport, Repo DNA, Share readiness, serial missions, plus
   read-only MCP endpoints and a local adapter script. The MCP surface is small on
   purpose and exists to prove the contract, not to be the product.
-- **Phase 2.** GitHub App on a selected repo, monitoring, push-triggered checks,
-  history, score trends, full standards maps, SBOM signals.
-- **Phase 3.** A versioned public API, a full MCP integration, teams, roles, audit
-  logs, retention. The Phase 1 MCP routes above are the seed for this, not the
+- **Phase 2, gated on M1.** GitHub App on a selected repo, monitoring,
+  push-triggered checks, history, score trends, full standards maps, SBOM signals.
+  Monitoring only makes sense if the return loop is real. If M1 fails, this phase
+  is re-scoped, not built.
+- **Phase 3, gated on M4.** A versioned public API, a full MCP integration, teams,
+  roles, audit logs, retention. The Phase 1 MCP routes are the seed, not the
   finished version.
 
 ## Market
