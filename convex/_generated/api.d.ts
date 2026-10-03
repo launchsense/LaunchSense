@@ -19,6 +19,7 @@ import type * as auth from "../auth.js";
 import type * as github_app from "../github/app.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as projects from "../projects.js";
 import type * as scans_actions from "../scans/actions.js";
 import type * as scans_aiExplain from "../scans/aiExplain.js";
 import type * as scans_analyze from "../scans/analyze.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   "github/app": typeof github_app;
   health: typeof health;
   http: typeof http;
+  projects: typeof projects;
   "scans/actions": typeof scans_actions;
   "scans/aiExplain": typeof scans_aiExplain;
   "scans/analyze": typeof scans_analyze;
