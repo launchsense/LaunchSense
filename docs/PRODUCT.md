@@ -243,21 +243,26 @@ This was the riskiest guess in the product and it has just had its first test
 outside our own hands.
 
 **What happened.** A builder outside the team ran a scan, fixed what it found,
-and came back and pressed re-scan on his own, with no reminder from us. He is now
-asking for the MCP integration. One person, one unprompted return.
+and came back and pressed re-scan on their own, with no reminder from us. That same
+person is now asking for the MCP integration. One person, one unprompted return.
 
 **What that proves.** The loop is possible. A real person completed paste, fix,
 rescan without being asked. That is the first sign the thing we claim over
 CheckVibe and over a coding-agent skill is real rather than theoretical.
 
 **What it does not prove.** Three out of ten is the bar, and this is one. One
-person can be a friend who wanted to be helpful. The return has to happen with
-people who are not close to us, and more than once, before the loop counts as real.
-Status stays "not proven" until the count is there.
+person can be someone close to me who wanted to be helpful. The return has to happen
+with people who are not close to us, and more than once, before the loop counts as
+real. Status stays "not proven" until the count is there.
 
 **Plainest test:** ten builders finish a first scan. Count how many come back on
-their own, no reminder, no email, no nudge. Record the names and dates before
-asking them, so the ones who did not return are not forgotten.
+their own, no reminder, no email, no nudge.
+
+**Where the counts live:** in a private count, not in this document. We record only
+the number, never a name, an email, a repo, or anything that points at a person. A
+tester is "builder 1" in a private tally and nothing more. This document holds the
+aggregate result only, because it is public and the testers did not agree to appear
+in it.
 
 **When to stop:** fewer than three of ten return on their own, and the return loop
 is not real. The story changes before anything is built on top of it.
@@ -285,7 +290,7 @@ the diagnosis.
 
 **Plainest test:** show the report to five builders who have never seen it and ask
 them what they think it says. If any one of them says "so it's fine", we have not
-got there yet. Separately, ask the team member who was confused which specific part
+got there yet. Separately, ask the person who was confused which specific part
 lost them.
 
 ### M3, the fix we hand over actually works. First outside success observed.
@@ -293,10 +298,10 @@ lost them.
 **The guess:** pasting the fix prompt into an AI tool really fixes the thing, and
 the next scan shows it as fixed.
 
-**What happened.** A team member used LaunchSense, a licence finding came up, and
-they went and corrected the licence issue. That is the full loop working on a real
-problem in a real repo, by someone who is not us: a finding was read, understood,
-and fixed.
+**What happened.** A team member used LaunchSense, a licence finding
+came up, and they went and corrected the licence issue. That is the full loop
+working on a real problem in a real repo, by someone who is not us: a finding was
+read, understood, and fixed.
 
 **What that proves.** The prompt is good enough to produce a real fix at least
 once. The finding was legible enough to act on. That is the first evidence the
@@ -377,20 +382,23 @@ now. They are the first test set and the first word of mouth.
 
 ## What real people have done with it so far
 
-Testing so far, stated as what it is rather than what it proves.
+Testing so far, stated as what it is rather than what it proves. No tester is named
+here, by design. The counts are what matter and the people did not agree to appear
+in a public repo.
 
 - Tested on many of my own repositories, and on a range of other public repos, to
   shake out the scanner itself.
 - Shared with my team. They ran it on their work, found a licence issue, and
   corrected it. That is the first fix driven by LaunchSense outside my own hands.
-- One team member came back and pressed re-scan on his own, without being asked. He
-  is now asking for the MCP integration.
+- One team member came back and pressed re-scan voluntarily, without being asked,
+  and has asked for the MCP integration.
 - One piece of feedback: the report or its wording was confusing. Recorded as an
   open problem under M2, not smoothed over.
 
 What this is not: it is not the M1 proof. The people who returned are close to me,
-which is the easiest possible version of the test. The bar is ten builders, three
-returns, and it has not been run yet.
+which is the easiest possible version of the test. That is a description of the
+relationship, not of any person. The bar is ten builders, three returns, and it has
+not been run yet.
 
 ## How it is built, for the record
 
