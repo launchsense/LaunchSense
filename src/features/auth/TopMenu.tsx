@@ -1,4 +1,5 @@
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
+import { resetLocalAuthState } from "./resetLocalAuthState";
 
 // A small top menu. Sign-in is a choice, never the front door.
 export function TopMenu() {
@@ -17,8 +18,9 @@ export function TopMenu() {
           <button type="button" className="ghost" onClick={() => void signOut()}>Sign out</button>
         ) : (
           <button type="button" className="ghost" onClick={() => {
+            resetLocalAuthState();
             signIn("github").catch(() => {
-              alert("GitHub sign-in is not configured yet. Please try later.");
+              alert("GitHub sign-in could not start. Please refresh and try again.");
             });
           }}>Sign in with GitHub</button>
         )}
