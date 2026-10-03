@@ -416,8 +416,8 @@ export default function GuestScan() {
         <article aria-label="Scan result">
           <p>
             <strong>{scan.owner}/{scan.repo}</strong>
-            {scan.sha !== undefined && <> · commit {shortSha(scan.sha)}</>}
-            {scan.defaultBranch !== undefined && <> · branch {scan.defaultBranch}</>}
+            {scan.sha !== undefined && <>, commit {shortSha(scan.sha)}</>}
+            {scan.defaultBranch !== undefined && <>, branch {scan.defaultBranch}</>}
           </p>
           {scan.errorMessage !== undefined && <p role="alert">{scan.errorMessage}</p>}
           {scan.rateLimitResetAt !== undefined && (

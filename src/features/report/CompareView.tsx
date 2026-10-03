@@ -75,9 +75,9 @@ export default function CompareView(props: {
                   (t.oldFingerprint !== undefined && props.accepted.includes(t.oldFingerprint));
                 return (
                   <li key={fp}>
-                    <strong>{t.title}</strong> · {t.severity} · {t.path}:{t.line}
-                    {t.cause !== undefined && <span> · because {CAUSE_LINE[t.cause]}</span>}
-                    {isAccepted && <span> · accepted risk</span>}
+                    <strong>{t.title}</strong>, {t.severity}, {t.path}:{t.line}
+                    {t.cause !== undefined && <span>, because {CAUSE_LINE[t.cause]}</span>}
+                    {isAccepted && <span> (accepted risk)</span>}
                     {!isAccepted && (state === "still_broken" || state === "new" || state === "regressed") && (
                       <button
                         type="button"

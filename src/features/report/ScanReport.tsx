@@ -242,7 +242,7 @@ export default function ScanReport(props: {
         {props.findings.map((f) => (
           <article key={f.fingerprint} aria-label={`Finding ${f.title}`}>
             <p>
-              <strong>{f.title}</strong> · {f.severity}
+              <strong>{f.title}</strong>, {f.severity}
             </p>
             <p>
               Where: {f.path}:{f.line}
