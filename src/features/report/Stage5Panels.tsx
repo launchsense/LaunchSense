@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -7,6 +7,15 @@ import { buildStandards } from "../../../shared/reports/standards";
 import { buildMissions } from "../../../shared/reports/missions";
 import { DnaPanel, MissionsPanel, NoAgentPanel, StandardsPanel } from "./SignalPanels";
 import type { FixPlan } from "../../../shared/reports/fixPlan";
+
+type TabId = "dna" | "standards" | "missions" | "handoff";
+
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: "dna", label: "Repo DNA" },
+  { id: "standards", label: "Standards" },
+  { id: "missions", label: "Missions" },
+  { id: "handoff", label: "Handoff" },
+];
 
 const NOT_CHECKED = [
   "File contents beyond the 200 file and 2MB caps",
@@ -39,7 +48,13 @@ export default function Stage5Panels(props: {
   live: { reaches: boolean } | null;
   partial: boolean;
 }) {
-  const [tab, setTab] = useState<"dna" | "standards" | "missions" | "handoff">("dna");
+  const [tab, setTab] = useState<TabId>("dna");
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
+    dna: null,
+    standards: null,
+    missions: null,
+    handoff: null,
+  });
   const contents = useQuery(api.scans.queries.getAnalysisFacts, { scanId: props.scanId });
 
   const hygiene = useMemo(
@@ -107,22 +122,50 @@ export default function Stage5Panels(props: {
     });
   }, [props.findings, props.rescanRan, props.passportIssued, props.shareCreated, props.shareViewed, props.live, dna]);
 
+  // A tablist needs arrow key navigation and a roving tabindex, so keyboard
+  // users can reach every panel without tabbing through the other three.
+  function onTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    const last = TABS.length - 1;
+    let next: number | null = null;
+    if (event.key === "ArrowRight") next = index === last ? 0 : index + 1;
+    else if (event.key === "ArrowLeft") next = index === 0 ? last : index - 1;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = last;
+    if (next === null) return;
+    event.preventDefault();
+    const id = TABS[next].id;
+    setTab(id);
+    tabRefs.current[id]?.focus();
+  }
+
   return (
     <div aria-label="Signals and progress">
-      <nav aria-label="Panels">
-        <button type="button" onClick={() => setTab("dna")} aria-pressed={tab === "dna"}>
-          Repo DNA
-        </button>{" "}
-        <button type="button" onClick={() => setTab("standards")} aria-pressed={tab === "standards"}>
-          Standards
-        </button>{" "}
-        <button type="button" onClick={() => setTab("missions")} aria-pressed={tab === "missions"}>
-          Missions
-        </button>{" "}
-        <button type="button" onClick={() => setTab("handoff")} aria-pressed={tab === "handoff"}>
-          Handoff
-        </button>
-      </nav>
+      <div className="tabs" role="tablist" aria-label="Signals and progress">
+        {TABS.map((entry, index) => (
+          <button
+            key={entry.id}
+            type="button"
+            role="tab"
+            id={`tab-${entry.id}`}
+            aria-selected={tab === entry.id}
+            aria-controls={`panel-${entry.id}`}
+            tabIndex={tab === entry.id ? 0 : -1}
+            ref={(node) => {
+              tabRefs.current[entry.id] = node;
+            }}
+            onClick={() => setTab(entry.id)}
+            onKeyDown={(event) => onTabKeyDown(event, index)}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
+      <div
+        role="tabpanel"
+        id={`panel-${tab}`}
+        aria-labelledby={`tab-${tab}`}
+        tabIndex={0}
+      >
       {tab === "dna" && <DnaPanel dna={dna} readiness={readiness} />}
       {tab === "standards" && <StandardsPanel mappings={standards} />}
       {tab === "missions" && (
@@ -143,6 +186,7 @@ export default function Stage5Panels(props: {
           notChecked={NOT_CHECKED}
         />
       )}
+      </div>
     </div>
   );
 }

@@ -17,9 +17,8 @@ export default function Home() {
   return (
     <>
       <TopMenu />
-      <main className="home">
+      <main id="main-content" tabIndex={-1} className="home">
       <header className="hero" aria-labelledby="launchsense-title">
-        <p className="eyebrow">LAUNCHSENSE · CHECK BEFORE SHARING</p>
         <h1 id="launchsense-title">Check your public repo before you share it.</h1>
         <p className="lead">
           Paste a repo link. LaunchSense reads what it can, shows proof for every finding, and helps you recheck after a fix.
@@ -46,40 +45,52 @@ export default function Home() {
 
       <section className="check-section" aria-labelledby="checks-title">
         <h2 id="checks-title">What it checks</h2>
-        <div className="feature-grid">
-          <article>
-            <h3>Security</h3>
+        <ul className="check-list">
+          <li>
+            <strong>Secrets and risky patterns</strong>
             <p>
               Secrets, risky patterns, eval, SQL shapes, and hardcoded keys are reported
               with proof. Redacted means the secret value is hidden and only the kind of
               finding is shown.
             </p>
-          </article>
-          <article>
-            <h3>Dependencies</h3>
-            <p>Manifests and lock files are checked for vulnerabilities, unpinned ranges, duplicates, and install scripts.</p>
-          </article>
-          <article>
-            <h3>License</h3>
-            <p>Missing terms and copyleft-looking language are flagged as legal review, not legal advice.</p>
-          </article>
-          <article>
-            <h3>Live app</h3>
-            <p>Optional live URL checks verify HTTPS, response, main action hint, and viewport meta. It is not a browser render claim.</p>
-          </article>
-          <article>
-            <h3>Progress</h3>
-            <p>Re-scan after a fix and compare the commit, so fixed, still broken, new, and unknown findings are clear.</p>
-          </article>
-          <article>
-            <h3>Share with care</h3>
+          </li>
+          <li>
+            <strong>Dependencies</strong>
+            <p>
+              Manifests and lock files are checked for vulnerabilities, unpinned ranges,
+              duplicates, and install scripts.
+            </p>
+          </li>
+          <li>
+            <strong>Licence</strong>
+            <p>
+              Missing terms and copyleft-looking language are flagged as legal review,
+              not legal advice.
+            </p>
+          </li>
+          <li>
+            <strong>Live app</strong>
+            <p>
+              Optional live URL checks verify HTTPS, response, main action hint, and
+              viewport meta. It is not a browser render claim.
+            </p>
+          </li>
+          <li>
+            <strong>Progress after a fix</strong>
+            <p>
+              Re-scan after a fix and compare the commit, so fixed, still broken, new,
+              and unknown findings are clear.
+            </p>
+          </li>
+          <li>
+            <strong>Share with care</strong>
             <p>
               Share a page that shows counts, titles, and short explanations. It hides
               file paths, line numbers, and code. Links stay live once created, so read
               the page before you send it.
             </p>
-          </article>
-        </div>
+          </li>
+        </ul>
       </section>
 
       <section className="limits-section" aria-labelledby="limits-title">
