@@ -15,8 +15,9 @@ const DOCS = {
 export default function Home() {
   const health = useQuery(api.health.status);
   return (
-    <main className="home">
+    <>
       <TopMenu />
+      <main className="home">
       <header className="hero" aria-labelledby="launchsense-title">
         <p className="eyebrow">LAUNCHSENSE · CHECK BEFORE SHARING</p>
         <h1 id="launchsense-title">Check your public repo before you share it.</h1>
@@ -27,7 +28,7 @@ export default function Home() {
       </header>
 
       <section className="scan-section" aria-labelledby="scan-title">
-        <h2 id="scan-title">Run a guest scan</h2>
+        <h2 id="scan-title">Paste a public repo URL</h2>
         <p>
           No account needed. Guest scans read public repos only and produce a clear partial report when files are skipped.
         </p>
@@ -92,6 +93,7 @@ export default function Home() {
           <a href={DOCS.about}>about page</a>, and <a href={DOCS.roadmap}>roadmap</a>.
         </p>
       </footer>
-    </main>
+      </main>
+    </>
   );
 }

@@ -16,7 +16,11 @@ export function TopMenu() {
         ) : isAuthenticated ? (
           <button type="button" className="ghost" onClick={() => void signOut()}>Sign out</button>
         ) : (
-          <button type="button" className="ghost" onClick={() => void signIn("github")}>Sign in with GitHub</button>
+          <button type="button" className="ghost" onClick={() => {
+            signIn("github").catch(() => {
+              alert("GitHub sign-in is not configured yet. Please try later.");
+            });
+          }}>Sign in with GitHub</button>
         )}
       </div>
     </nav>
