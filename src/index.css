@@ -58,4 +58,17 @@ ul, ol { padding-left: 22px; }
 .verdict-stages li { margin-bottom: 4px; }
 .not-checked { margin-top: 4px; }
 .not-checked summary { color: #174e39; }
+/* The verdict is the only heading with real size authority, so DOM order and
+   visual order agree. Everything below it is a section label. */
+.verdict h3 { font-size: 1.5rem; }
+.panel-caption { margin: 0 0 8px; color: #334; }
+.share-block { margin-top: 24px; }
+.share-block [aria-label="Before you create a link"] {
+  border: 1px solid #cbd4ca;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+.share-block [aria-label="Before you create a link"] p { margin: 0 0 6px; }
 
