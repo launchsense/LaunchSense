@@ -4,7 +4,13 @@ The page has four tabs after the report. Read the report first, then the tabs if
 
 ## Start at the top
 
-One prompt for the top 3 comes first, with a copy button. Those three are ranked across your code and your live app together, secrets ahead of everything else. Below it the rest of the list stays visible, ordered, with every step spelled out.
+The result box comes first. The headline and the line saying how much was not read are in the same box. A gap is not a pass. The page does not say the app will sell, and it does not say the repo is safe.
+
+Then one lead. That is the item a first check usually misses: a leaked key, a license that needs a person, duplicate or huge files, or the first high finding if none of those are present. Copy that prompt.
+
+Then three short prompts, worst first. Each one says what is wrong, where, and what to change. Copy one into Codex, Cursor, or Claude. Under those three, a line says how the order was chosen. A model may reorder items inside one severity band. It does not choose which findings exist. If it did not answer, the order is severity and credential risk alone.
+
+Below that, the rest of the list stays visible.
 
 ## Each finding card shows
 
@@ -32,7 +38,7 @@ The Explain in plain words button rewrites each finding in one or two short sent
 
 **Repo DNA.** The shape of your project: folders, languages, entry points, what exists and what does not. Share Readiness sits here as a signal from the files we could read. Two numbers are shown: read coverage, which is how much of the repo was actually opened, and actionable share, which is how many findings need action. It is not a certification.
 
-**Standards.** One honest line per OWASP ASVS 5.0.0 requirement we can partially map. Every line carries coverage, status, evidence count, and a caveat. Nothing claims full coverage we cannot prove.
+**Standards.** Honest lines for the checks we can map: an OWASP ASVS 5.0.0 subset, OWASP Top 10:2025, OSV, and three CWE labels. deps.dev and OpenSSF Scorecard stay not-checked. Every line carries version, status, a caveat, and a source. A not-checked line is not a pass.
 
 **Missions.** Seven steps in a fixed order, one active at a time. Completion is verified from the scan, never self declared. Achievements are marked earned only when the data proves it. No points, no leaderboard.
 

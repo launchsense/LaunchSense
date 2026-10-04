@@ -4,8 +4,13 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 
 ## [Unreleased]
 
+### Changed
+
+- Home, readme, and docs now say LaunchSense checks the codebase, not whether the app will sell. Repeated functions are named as the next rule, not as a check that runs today.
+
 ### Added
 
+- Standards tab now includes OWASP Top 10:2025, OSV, and three CWE labels on checks that already run. deps.dev and OpenSSF Scorecard stay not-checked. A timeout on OSV stays not-checked.
 - One repository archive per scan, about 4 GitHub requests instead of about 200.
 - Live quota display on the scan page: requests left, how many more scans that allows, and the reset countdown. Plus the check order, in plain words.
 - Admission control. Six scans analyse at once; the rest queue and are told their place instead of everyone failing together.
@@ -47,7 +52,7 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 - First-party analytics writes are throttled by event kind and day.
 - Claim guard now checks two more things: any sentence claiming there is no stored copy of your code, and any stated cache or retention window. A window must match a TTL constant in the code and be backed by code that deletes. This is why the three defects above cannot come back silently.
 - Repo renamed to LaunchSense.
-- Docs state that only public repos can be read, and that private repos are not supported in this release.
+- Positioning now names three ways in: a public paste, a private repo after GitHub login, and MCP. The private scan is not running yet. MCP for a private repo is work we will do.
 - Publish guard now blocks internal notes, tool config, secrets, and private-life details on every push.
 
 ## [0.3.0] - 2026-10-02

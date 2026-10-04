@@ -36,6 +36,11 @@ export interface RankResult {
 
 const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2, info: 3 };
 
+/** Questions sent to the model. Findings past this stay in table order. */
+export const DECISION_QUESTION_CAP = 10;
+
+const MODEL_DID_NOT_CHOOSE = "The model did not choose which findings exist.";
+
 /** Matches the ruleIds that usually mean a live credential a stranger can use. */
 function isCredential(ruleId: string): boolean {
   return /secret|credential|key|token/i.test(ruleId);
@@ -64,6 +69,34 @@ export function tableOrder(findings: RankableFinding[]): string[] {
 /** Only actionable findings (high, medium, low) are ranked. Info is not an action. */
 export function actionableFindings(findings: RankableFinding[]): RankableFinding[] {
   return findings.filter((f) => f.severity !== "info");
+}
+
+function bandCounts(pool: RankableFinding[]): Map<Severity, number> {
+  const counts = new Map<Severity, number>();
+  for (const finding of pool) {
+    counts.set(finding.severity, (counts.get(finding.severity) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Findings a model is allowed to look at: only severity bands with two or more
+ * items, because a band of one cannot move. Capped so the rest stay on the table.
+ */
+export function findingsToAsk(findings: RankableFinding[]): RankableFinding[] {
+  const pool = actionableFindings(findings);
+  const counts = bandCounts(pool);
+  const byFingerprint = new Map(pool.map((finding) => [finding.fingerprint, finding]));
+  const eligible = tableOrder(pool)
+    .map((fingerprint) => byFingerprint.get(fingerprint))
+    .filter((finding): finding is RankableFinding => finding !== undefined)
+    .filter((finding) => (counts.get(finding.severity) ?? 0) >= 2);
+  return eligible.slice(0, DECISION_QUESTION_CAP);
+}
+
+/** True when some severity band has two or more actionable findings. */
+export function laneCanReorder(findings: RankableFinding[]): boolean {
+  return findingsToAsk(findings).length >= 2;
 }
 
 /** Stable question id for one finding. Must be deterministic or answers cannot map back. */
@@ -97,14 +130,15 @@ export function rankFromAnswers(
   const pool = actionableFindings(findings);
   const floor = tableOrder(pool);
 
+  const capped = reorderableCount(pool) > DECISION_QUESTION_CAP;
   if (pool.length === 0) {
-    return { order: [], source: "table", note: "Nothing actionable to rank." };
+    return { order: [], source: "table", note: `Nothing actionable to rank. ${MODEL_DID_NOT_CHOOSE}` };
   }
   if (answers === null) {
     return {
       order: floor,
       source: "table",
-      note: "Ordered by severity and credential risk.",
+      note: `Ordered by severity and credential risk alone. ${MODEL_DID_NOT_CHOOSE}`,
     };
   }
 
@@ -130,18 +164,24 @@ export function rankFromAnswers(
   });
 
   const moved = ordered.filter((fp, i) => floor[i] !== fp).length;
+  const capNote = capped ? " Findings past the first 10 stay in severity order." : "";
   if (moved === 0) {
     return {
       order: ordered,
       source,
-      note: "Ordered by severity and credential risk.",
+      note: `Order is by severity. A model looked inside one severity band and left the order unchanged. ${MODEL_DID_NOT_CHOOSE}${capNote}`,
     };
   }
   return {
     order: ordered,
     source,
-    note: `Ordered by severity, with ${moved} item(s) reordered inside their severity band.`,
+    note: `Order is by severity. A model reordered some items inside one severity band. ${MODEL_DID_NOT_CHOOSE}${capNote}`,
   };
+}
+
+function reorderableCount(pool: RankableFinding[]): number {
+  const counts = bandCounts(pool);
+  return pool.filter((finding) => (counts.get(finding.severity) ?? 0) >= 2).length;
 }
 
 /**
@@ -150,7 +190,5 @@ export function rankFromAnswers(
  * any of this is key-shaped, so a leaked secret in a finding title cannot travel.
  */
 export function rankState(findings: RankableFinding[]): Array<Record<string, string>> {
-  return actionableFindings(findings)
-    .slice(0, 10)
-    .map((f) => ({ title: f.title, severity: f.severity, ruleId: f.ruleId }));
+  return findingsToAsk(findings).map((f) => ({ title: f.title, severity: f.severity, ruleId: f.ruleId }));
 }

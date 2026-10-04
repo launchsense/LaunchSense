@@ -1,10 +1,27 @@
 # LaunchSense, product
 
-The confidence check before you deploy.
+The codebase check before you share. Not a verdict on whether the app will sell.
 
-You point LaunchSense at the app you built with AI. It tells you what is wrong, in
-plain words, with the exact next step for your AI tool. It never edits your code
-and never blocks a deploy.
+You point LaunchSense at the repo you built with AI. It looks for problems a
+vibe coder has no name for, so they never ask Codex: a leaked key, a license
+that does not fit, a dependency with a known hole or no fixed version, eval or
+a database query built from text, a missing README, tests, or CI, duplicate
+files, and huge files. It says what is wrong, in plain words, and gives a
+prompt to paste. It never edits your code and never blocks a deploy.
+
+Policy means those rules for the codebase. A license is one rule inside the
+layer, not the name of the product. The lines sit on OWASP Top 10, OWASP ASVS,
+OSV, and CWE. They are signals with a caveat, not a certification. Repeated
+functions, and a wider read of code bloat, are the next rules in that layer.
+They are not checked yet.
+
+Three ways in:
+
+- Public repo, no account. Paste the URL. This is what runs today.
+- Private repo. Sign in with GitHub and check a repo you can already read. That
+  scan is not running yet.
+- MCP. The same check from a coding helper. A public-repo route exists. Private
+  repos through MCP are work we will do.
 
 Status: Phase 1, shipped and live at `https://harmless-chihuahua-667.convex.site`.
 Source: `https://github.com/launchsense/LaunchSense`.
@@ -54,23 +71,23 @@ answer and three things to do, and not with a long list.
 
 **Fighting us: the habit.** They have deployed without checking every time, and
 nothing bad happened. That habit has been rewarded. Ask them to change it at the
-last minute and they will skip you. So we do not ask for an account, we do not ask
-for a private repo, and we do not ask them to learn a process. We ask for one paste,
-at the exact moment they were already nervous.
+last minute and they will skip you. A public repo is one paste, with no account.
+A private repo is GitHub login, on a repo they can already read. We do not ask
+them to learn a process.
 
 What we do about the two that fight us:
 
 | The problem | What the product does |
 |---|---|
 | A hundred findings they cannot sort | One plain answer, then the three things to fix first, then the rest. Worst things first, not the order we happened to find them. |
-| The deploy-and-hope habit | No account, nothing to install, one paste. And the thing they walk away with is the fix prompt, not the report. |
+| The deploy-and-hope habit | A public repo is one paste. A private repo is GitHub login. The thing they walk away with is the fix prompt, not the report. |
 
 Most of this product exists to beat those last two.
 
 ## Who it is for
 
 Vibe coders. Builders who ship fast with AI coding tools and want a second set of
-eyes on a public repo before they share the link.
+eyes on the repo before they share the link, public or still private.
 
 They have no security team and are not going to hire one. On this decision they
 trust their AI coding tool, Cursor or Claude or v0, and the builder community
@@ -83,7 +100,7 @@ around them. They do not read policies, licences, or security warnings.
 > matter before anyone else can see them.
 
 That is the whole job. The moment is not "I need a security tool." The moment is
-"this is about to be public and I am not sure what is in it."
+"I am about to share this, public or still private, and I am not sure what is in it."
 
 Everything below is checked against that sentence. If a feature does not help a
 builder fix the things that matter before someone else sees them, it is not the job.
@@ -153,6 +170,10 @@ and never decides anything.
   on a phone, and the report says so.
 - **Repo DNA and Share readiness.** A tree and language map, plus an explainable
   readiness band with read-coverage attached. Signals only, never certification.
+- **Standards.** An OWASP ASVS 5.0.0 subset, OWASP Top 10:2025 where a check
+  exists, OSV for npm, PyPI, and Go, and three CWE labels on checks we already
+  run. deps.dev and OpenSSF Scorecard are listed as not-checked. A model does
+  not set these rows.
 
 Caps are stated in the interface, not buried: 200 files, about 2MB, 100KB per file
 when a single file is read, and 5000 stored tree entries.
@@ -174,6 +195,10 @@ Gemini 2.5 Flash (thinking off)
 AI output is rejected and replaced with plain wording if it references an unknown
 finding, drops an actionable finding, or claims a check we did not run. A scan never
 fails because AI failed.
+
+A separate decision step may reorder findings inside one severity band. It does
+not choose which findings exist, and it does not set a standards row. If it does
+not answer, the order is severity and credential risk alone.
 
 ## Honest coverage, which is the actual product
 
@@ -204,7 +229,8 @@ builder is about to hit publish.
 
 ## Privacy and what we store
 
-- Public repos only. A private repo cannot be scanned.
+- The paste box reads a public repo. A private repo uses GitHub login, and that
+  scan is not running yet, so a private repo is not read today.
 - No raw file contents are stored, ever. Only owner, repo, commit SHA, file paths,
   sizes, hashes, and redacted finding snippets.
 - No raw secret values, anywhere. One redaction function covers every output path:
@@ -215,7 +241,8 @@ builder is about to hit publish.
 
 ## Known limits, stated up front
 
-- Public repos only. No private repository path yet.
+- The running scan is a public paste. Private repos after GitHub login are not
+  running yet. MCP for a private repo is work we will do.
 - 200 files and about 2MB per guest scan.
 - No browser rendering. The live check reads served HTML, not a rendered phone.
 - The check runs when you press Run, or from the read-only MCP endpoints. There is no
@@ -350,9 +377,9 @@ a plan we wrote before we had users would be the plan serving itself.
 
 What we are doing and why:
 
-- **MCP moves earlier, as a small read-only surface.** It scans a public repo and
-  reads a report. Nothing private, no writes, no account. The Phase 1 routes already
-  exist, so this is finishing them, not starting from nothing.
+- **MCP moves earlier, as a small read-only surface.** The routes that exist scan
+  a public repo and read a report. No writes, no account. Private repos through
+  MCP are work we will do, on a repo the helper can already read.
 - **The gate on M4 still stands for everything else in Phase 3.** Teams, roles,
   audit logs, and retention all wait. Those are large, and M4 is still unproven.
 - **M1 is still the number that matters.** MCP users are the same people who would
@@ -415,6 +442,7 @@ understand. It now scans this document too.
 
 ## What is not built, plainly
 
-Sign-in unlocks nothing today. There is no saved history, no private repo scanning,
-no monitoring, no browser rendering, no share revocation. Each of those is either a
-later phase or not started, and the interface never pretends otherwise.
+Sign-in unlocks nothing today. There is no saved history, and a private repo scan
+after GitHub login is not running yet. MCP for a private repo is work we will do.
+There is no monitoring, no browser rendering, and no share revocation. The
+interface says so.

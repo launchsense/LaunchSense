@@ -35,8 +35,18 @@ export interface RankedItem {
   count: number;
 }
 
+export interface ActionPrompt {
+  ruleId: string;
+  title: string;
+  prompt: string;
+}
+
 export interface TopPrompt {
   prompt: string;
+  /** One short prompt per top action. The combined prompt stays for the same three. */
+  prompts: ActionPrompt[];
+  /** The one finding a weekend coder would not have thought to ask about. */
+  lead: ActionPrompt | null;
   topCount: number;
   restCount: number;
   // Rule ids in the prompt and below it, so the UI can hide the duplicates.
@@ -67,6 +77,36 @@ function ruleRank(ruleId: string | null): number {
   if (ruleId === null) return 5;
   const rank = RULE_RANK[ruleId];
   return rank === undefined ? 3 : rank;
+}
+
+function isCredentialRule(ruleId: string): boolean {
+  return (
+    /secret|credential|key|token/i.test(ruleId) &&
+    ruleId !== "secret.debug-leftover" &&
+    ruleId !== "secret.debugger-statement" &&
+    ruleId !== "secret.eval-use" &&
+    ruleId !== "secret.sql-pattern"
+  );
+}
+
+/** Policy lead. Severity does not pick this. The lane may only order ties inside one band, which the ranked list already did. */
+export function pickLead(ranked: RankedItem[]): RankedItem | null {
+  const groups: Array<(item: RankedItem) => boolean> = [
+    (item) => isCredentialRule(item.ruleId),
+    (item) => item.ruleId === "license.policy",
+    (item) => item.ruleId === "hygiene.duplicates" || item.ruleId === "hygiene.large-files",
+    (item) => item.severity === "high",
+  ];
+  for (const group of groups) {
+    const hit = ranked.find(group);
+    if (hit !== undefined) return hit;
+  }
+  return ranked[0] ?? null;
+}
+
+function actionPrompt(item: RankedItem): string {
+  const many = item.count > 1 ? ` (${item.count} places)` : "";
+  return `${item.title}${many}\nWhere: ${item.where}\nWhat is wrong: ${item.why}\nWhat to change: ${item.firstStep}`;
 }
 
 export function liveActionItems(
@@ -201,8 +241,13 @@ export function buildTopPrompt(
 
   const top = ranked.slice(0, limit);
   const restCount = Math.max(0, ranked.length - top.length);
+  const leadItem = pickLead(ranked);
+  const lead =
+    leadItem === null
+      ? null
+      : { ruleId: leadItem.ruleId, title: leadItem.title, prompt: actionPrompt(leadItem) };
   if (top.length === 0) {
-    return { prompt: "", topCount: 0, restCount, topRuleIds: [], restRuleIds: [] };
+    return { prompt: "", prompts: [], lead, topCount: 0, restCount, topRuleIds: [], restRuleIds: [] };
   }
   const lines = top.map((item, i) => {
     const many = item.count > 1 ? ` (${item.count} places)` : "";
@@ -215,6 +260,8 @@ export function buildTopPrompt(
     (restCount > 0 ? ` (${restCount} more).` : `.`);
   return {
     prompt,
+    prompts: top.map((item) => ({ ruleId: item.ruleId, title: item.title, prompt: actionPrompt(item) })),
+    lead,
     topCount: top.length,
     restCount,
     topRuleIds: top.map((t) => t.ruleId),

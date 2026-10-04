@@ -161,6 +161,22 @@ describe("buildTopPrompt", () => {
     assert.equal(top.topRuleIds[0], "deps.vulnerability");
   });
 
+  it("picks a credential as the lead ahead of a higher-ranked other finding", () => {
+    const top = buildTopPrompt(
+      [
+        { ruleId: "deps.vulnerability", path: "package.json", line: 3, severity: "high", title: "CVE affects x@1", why: "Known." },
+        { ruleId: "license.policy", path: "LICENSE", line: 1, severity: "medium", title: "License needs attention", why: "Copyleft." },
+        { ruleId: "secret.credential-pattern", path: "src/a.ts", line: 4, severity: "high", title: "A key is in source", why: "Readable." },
+      ],
+      [],
+      [],
+    );
+    assert.equal(top.lead?.ruleId, "secret.credential-pattern");
+    assert.equal(top.prompts.length, 3);
+    assert.match(top.prompts[0]?.prompt ?? "", /What is wrong/);
+    assert.match(top.prompts[0]?.prompt ?? "", /What to change/);
+  });
+
   it("names live problems plainly", () => {
     const items = liveActionItems(
       { reaches: true, https: false, nonBlank: true, viewportMeta: false, url: "https://example.com/" },

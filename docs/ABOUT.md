@@ -1,18 +1,37 @@
 # About LaunchSense
 
-LaunchSense helps people check apps they built with AI before sharing them.
+LaunchSense checks the codebase, not the business. It does not say if the app will sell.
 
-It reads a public repo and your live app the way a stranger would, and lists problems with proof. It gives one fix prompt for the top 3, then lets you re-check after you fix. It never changes your code.
+You built the app with an AI coding tool. It works, and you are about to share the repo. You do not know what to ask Codex, so the check never starts. LaunchSense already knows what to ask. It says what is wrong, in plain words, and gives a prompt you can paste. It never changes your code.
+
+## What it solves
+
+- A leaked key, token, password, or private key.
+- A license that does not fit, including copyleft or missing terms. A signal, not legal advice.
+- A dependency with a known hole, or one with no fixed version.
+- Risky code, like eval, or a database query built from text.
+- A missing README, tests, or CI.
+- Duplicate files and huge files.
+
+Repeated functions, and a wider read of code bloat, are the next rules in this same layer. They are not checked yet.
+
+## Why use it
+
+You do not need the name of the problem. The checks are fixed, so a model does not invent a finding. You leave with a prompt for Codex, Cursor, or Claude. The report says what it did not read, and a gap is not a pass. It does not change your code, block a deploy, or judge whether anyone will pay.
+
+## Policies and standards
+
+Policy means the rules for the codebase. A license is one rule inside that, not the whole layer. The findings sit on OWASP Top 10, OWASP ASVS, OSV, and CWE. Each line is a signal with a caveat. It is not a certification, and it is not a verdict that the product will sell.
 
 ## Who it is for
 
-Builders who ship fast with AI coding tools and want a second set of eyes on a public repo before they share the link. You paste a repo link, get a plain report, hand the fix prompt to your coding helper, fix, then scan again.
+People who ship fast with AI coding tools and have no name for these problems. A public repo needs no account. A private repo uses GitHub login. Your coding helper will use MCP, and that private path is work we will do.
 
 ## The moment it is built for
 
-The moment after a repo becomes public and before you share the link. Public means every future reader can see it, including anything already committed. That is when a leaked key, a copyleft license, or a missing README stops being a private problem.
+The moment before you share the link, whether the repo is public or still private. The leaked key or the copyleft license is already in the history. Checking the code before anyone else sees it is the job. Judging the market is not.
 
-It reads public repos only. A private repo cannot be scanned, and no local agent or MCP setup is included here.
+What runs today is the public paste. GitHub login for a private repo is not running yet. MCP can already call a public scan. Private repos through MCP are work we will do.
 
 ## What it will not do
 

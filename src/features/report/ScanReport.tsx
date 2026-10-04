@@ -68,7 +68,7 @@ export default function ScanReport(props: {
   priorityNote?: string;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
-  const [promptCopied, setPromptCopied] = useState(false);
+  const [promptCopied, setPromptCopied] = useState<string | null>(null);
   const counts = { high: 0, medium: 0, low: 0, info: 0 };
   for (const f of props.findings) counts[f.severity]++;
 
@@ -109,9 +109,9 @@ export default function ScanReport(props: {
     });
   }
 
-  function copyPrompt() {
-    void copyText(top.prompt).then((ok) => {
-      setPromptCopied(ok);
+  function copyPrompt(id: string, text: string) {
+    void copyText(text).then((ok) => {
+      setPromptCopied(ok ? id : null);
     });
   }
 
@@ -167,14 +167,44 @@ export default function ScanReport(props: {
         </details>
       </section>
 
-      {top.topCount > 0 && (
-        <div aria-label="Top 3 fix prompt">
-          <h4>Your top 3: one prompt</h4>
-          <p style={{ whiteSpace: "pre-line" }}>{top.prompt}</p>
-          <button type="button" onClick={copyPrompt}>
-            {promptCopied ? "Copied" : "Copy prompt"}
+      {top.lead !== null && (
+        <div aria-label="One thing to look at">
+          <h4>The one thing to look at</h4>
+          <p>This is the item a first check usually misses.</p>
+          <p style={{ whiteSpace: "pre-line" }}>{top.lead.prompt}</p>
+          <button type="button" onClick={() => copyPrompt("lead", top.lead?.prompt ?? "")}>
+            {promptCopied === "lead" ? "Copied" : "Copy this prompt"}
           </button>
         </div>
+      )}
+
+      {top.prompts.length > 0 && (
+        <div aria-label="Three actions">
+          <h4>
+            {top.prompts.length === 1
+              ? "One thing to fix first"
+              : top.prompts.length === 2
+                ? "Two things to fix first"
+                : "Three things to fix first"}
+          </h4>
+          <ol>
+            {top.prompts.map((item, index) => (
+              <li key={item.ruleId}>
+                <p style={{ whiteSpace: "pre-line" }}>{item.prompt}</p>
+                <button type="button" onClick={() => copyPrompt(item.ruleId, item.prompt)}>
+                  {promptCopied === item.ruleId ? "Copied" : `Copy prompt ${index + 1}`}
+                </button>
+              </li>
+            ))}
+          </ol>
+          {props.priorityNote !== undefined && props.priorityNote.length > 0 && (
+            <p className="priority-note">{props.priorityNote}</p>
+          )}
+        </div>
+      )}
+
+      {top.prompts.length === 0 && props.priorityNote !== undefined && props.priorityNote.length > 0 && (
+        <p className="priority-note">{props.priorityNote}</p>
       )}
 
       {restSteps.length > 0 && (
@@ -182,7 +212,7 @@ export default function ScanReport(props: {
           <h4>The rest of the fix list</h4>
           <p>
             {top.topRuleIds.length > 0
-              ? "These are the items after the top 3 above."
+              ? "These are the items after the prompts above."
               : "Everything the check found."}
           </p>
           <ol>
@@ -227,10 +257,6 @@ export default function ScanReport(props: {
         </div>
       )}
 
-      {props.priorityNote !== undefined && props.priorityNote.length > 0 && (
-        <p className="priority-note">{props.priorityNote}</p>
-      )}
-
       <div aria-label="Findings">
         <h4>Findings</h4>
         {props.findings.length === 0 && (
@@ -242,7 +268,8 @@ export default function ScanReport(props: {
         {props.findings.map((f) => (
           <article key={f.fingerprint} aria-label={`Finding ${f.title}`}>
             <p>
-              <strong>{f.title}</strong>, {f.severity}
+              <strong>{f.title}</strong>,{" "}
+              <span className={f.severity === "high" ? "severity-high" : undefined}>{f.severity}</span>
             </p>
             <p>
               Where: {f.path}:{f.line}

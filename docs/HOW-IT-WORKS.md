@@ -1,15 +1,19 @@
 # How a scan works
 
+LaunchSense checks the codebase, not the business. It does not say if the app will sell. It looks for problems you have no name for, says what is wrong, and gives a prompt you can paste.
+
 ## What you can scan
 
-Public GitHub repos only. If your repo is private, we cannot read it and there is nothing to check yet.
+LaunchSense is for a public repo and a private one.
+
+- Public repo: paste the URL. No account. This is what runs today.
+- Private repo: sign in with GitHub and check a repo you can already read. That scan is not running yet.
+- MCP: your coding helper runs the same check. The route that exists today reads a public repo. Private repos through MCP are work we will do.
 
 Two useful moments:
 
-- Your repo is already public and you want to know what a visitor will find. Scan it.
-- Your repo is about to become public. Flip it, scan it, fix what shows up, and only then share the link. Public means every future reader can see it, including anything already committed.
-
-Private repos are out of scope for now. Local tools such as MCP can read them, but that is not built here.
+- The repo is already public and you want to know what a visitor will find.
+- The repo is still private and you want the same check before you share the link.
 
 ## The first minute
 
@@ -26,7 +30,7 @@ Private repos are out of scope for now. Local tools such as MCP can read them, b
 4. We fetch the served live page HTML.
 5. Fixed checks run: secrets, risky patterns, dependencies, licenses, and hygiene.
 6. You get one fix prompt for the top 3, then the rest of the list.
-7. Repo DNA, Share Readiness, standards lines, missions, and the handoff text are computed from the same read.
+7. Repo DNA, Share Readiness, standards lines, missions, and the handoff text are computed from the same read. A standards line is not-checked when we did not run that check.
 
 ## What runs and what does not
 

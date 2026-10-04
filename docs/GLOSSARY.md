@@ -2,6 +2,11 @@
 
 Each word in one plain line.
 
+## The product
+
+- Policy: the rules for the codebase. A license is one rule inside this. It is not a judgment of whether the app will sell.
+- Standard: a named line such as OWASP Top 10, OWASP ASVS, OSV, or CWE. A signal with a caveat, not a certification.
+
 ## Scanning
 
 - Passport: a small proof card for one scan. It shows counts and the commit, never secrets.
@@ -28,7 +33,7 @@ Each word in one plain line.
 - Actionable share: the share of findings that need action. It describes the mix of findings, not how much was checked.
 - Coverage: how much of the repo we actually looked at.
 - Policy: the rule that decides if a finding needs review before sharing.
-- Standards mapping: one honest line linking a finding to an OWASP ASVS 5.0.0 requirement, with coverage and a caveat.
+- Standards mapping: one honest line linking a finding to a named requirement, with version, coverage, status, a caveat, and a source. Not a certification.
 
 ## Progress
 

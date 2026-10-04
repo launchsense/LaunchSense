@@ -13,7 +13,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { decide } from "../adapters/decision";
 import type { DecisionQuestion } from "../adapters/decision";
-import { rankFromAnswers, questionIdFor, rankState } from "../../shared/reports/priority";
+import { findingsToAsk, laneCanReorder, rankFromAnswers, questionIdFor, rankState } from "../../shared/reports/priority";
 import type { RankableFinding } from "../../shared/reports/priority";
 
 export const rankScan = internalAction({
@@ -32,13 +32,19 @@ export const rankScan = internalAction({
       title: r.title,
     }));
 
+    // Standards rows are not sent. The model may only reorder inside a severity
+    // band, and only when that band has two or more findings.
+    if (!laneCanReorder(findings)) {
+      return rankFromAnswers(findings, null, "table");
+    }
+
     const state = rankState(findings);
 
-    // One closed question per finding. The model can answer only with the
-    // probability of yes, so it cannot name a check, a tool, or anything we did
-    // not enumerate.
+    // One closed question per finding the model is allowed to move. It can
+    // answer only with the probability of yes, so it cannot name a check, a
+    // tool, or anything we did not enumerate.
     const questions: Record<string, DecisionQuestion> = {};
-    for (const f of findings.filter((x) => x.severity !== "info").slice(0, 10)) {
+    for (const f of findingsToAsk(findings)) {
       questions[questionIdFor(f.fingerprint)] = {
         type: "noul",
         instructions: `Does this need fixing before the builder shares their repo: ${f.title} (severity ${f.severity}).`,

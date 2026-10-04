@@ -7,6 +7,8 @@ import {
   questionIdFor,
   rankFromAnswers,
   rankState,
+  laneCanReorder,
+  findingsToAsk,
 } from "../shared/reports/priority.ts";
 import { looksLikeSecret, validateQuestions, decisionRungs } from "../convex/adapters/decision.ts";
 import * as FX from "./fixtures.mjs";
@@ -89,6 +91,34 @@ describe("the lane can never override severity", () => {
     const result = rankFromAnswers(SAMPLE, null, "table");
     assert.deepEqual(result.order, tableOrder(actionableFindings(SAMPLE)));
     assert.equal(result.source, "table");
+    assert.match(result.note, /severity and credential risk alone/);
+    assert.match(result.note, /did not choose which findings exist/);
+    assert.doesNotMatch(result.note, /jev|perplexity|chose a check|chose a finding|chooses which/i);
+  });
+
+  it("does not ask the model when no band can move", () => {
+    const one = [F("only", "high", "secret.tracked-env", "A tracked env file")];
+    assert.equal(laneCanReorder(one), false);
+    assert.deepEqual(findingsToAsk(one), []);
+  });
+
+  it("says a model reordered inside a band and did not choose the findings", () => {
+    const answers = {
+      [questionIdFor("a2")]: { type: "noul", noul: 0.2 },
+      [questionIdFor("a4")]: { type: "noul", noul: 0.99 },
+    };
+    const result = rankFromAnswers(SAMPLE, answers, "jev");
+    assert.match(result.note, /inside one severity band/);
+    assert.match(result.note, /did not choose which findings exist/);
+    assert.doesNotMatch(result.note, /jev|perplexity|chose a check|chose a finding|chooses which/i);
+  });
+
+  it("says findings past the cap stay in severity order", () => {
+    const many = Array.from({ length: 12 }, (_, i) => F(`h${i}`, "high", `rule${i}`, `t${i}`));
+    const answers = Object.fromEntries(many.slice(0, 10).map((f) => [questionIdFor(f.fingerprint), { noul: 0.5 }]));
+    const result = rankFromAnswers(many, answers, "jev");
+    assert.match(result.note, /past the first 10/);
+    assert.equal(result.order.length, 12);
   });
 
   it("always covers every actionable finding, in every branch", () => {
@@ -200,6 +230,9 @@ describe("the product promise is enforced, not intended", () => {
     // contract. What matters is that OUR caller never uses it: a choice question in
     // rankScan would mean the lane is picking from a set of checks or tools.
     const action = readFileSync(new URL("../convex/scans/rankScan.ts", import.meta.url), "utf8");
+    const can = action.indexOf("laneCanReorder");
+    const call = action.indexOf("await decide");
+    assert.ok(can >= 0 && call > can, "the model is skipped when no band can move");
     assert.match(action, /type: "noul"/, "the ranker asks a yes/no about fixing");
     assert.doesNotMatch(action, /type: "choice"/, "the lane must never pick from a set of work");
     assert.doesNotMatch(action, /type: "score"/, "the lane must not be asked to rank the work itself");
