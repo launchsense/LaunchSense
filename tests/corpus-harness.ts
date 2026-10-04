@@ -1,5 +1,10 @@
 // Corpus harness: run the real secrets analyzer over real repos and classify every
-// credential hit. This is the measurement that must exist before any more rules are
+// credential hit. Secrets only. This is not a full review: it does not check
+// deps, licenses, hygiene, live fetch, DNA, readiness, or standards.
+// For the full local review, run:
+//   node --experimental-strip-types mcp/review-entry.ts --root <dir>
+// or call launchsense_scan_repo in the coding tool.
+// This is the measurement that must exist before any more secret rules are
 // added. A rule written without a corpus is a guess.
 //
 // Usage:
@@ -83,6 +88,12 @@ function main(): void {
     console.error("give a corpus directory");
     process.exit(2);
   }
+  console.error(
+    "Secrets-only run. This is not a full review: deps, licenses, hygiene, " +
+    "live fetch, DNA, readiness, and standards are not checked. " +
+    "For the full local review, run: " +
+    "node --experimental-strip-types mcp/review-entry.ts --root <dir>"
+  );
 
   const repos = readdirSync(root).filter((d) => {
     try {
