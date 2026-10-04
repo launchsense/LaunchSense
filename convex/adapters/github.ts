@@ -10,19 +10,23 @@ export const MAX_BYTES_PER_FILE = 100000;
 
 export interface RateLimitInfo {
   remaining: number | null;
+  limit: number | null;
   resetAtMs: number | null;
   retryAfterMs: number | null;
 }
 
 export function parseRateLimitHeaders(headers: Headers): RateLimitInfo {
   const remainingRaw = headers.get("x-ratelimit-remaining");
+  const limitRaw = headers.get("x-ratelimit-limit");
   const resetRaw = headers.get("x-ratelimit-reset");
   const retryRaw = headers.get("retry-after");
   const remaining = remainingRaw !== null && remainingRaw !== "" ? Number(remainingRaw) : null;
+  const limit = limitRaw !== null && limitRaw !== "" ? Number(limitRaw) : null;
   const resetSeconds = resetRaw !== null && resetRaw !== "" ? Number(resetRaw) : null;
   const retrySeconds = retryRaw !== null && retryRaw !== "" ? Number(retryRaw) : null;
   return {
     remaining: remaining !== null && Number.isFinite(remaining) ? remaining : null,
+    limit: limit !== null && Number.isFinite(limit) ? limit : null,
     resetAtMs:
       resetSeconds !== null && Number.isFinite(resetSeconds) ? resetSeconds * 1000 : null,
     retryAfterMs:
@@ -36,14 +40,18 @@ export function isRateLimitStatus(status: number, rate: RateLimitInfo): boolean 
   return false;
 }
 
-function authHeaders(): Record<string, string> {
+function authHeaders(userToken?: string | null): Record<string, string> {
   const base: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "LaunchSense/1.0",
   };
-  // Server-only quota token. Never returned, logged, or sent to the client.
-  const token = process.env.GITHUB_TOKEN;
+  // A signed-in scan uses that person's token. A guest scan uses the server
+  // token when one is set. Neither value is returned, logged, or sent to the client.
+  const token =
+    userToken !== undefined && userToken !== null && userToken.length > 0
+      ? userToken
+      : process.env.GITHUB_TOKEN;
   if (token !== undefined && token.length > 0) {
     base.Authorization = `Bearer ${token}`;
   }
@@ -57,9 +65,9 @@ export interface GitHubFetchResult {
   etag: string | null;
 }
 
-export async function fetchGitHubJson(url: string): Promise<GitHubFetchResult> {
+export async function fetchGitHubJson(url: string, userToken?: string | null): Promise<GitHubFetchResult> {
   const response = await fetch(url, {
-    headers: authHeaders(),
+    headers: authHeaders(userToken),
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   const rate = parseRateLimitHeaders(response.headers);
@@ -97,6 +105,7 @@ export async function fetchBlobContent(
   sha: string,
   path: string,
   maxBytes = MAX_BYTES_PER_FILE,
+  userToken?: string | null,
 ): Promise<BlobResult> {
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path
     .split("/")
@@ -105,7 +114,7 @@ export async function fetchBlobContent(
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: authHeaders(),
+      headers: authHeaders(userToken),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch {

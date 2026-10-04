@@ -6,9 +6,9 @@ You built the app with an AI coding tool. It works, and you are about to share t
 
 ## Three ways in
 
-- Public repo, no account. Paste the GitHub URL. This is what runs today.
-- Private repo. Sign in with GitHub and check a repo you can already read. That scan is not running yet. Signing in today does not start it.
-- MCP. The same check from your coding helper. A small public-repo route exists. Private repos through MCP are work we will do.
+- Public repo, no account. Paste the GitHub URL. A guest read stops at 200 files and about 2MB.
+- Private repo, or a larger public read. Sign in with GitHub. The scan uses your token and stops at 1,000 files and about 8MB.
+- MCP. A coding tool review that reads the files on your machine is not running yet.
 
 ## How to use
 
@@ -73,10 +73,10 @@ The findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASV
 
 ## Limits
 
-- The paste box reads public repos. A private scan after GitHub login is not running yet.
-- MCP today is a public-repo route. Private repos through MCP are work we will do.
-- GitHub quota is shared, so heavy use can pause scans until the quota resets.
-- Each scan reads at most 200 files and 2 MB in total. The rest is listed as not checked.
+- A guest paste uses the shared GitHub quota. A signed-in scan uses that person's token and does not change the guest meter.
+- A coding tool review that reads the files on your machine is not running yet.
+- GitHub quota for guest scans is shared, so heavy use can pause those scans until the quota resets.
+- A guest scan reads at most 200 files and 2 MB. Signed in, the cap is 1,000 files and about 8MB. The rest is listed as not checked.
 - Plain words explanations use an AI provider when one is configured. None is configured in this release, so fixed wording is shown.
 - More detail: `docs/LIMITS.md`. Privacy detail: `docs/PRIVACY.md`.
 

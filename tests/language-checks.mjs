@@ -107,9 +107,9 @@ describe("error text never leaks raw backend messages", () => {
 });
 
 describe("share permanence is stated, not implied", () => {
-  it("Home describes the share feature without claiming safety", () => {
-    const home = readFileSync(join(repo, "src/pages/Home.tsx"), "utf8");
-    assert.doesNotMatch(home, /without exposing secrets/i);
-    assert.match(home, /Links stay live once created/);
+  it("Why describes the share feature without claiming safety", () => {
+    const why = readFileSync(join(repo, "src/pages/Why.tsx"), "utf8");
+    assert.doesNotMatch(why, /without exposing secrets/i);
+    assert.match(why, /Links stay live once created/);
   });
 });

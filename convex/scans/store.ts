@@ -54,6 +54,7 @@ const fullScanDoc = v.object({
   liveUrl: v.optional(v.string()),
   mainAction: v.optional(v.string()),
   rescanOf: v.optional(v.id("scans")),
+  signedIn: v.optional(v.boolean()),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -526,6 +527,7 @@ export const createRescan = internalMutation({
     repo: v.string(),
     repoUrl: v.string(),
     rescanOf: v.id("scans"),
+    signedIn: v.boolean(),
     now: v.number(),
   },
   returns: v.id("scans"),
@@ -536,6 +538,7 @@ export const createRescan = internalMutation({
       repoUrl: args.repoUrl,
       status: "validating",
       rescanOf: args.rescanOf,
+      signedIn: args.signedIn,
       createdAt: args.now,
       updatedAt: args.now,
     });

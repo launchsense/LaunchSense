@@ -77,8 +77,8 @@ export default function CapacityMeter(props: {
       <p>
         <strong>What to check, in order:</strong> secrets first, then your live
         app, then dependencies and licenses, then repo hygiene. Each scan is
-        Each scan is pinned to one commit, so re-scanning after a fix checks that same
-          commit again. Guest scans use a shared quota, so a busy hour can come back partial.
+        pinned to one commit, so re-scanning after a fix checks that same
+        commit again. Guest scans use a shared quota, so a busy hour can come back partial.
       </p>
       <p>
         If a scan says partial, the not-checked list tells you exactly what was

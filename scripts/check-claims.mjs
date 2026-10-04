@@ -44,16 +44,15 @@ const POSITIVE_CLAIMS = [
   { phrase: /\bno\s+issues\s+(found|exist)/i, why: "skipped work is listed as not checked" },
   { phrase: /\ball\s+secrets\b/i, why: "secrets are patterns, not proof" },
   { phrase: /coming\s+soon/i, why: "unbuilt work is named, not promised" },
-  // Sign-in promises. Signing in currently unlocks nothing a user can see:
-  // getInstallationToken, projects.listForUser, and entitlements.getMyEntitlements
-  // all have zero callers. Verified 2026-10-03. Copy must disclaim, not sell.
-  { phrase: /deeper\s+scan/i, why: "sign-in unlocks no deeper scan; the connected path has no callers" },
+  // Sign-in reads one archive on the person's token, up to 1,000 files.
+  // A further read in the coding tool is not running, so copy must not sell it.
+  { phrase: /deeper\s+scan/i, why: "a further read is the local coding tool review, which is not running" },
   // Allows the honest denial "there is no saved history". The negation sits
   // before the phrase, which isWalkedBack's 15 character window cannot see.
   { phrase: /(?<!no\s)(?<!not\s)saved\s+history/i, why: "no history store exists" },
   // "unlocks nothing" is the honest disclaimer and must stay allowed, so this
   // targets only claims that sign-in grants a real capability.
-  { phrase: /unlocks?\s+(private\s+repos?|a\s+deeper\s+scan|full\s+scans?)/i, why: "sign-in unlocks no scan capability today" },
+  { phrase: /unlocks?\s+(private\s+repos?|a\s+deeper\s+scan|full\s+scans?)/i, why: "sign-in states a cap; it does not sell an unlock" },
   // Durability promises with no mechanism behind them. The queue copy said
   // "you will not lose your place" while pressing Run scan minted a new scanId
   // and a new queue row. See .progress/UI-COPY-CONTENT-POLICY-PLAN.md W1.
