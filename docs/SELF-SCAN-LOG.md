@@ -58,7 +58,7 @@ Triage of what remains:
 
 - `secret.credential-pattern` on `convex/auth.ts:23` and `:34`, `convex/scans/analyze.ts:75`, `package-lock.json:346`, and `shared/entitlements.ts:1`. False positive. These are a type name that contains "token", an optional-chaining read, a TypeScript type after a colon, an npm bin path named auth, and a feature-key array. No literal secret is assigned. Not retuned in this pass, because that gate is shared with the website scan and a looser skip would hide a real value.
 - `secret.credential-pattern` and `secret.private-key` under `tests/`. Expected. Those files plant the shapes on purpose. The extra row in `tests/secret-false-positive-checks.mjs` is the same class.
-- `code.sql-pattern` on `convex/scans/analyze.ts`, `shared/reports/fixPlan.ts`, and `shared/review/buildReport.ts`. False positive. The lines are the check describing `SELECT ... FROM`. Left in place. A query built inside a string is still the shape this rule is for.
+- `code.sql-pattern` on `convex/scans/analyze.ts`, `shared/reports/fixPlan.ts`, and `shared/review/buildReport.ts`. False positive. The lines are the check describing that query shape. Left in place. A query built inside a string is still the shape this rule is for.
 - `code.debug-leftover` on `scripts/check-claims.mjs` and `tests/corpus-harness.ts`. False positive for an app leftover. Those files are command-line tools and they print on purpose.
 - `code.child-process` and `code.weak-crypto` in `tests/local-review-checks.mjs`. Expected. The test plants the call shape.
 - `license.policy` on `LICENSE.txt`. True as stated. The file has no marker this reader knows. It was not changed into an open-source license.
