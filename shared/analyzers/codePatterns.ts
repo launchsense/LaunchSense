@@ -20,10 +20,10 @@ export function matchCodePattern(line: string): CodeHit | null {
     return { ruleId: "code.sql-pattern", oncePerFile: false };
   }
   if (/\.innerHTML\s*=/.test(line)) return { ruleId: "code.inner-html", oncePerFile: false };
-  if (/child_process|\bexecSync\s*\(|\bexecFile(?:Sync)?\s*\(/.test(line) && !/\.exec\s*\(/.test(line)) {
+  if (/(?:require\(\s*['"](?:node:)?child_process['"]|from\s+['"](?:node:)?child_process['"])|\bexecSync\s*\(|\bexecFile(?:Sync)?\s*\(/.test(line)) {
     return { ruleId: "code.child-process", oncePerFile: false };
   }
-  if (/createHash\s*\(\s*['"](?:md5|sha1)['"]|createCipher(?:iv)?\s*\(/i.test(line)) {
+  if (/createHash\s*\(\s*['"](?:md5|sha1)['"]|createCipher(?:iv)?\s*\(\s*['"]/i.test(line)) {
     return { ruleId: "code.weak-crypto", oncePerFile: false };
   }
   if (/Access-Control-Allow-Origin['"]?\s*[:=]\s*['"]\*['"]|origin\s*:\s*['"]\*['"]/.test(line)) {

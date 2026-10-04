@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { matchCodePattern } from "../shared/analyzers/codePatterns.ts";
+import { generatedMarkers } from "../shared/review/extraChecks.ts";
 import { analyzeLicenses } from "../shared/analyzers/licenses.ts";
 import { buildLocalReport } from "../shared/review/buildReport.ts";
 import { quoteForChoice, suggestionOptions } from "../shared/review/unknownQuote.ts";
@@ -99,6 +101,17 @@ describe("lockfile and clash", () => {
     assert.match(result.note, /package.json says MIT/);
     assert.match(result.note, /Apache-2.0/);
     assert.match(result.note, /Signal, not legal advice/);
+  });
+
+  it("does not treat a mention or a Convex import as a live call", () => {
+    assert.equal(matchCodePattern("Added innerHTML, child_process exec, weak crypto.")?.ruleId ?? null, null);
+    assert.equal(matchCodePattern("import { api } from '../_generated/server';"), null);
+    assert.equal(matchCodePattern('import { execSync } from "node:child_process"')?.ruleId, "code.child-process");
+    assert.equal(matchCodePattern('crypto.createHash("md5")')?.ruleId, "code.weak-crypto");
+    const large = `import { api } from "../_generated/api";\n${"x".repeat(20_000)}`;
+    assert.equal(generatedMarkers([{ path: "convex/scans/analyze.ts", content: large }]).length, 0);
+    const marked = `@generated\n${"x".repeat(20_000)}`;
+    assert.equal(generatedMarkers([{ path: "out.ts", content: marked }]).length, 1);
   });
 
   it("flags Apache-2.0 under GPL-2.0-only as a review signal", () => {
