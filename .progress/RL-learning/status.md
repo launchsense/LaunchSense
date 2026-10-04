@@ -1,20 +1,34 @@
-# Night run status (append-only, one line per unit)
+# Run status: full offline reviews, 100 repos
 
-Coordinator reads queue.md, takes the top UNSTARTED item, commits, appends here.
+Append-only. One line per completed unit, newest at the bottom. Waves 01 to 05
+are recorded in their own sheets; this file starts at the night coordinator run
+that covered waves 06 to 10 autonomously.
 
-- 2026-10-05 M1 ranking math module done (53c5c5c)
-- 2026-10-05 M2 five precision drafts done (drafts/)
-- 2026-10-05 wave-full 05 done (wave-full-05.md) - 1 real live secret found (spring-boot-realworld jwt.secret)
-- 2026-10-05 M1b maths scoring pass done (12 bands scored on local nimble, values 2.16-2.94 on a 0-3 rubric)
-- 2026-10-05 coordinator launched in background for waves 06-10
-- 2026-10-05 queue extended with feature-board work (items 13-15)
-- 2026-10-05 wave-full 06 re-verified by me (its 2 owner-queue rows both hold: sidekiq 128-char random key with a keep-private comment, wallabag shipped APP_SECRET default)
-- 2026-10-05 wave-full 07 done (wave-full-07.md) - 10/10, 13 private-key header TPs (civetweb+mongoose demo certs), yyjson repo name in the locked list does not exist, scanned ibireme/yyjson
-- 2026-10-05 wave-full 08 done (wave-full-08.md) - 10/10, WQ-3 real committed Django SECRET_KEY, model.eval() FP class = 19 rows across 6 repos
-- 2026-10-05 wave-full 09 done (wave-full-09.md) - 10/10, no owner decisions, tracked-env FP cleared by reading every key in immich/.env
-- 2026-10-05 wave-full 10 done (wave-full-10.md) - 10/10, 144/145 H/M false positives, Kotlin view-binding credential gate is the biggest defect found in 100 repos (53 rows)
-- 2026-10-05 waves 06-10 committed together (b80e788); a second masker leak (Django SECRET_KEY) written to owner-queue.md as a shape, helper widened
-- 2026-10-05 M4 done (commit 5e0e731): decision-source internal query written, 0 rows to read (usageDiagnostics unreachable offline, reading says so rather than inventing a number); local walk now skips .progress by name and discloses the skip; OSV not-checked line now names the lockfile that was in hand; 8 new tests, 393/393 pass, tsc clean, claim guard clean
-- 2026-10-05 owner-queue renumbered: a concurrent coordinator and I both wrote it, so WQ-1..6 are its rows and WQ-7/8 are mine, no number reused, duplicate Django row folded into WQ-5
-- 2026-10-05 M5 done: 4 counts-only case drafts in cases/ (50-repo totals, language precision, coverage honesty, unmeasured ranking) + index. No repo names, no paths, no values, no em dashes. All totals reconcile to 433 H\/M rows and 15,532 files read.
-- 2026-10-05 item 13 done: feature-board audit of 8 done rows, 6 TRUE 2 PARTIAL 0 FALSE. Two real defects: REST tool list advertises launchsense_scan_public_repo and launchsense_explain_findings while the MCP route uses launchsense_scan_public (explain_findings has no handler anywhere); and the registry facts / deprecated flag / publish date rows are true only of the local review, never the hosted scan. Every citation re-verified against the file after edits.
+Method for every wave below: depth-1 clone to /tmp/opencode/full, then
+`LAUNCHSENSE_OFFLINE=1 node --experimental-strip-types mcp/review-entry.ts
+--root <dir> --json`. Every HIGH and MEDIUM finding was judged by reading the
+real file at the reported line, and the harness reports an absent file or an
+out-of-range line rather than trusting the scan. Clones cleaned after each wave.
+No GrowthX, nothing pushed, nothing deployed, no secret values written anywhere.
+
+---
+
+2026-10-05 waves 06 to 10 complete, 50 repos reviewed (PHP/Ruby, C/C++,
+crypto/ML, infra, mobile/other), all depth-1 and all offline. 1241 findings
+total, 433 of them HIGH or MEDIUM. 13 of those 433 rows were flagged as
+fabricated, and every one is the same rule bug: `license.policy` emits
+`path "(repo)"` line 1, a placeholder path that does not exist, so a reviewer
+cannot open it. No model-fabricated finding in these 50 repos. Live secrets
+found: 8 entries in owner-queue.md, of which 2 are genuine committed signing
+secrets (sidekiq `secret_key_base`, dharmpatel28 Django `SECRET_KEY`), 13 are
+committed private keys that upstream documents as test or tutorial material
+(civetweb 11, mongoose 1), 1 is a weak committed DB password in a homelab
+repo (homelab immich), and 2 are config literals queued for their naming
+context rather than because a key is exposed. Top repeated classes of error,
+in order of volume: credential-pattern regex firing on ordinary code, 200+
+false highs across Kotlin, Swift, Ruby, C and Python, the global 20-per-rule
+match cap silently filling with those false positives, `code.eval-use` firing
+on PyTorch `model.eval()`, `code.inner-html` firing on generated, vendored and
+first-party markup builders, and license advice issued where a LICENSE file
+already exists. Precision is the single blocker on this analyzer for
+non-JavaScript ecosystems, not recall.- 2026-10-05 item 14 done: feature-board plans for 5 noted rows, plans only, zero code. Key line for the owner: the two bot rows depend on the 12pct precision measurement, so precision work is upstream of both, and whose-GitHub-quota is one question that unblocks two rows.

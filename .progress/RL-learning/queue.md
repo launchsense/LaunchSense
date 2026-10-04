@@ -30,7 +30,7 @@ Every audit cites the real file/line; a claim with no code is a defect.
     - Deep local reads: vendored tree named, SBOM omissions, model card.
     - More code patterns: innerHTML, child_process, weak crypto, CORS wildcard ids.
     Output: per row TRUE / PARTIAL / FALSE with file:line, plus a fixes list.
-14. TODO Write plans for noted rows (feature-board-plans.md), no code:
+14. DONE Write plans for noted rows (feature-board-plans.md), no code: 5 noted rows, each with what-it-is, seam, never-list, and owner decisions
     - 24/7 public-repo learner (needs a quota owner first, per the row).
     - Outreach bot (disclosure flow: CONTRIBUTING/security policy, person approves batch one).
     - Relationship questions.
