@@ -89,7 +89,7 @@ function main(): void {
     process.exit(2);
   }
   console.error(
-    "Secrets-only run. This is not a full review: deps, licenses, hygiene, " +
+    "Secrets-only run. This is not a full review: risky code shapes, deps, licenses, hygiene, " +
     "live fetch, DNA, readiness, and standards are not checked. " +
     "For the full local review, run: " +
     "node --experimental-strip-types mcp/review-entry.ts --root <dir>"
@@ -115,6 +115,14 @@ function main(): void {
   const creds = all.filter((h) => h.ruleId === "secret.credential-pattern");
   console.log("");
   console.log(`TOTAL credential-pattern hits: ${creds.length}`);
+  console.log("");
+  const other = all.filter((h) => h.ruleId !== "secret.credential-pattern");
+  const byRule = new Map<string, number>();
+  for (const h of other) byRule.set(h.ruleId, (byRule.get(h.ruleId) ?? 0) + 1);
+  console.log(`Other-rule hits the analyzer held but this list does not print: ${other.length}`);
+  for (const [rule, n] of [...byRule.entries()].sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${String(n).padStart(4)}  ${rule}`);
+  }
   console.log("");
 
   // Group by the syntactic shape, so the failure modes are visible rather than a
