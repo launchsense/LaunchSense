@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { matchCodePattern } from "../shared/analyzers/codePatterns.ts";
 import { generatedMarkers } from "../shared/review/extraChecks.ts";
 import { analyzeLicenses } from "../shared/analyzers/licenses.ts";
@@ -24,6 +25,63 @@ describe("local review", () => {
     assert.equal(report.status, "partial");
     assert.match(report.lockNote, /incomplete/);
     assert.ok(report.findings.some((item) => item.ruleId === "license.policy"));
+  });
+});
+
+describe("OSV honesty", () => {
+  // A lockfile we read but did not query is a weaker claim than having no lockfile.
+  // If these two ever read the same, the report overstates what was checked.
+  it("says a lockfile was in hand and unchecked, not that there was nothing to check", () => {
+    const lock = {
+      path: "package-lock.json",
+      content: JSON.stringify({ packages: { "": {}, "node_modules/leftpad": { version: "1.0.0" } } }),
+    };
+    const withLock = buildLocalReport(
+      [{ path: "package.json", content: JSON.stringify({ license: "MIT" }) }, lock],
+      [],
+      null,
+      null,
+      lock,
+    );
+    const withoutLock = buildLocalReport(
+      [{ path: "package.json", content: JSON.stringify({ license: "MIT" }) }],
+      [],
+      null,
+      null,
+      undefined,
+    );
+    const held = withLock.notChecked.find((item) => item.scope === "OSV")?.reason ?? "";
+    const absent = withoutLock.notChecked.find((item) => item.scope === "OSV")?.reason ?? "";
+    assert.match(held, /package-lock\.json was in the files read and its versions were not queried/);
+    assert.match(absent, /No lockfile was in the files read/);
+    assert.notEqual(held, absent);
+  });
+
+  it("keeps partial a partial: an unqueried lockfile never turns a scan complete", () => {
+    const lock = {
+      path: "package-lock.json",
+      content: JSON.stringify({ packages: { "": {}, "node_modules/leftpad": { version: "1.0.0" } } }),
+    };
+    const report = buildLocalReport([lock], [], null, null, lock);
+    assert.equal(report.status, "partial");
+  });
+});
+
+describe("the local walk never enters the working notes folder", () => {
+  const entry = readFileSync(new URL("../mcp/review-entry.ts", import.meta.url), "utf8");
+
+  it("skips .progress by name in the skip set", () => {
+    assert.match(entry, /const SKIP = new Set\(\[[\s\S]*"\.progress"/);
+  });
+
+  it("discloses the skip rather than hiding it", () => {
+    assert.match(entry, /name === "\.progress"/);
+    assert.match(entry, /Working notes folder\. Not read/);
+  });
+
+  it("does not name the private folders inside it", () => {
+    // The skip reason describes the folder, never what is in it.
+    assert.ok(!/StableSense|reserach-policy/.test(entry), "the entry must not name private folders");
   });
 });
 
