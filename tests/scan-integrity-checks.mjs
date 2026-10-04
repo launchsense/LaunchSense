@@ -44,7 +44,7 @@ describe("debugger rule precision", () => {
       { path: "src/prose.ts", content: "// A debugger statement halts execution.\nconst r = 'secret.debugger-statement';" },
       { path: "src/real.ts", content: "function f() {\n  debugger;\n}" },
     ]);
-    const hits = matches.filter((m) => m.ruleId === "secret.debugger-statement");
+    const hits = matches.filter((m) => m.ruleId === "code.debugger-statement");
     assert.equal(hits.length, 1);
     assert.equal(hits[0]?.path, "src/real.ts");
   });

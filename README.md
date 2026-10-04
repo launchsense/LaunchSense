@@ -8,7 +8,7 @@ You built the app with an AI coding tool. It works, and you are about to share t
 
 - Public repo, no account. Paste the GitHub URL. A guest read stops at 200 files and about 2MB.
 - Private repo, or a larger public read. Sign in with GitHub. The scan uses your token and stops at 1,000 files and about 8MB.
-- MCP. A coding tool review that reads the files on your machine is not running yet.
+- Alpha harness, in this repository. Run `sh install.sh`. The review reads the files on your machine and does not download GitHub. It is not a control on the live site until that site is deployed from this commit.
 
 ## How to use
 
@@ -74,7 +74,7 @@ The findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASV
 ## Limits
 
 - A guest paste uses the shared GitHub quota. A signed-in scan uses that person's token and does not change the guest meter.
-- A coding tool review that reads the files on your machine is not running yet.
+- A coding tool review that reads the files on your machine is alpha in this repository. Run sh install.sh. It is not on the live site until this commit is deployed.
 - GitHub quota for guest scans is shared, so heavy use can pause those scans until the quota resets.
 - A guest scan reads at most 200 files and 2 MB. Signed in, the cap is 1,000 files and about 8MB. The rest is listed as not checked.
 - Plain words explanations use an AI provider when one is configured. None is configured in this release, so fixed wording is shown.

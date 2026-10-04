@@ -10,7 +10,7 @@ export function SiteFooter() {
   return (
     <footer className="home-footer" aria-label="Product details">
       <p>
-        Read the <a href={DOCS.howItWorks}>how it works</a>,{" "}
+        Read the <a href="/case-studies">case studies</a>, <a href={DOCS.howItWorks}>how it works</a>,{" "}
         <a href={DOCS.limits}>limits</a>, <a href={DOCS.privacy}>privacy note</a>,{" "}
         <a href={DOCS.about}>about page</a>, and <a href={DOCS.roadmap}>roadmap</a>.
       </p>

@@ -15,12 +15,15 @@ OSV, and CWE. They are signals with a caveat, not a certification. Repeated
 functions, and a wider read of code bloat, are the next rules in that layer.
 They are not checked yet.
 
+The job runs in the coding tool, on the files already on the machine. This website is the first look. Alpha is the name of this stage. Alpha has no login.
+
 Three ways in:
 
-- Public repo, no account. Paste the URL. This is the guest read: 200 files and about 2MB.
-- Private repo, or a larger public read. Sign in with GitHub. The scan uses your
-  token for one archive and stops at 1,000 files and about 8MB.
-- MCP. A coding tool review that reads the files on your machine is not running yet.
+- Public repo, no account. Paste the URL. This is the guest read: 200 files and about 2MB. This is the live site.
+- Private repo, or a larger public read. Sign in with GitHub. In this repository the scan uses your token for one archive and stops at 1,000 files and about 8MB. That signed-in read is not on the live site until this commit is deployed.
+- Alpha harness. `install.sh` in this repository installs the MCP command and one skill. The review reads the working tree and does not download GitHub. It is not a control on the live site until that site is deployed from this commit.
+
+Unknown stays unknown. A model may quote one next look. That quote is not a finding. If the same suggestion keeps appearing, a person may later turn it into a fixed check. The model does not add the check.
 
 Status: Phase 1, shipped and live at `https://harmless-chihuahua-667.convex.site`.
 Source: `https://github.com/launchsense/LaunchSense`.
@@ -233,7 +236,7 @@ builder is about to hit publish.
   your GitHub token on our server to download that one repository, including one
   private repo you can already read. We do not store the file contents. We delete
   the token when you sign out. A coding tool review that reads the files on your
-  machine is not running yet.
+  machine is alpha in this repository. Run sh install.sh. It is not on the live site until this commit is deployed.
 - No raw file contents are stored, ever. Only owner, repo, commit SHA, file paths,
   sizes, hashes, and redacted finding snippets.
 - No raw secret values, anywhere. One redaction function covers every output path:
@@ -245,7 +248,7 @@ builder is about to hit publish.
 ## Known limits, stated up front
 
 - The running scan is a public paste, or a signed-in read of one repository.
-  A coding tool review that reads the files on your machine is not running yet.
+  A coding tool review that reads the files on your machine is alpha in this repository. Run sh install.sh. It is not on the live site until this commit is deployed.
 - 200 files and about 2MB per guest scan. 1,000 files and about 8MB when signed in.
 - No browser rendering. The live check reads served HTML, not a rendered phone.
 - The check runs when you press Run, or from the read-only MCP endpoints. There is no
@@ -445,8 +448,7 @@ understand. It now scans this document too.
 
 ## What is not built, plainly
 
-There is no saved history. A coding tool review that reads the files on your
-machine is not running yet. Sign-in reads one repository, up to 1,000 files and
-about 8MB, and then stops.
+There is no saved history. Paid login for the harness is not built. The auth slot is empty. Sign-in on the website reads one repository, up to 1,000 files and
+about 8MB, and then stops. The alpha harness is in this repository and is not on the live site until this commit is deployed.
 There is no monitoring, no browser rendering, and no share revocation. The
 interface says so.

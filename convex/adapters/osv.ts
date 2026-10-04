@@ -65,7 +65,7 @@ export async function queryOsvBatch(
   }
   let data: unknown;
   try {
-    data = (await response.json()) as unknown;
+    data = await response.json();
   } catch {
     return { timedOut: true, results: capped.map(() => []) };
   }
@@ -94,5 +94,30 @@ export async function queryOsvBatch(
       }];
     });
   });
+  await fillEmptySummaries(results);
   return { timedOut: false, results };
+}
+
+async function fillEmptySummaries(results: OsvVuln[][]): Promise<void> {
+  const missing: OsvVuln[] = [];
+  for (const group of results) {
+    for (const vuln of group) {
+      if (vuln.summary.length === 0) missing.push(vuln);
+    }
+  }
+  const batch = missing.slice(0, 8);
+  await Promise.all(batch.map(async (vuln) => {
+    try {
+      const response = await fetch(`https://api.osv.dev/v1/vulns/${encodeURIComponent(vuln.id)}`, {
+        signal: AbortSignal.timeout(OSV_TIMEOUT_MS),
+      });
+      if (response.status !== 200) return;
+      const data = await response.json();
+      if (typeof data !== "object" || data === null) return;
+      const summary = (data as Record<string, unknown>)["summary"];
+      if (typeof summary === "string" && summary.length > 0) vuln.summary = summary.slice(0, 200);
+    } catch {
+      // An id without a fetched record stays an id. It is not a pass.
+    }
+  }));
 }

@@ -82,7 +82,7 @@ export default function Why() {
             A skill in the chat can read a repo. It still falls short. It runs only when you open a chat. It keeps no shared memory of the last check. It gives you no link a reviewer can open. It does not keep a fixed count of what was not read.
           </p>
           <p>
-            A coding tool review that reads the files on your machine is not running yet. The report names Cursor, Codex, or Claude only when the repo shows that tool.
+            The review that reads the files on your machine is alpha, in this repository. Run install.sh from the repo. It is not a control on the live site until that site is deployed from this commit. The website paste stays the first look. The report names Cursor, Codex, or Claude only when the repo shows that tool.
           </p>
           <p>
             We do not edit the repo. The prompt goes back into the same tool.
@@ -243,7 +243,7 @@ export default function Why() {
             Sign in to read one private repo, or more of a public one, up to 1,000 files and about 8MB.
           </p>
           <p>
-            {SIGN_IN_POLICY} A coding tool review that reads the files on your machine is not running yet.
+            {SIGN_IN_POLICY} A coding tool review that reads the files on your machine is alpha in this repository. Run install.sh. It is not on the live site until this commit is deployed.
           </p>
           <ul>
             <li>Partial result is never a pass.</li>

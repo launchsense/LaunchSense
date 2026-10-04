@@ -49,7 +49,7 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 ## Not built yet
 
 - No saved projects, no history, no rescan across sessions.
-- A coding tool review that reads the files on your machine is not running yet. There is no code upload.
+- A coding tool review that reads the files on your machine is alpha in this repository. Run sh install.sh. It does not upload code. It is not on the live site until this commit is deployed.
 - No monitoring and no scheduled scans.
 - No GitHub App installation scan yet. That connected read is on the roadmap, see `ROADMAP.md`. Sign-in today downloads one archive with the person's token.
 - No runtime performance data. GitHub does not expose it.
