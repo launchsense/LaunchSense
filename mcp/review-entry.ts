@@ -78,8 +78,11 @@ function walk(root: string): { files: ReviewFile[]; skipped: NotChecked[] } {
     }
     for (const name of names) {
       if (SKIP.has(name)) {
+        const scope = relative(root, join(dir, name)).split("\\").join("/");
         if (name === "vendor" || name === "third_party") {
-          skipped.push({ scope: name, reason: "Vendored tree was not read, so its notices were not checked." });
+          skipped.push({ scope, reason: "Vendored tree was not read, so its notices were not checked." });
+        } else {
+          skipped.push({ scope, reason: `Skipped directory ${name} was not read, so its notices were not checked.` });
         }
         continue;
       }
