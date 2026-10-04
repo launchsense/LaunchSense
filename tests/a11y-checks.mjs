@@ -67,28 +67,31 @@ describe("skip link", () => {
     for (const route of ['"/s/"', '"/p/"']) {
       assert.ok(app.includes(route), `App does not handle ${route}`);
     }
-    assert.match(app, /className="skip-link"/);
-    assert.match(app, /href="#main-content"/);
-    assert.match(app, /Skip to content/);
+    const frame = readFileSync(join(repo, "src/features/site/SiteFrame.tsx"), "utf8");
+    assert.match(frame, /className="skip-link"/);
+    assert.match(frame, /href="#main-content"/);
+    assert.match(frame, /Skip to content/);
   });
 
   it("targets a focusable main landmark", () => {
+    const frame = readFileSync(join(repo, "src/features/site/SiteFrame.tsx"), "utf8");
+    assert.match(frame, /id="main-content"/);
+    assert.match(frame, /tabIndex=\{-1\}/);
     for (const page of ["Home.tsx", "SharePage.tsx", "PassportPage.tsx"]) {
       const source = readFileSync(join(repo, "src/pages", page), "utf8");
-      assert.match(source, /id="main-content"/, `${page} has no skip target`);
-      assert.match(source, /tabIndex=\{-1\}/, `${page} skip target is not focusable`);
+      assert.match(source, /SiteFrame/, `${page} does not use the site frame`);
     }
   });
 });
 
 describe("every page has one main landmark", () => {
   it("no page renders two", () => {
+    const frame = readFileSync(join(repo, "src/features/site/SiteFrame.tsx"), "utf8");
+    const mains = [...frame.matchAll(/<main[^>]*id="main-content"/g)];
+    assert.equal(mains.length, 1);
     for (const page of ["Home.tsx", "SharePage.tsx", "PassportPage.tsx"]) {
       const source = readFileSync(join(repo, "src/pages", page), "utf8");
-      const mains = [...source.matchAll(/<main[^>]*id="main-content"/g)];
-      // Share and Passport each have a loading state plus a loaded state, but
-      // only one of them is rendered at a time.
-      assert.ok(mains.length >= 1, `${page} has no main landmark`);
+      assert.doesNotMatch(source, /<main/, `${page} adds a second main`);
     }
   });
 });

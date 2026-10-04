@@ -24,6 +24,7 @@ import type * as github_readToken from "../github/readToken.js";
 import type * as github_sessionToken from "../github/sessionToken.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as mcpHttp from "../mcpHttp.js";
 import type * as mcpLimit from "../mcpLimit.js";
 import type * as projects from "../projects.js";
 import type * as scans_actions from "../scans/actions.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   "github/sessionToken": typeof github_sessionToken;
   health: typeof health;
   http: typeof http;
+  mcpHttp: typeof mcpHttp;
   mcpLimit: typeof mcpLimit;
   projects: typeof projects;
   "scans/actions": typeof scans_actions;

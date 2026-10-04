@@ -2,7 +2,7 @@
 
 What this release does not do. Everything here is stated so nothing looks finished when it is not.
 
-LaunchSense does not say if the product will sell. It does not judge the market or the idea. The website paste checks duplicate files and large files. The installed review also checks repeated function text.
+LaunchSense does not say if the product will sell. It does not judge the market or the idea. The website paste and the hosted MCP check duplicate files and large files.
 
 ## Code we can read
 
@@ -21,7 +21,7 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 
 ## Checks we do not run
 
-- The website paste does not ask deps.dev. The installed review may ask deps.dev, then ClearlyDefined. An empty answer stays unknown.
+- The website paste and the hosted MCP do not ask deps.dev. An empty answer stays unknown.
 - Vulnerability lookup covers npm, PyPI, and Go. Timeouts show as unknown, never as safe. For npm, exact installed versions are used from `package-lock.json` when that file is present.
 - License notes are signals, not legal advice.
 - Authentication and runtime behaviour are not tested.
@@ -49,7 +49,7 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 ## Not built yet
 
 - No saved projects, no history, no rescan across sessions.
-- The installed review reads files on your machine and does not upload them. The live home page shows the install command.
+- The hosted MCP reads one public GitHub repo on our server. The Connect page shows the address. It does not read a repo that exists only on a laptop. Two scans an hour from one caller, and eight an hour in total, then that route pauses.
 - No monitoring and no scheduled scans.
 - No GitHub App installation scan yet. That connected read is on the roadmap, see `ROADMAP.md`. Sign-in today downloads one archive with the person's token.
 - No runtime performance data. GitHub does not expose it.

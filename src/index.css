@@ -5,16 +5,16 @@
 
 :root {
   /* Palette. Roles, not colours, so a swap does not touch component rules. */
-  --paper: #f6f4ef;
-  --surface: #f8f7f4;
-  --ink: #1c1b19;
-  --ink-muted: #4a463f;
-  --ink-faint: #5c564c;
-  --action: #1d4e89;
+  --paper: #eef1f4;
+  --surface: #f7f9fb;
+  --ink: #17202a;
+  --ink-muted: #3d4c5c;
+  --ink-faint: #3a4a5a;
+  --action: #0c4f4a;
   --action-text: #ffffff;
-  --line: #d9d3c7;
-  --line-strong: #5e584e;
-  --focus: #1d4e89;
+  --line: #c5ced6;
+  --line-strong: #4a5968;
+  --focus: #0c4f4a;
   --focus-light: #ffffff;
 
   /* Type scale. Every step is an obvious jump, so hierarchy reads without
@@ -37,7 +37,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Kosugi", system-ui, sans-serif; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Libre Franklin", system-ui, sans-serif; }
 main { max-width: var(--layout); margin: 8vh auto; padding: 20px; }
 
 h1 { font-size: var(--text-display); line-height: 1.15; }
@@ -120,6 +120,8 @@ section { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 16px
     transition-duration: 0.01ms;
     scroll-behavior: auto;
   }
+  .beat-early { display: none; }
+  h1.beat { animation: none; }
 }
 
 .home { max-width: var(--layout-wide); padding: 24px; margin: 0 auto 8vh; }
@@ -167,26 +169,63 @@ article[aria-label="Scan result"] {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0 20px;
+  gap: 16px;
+  max-width: var(--layout-wide);
+  margin: 0 auto;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--line);
+  position: relative;
 }
 .brand { font-weight: 700; font-size: var(--text-md); color: inherit; text-decoration: none; }
-.menu-links { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.menu-links a { text-decoration: none; }
+.menu-toggle { display: none; }
+.menu-links { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.menu-links a { color: var(--ink); text-decoration: none; min-height: var(--tap); display: inline-flex; align-items: center; }
 .menu-links a[aria-current="page"] { font-weight: 700; }
-.menu-links .ghost {
-  background: transparent;
-  color: var(--action);
-  border: 1px solid var(--line-strong);
-  padding: 6px 10px;
-  border-radius: var(--radius);
-  min-height: var(--tap);
-}
 .menu-links .auth-state { color: var(--ink-faint); font-size: var(--text-sm); }
+button.text-button {
+  background: transparent;
+  color: var(--ink);
+  border: 0;
+  padding: 10px 0;
+  min-height: var(--tap);
+  width: auto;
+}
+.account { position: relative; }
+.account-panel {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  padding: 8px 14px;
+  z-index: 2;
+}
+a.button {
+  display: inline-flex;
+  align-items: center;
+  background: var(--action);
+  color: var(--action-text);
+  text-decoration: none;
+  min-height: var(--tap);
+  padding: 10px 16px;
+}
+.home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 20px; }
+.beat-early, h1.beat { font-size: var(--text-xl); font-weight: 600; margin: 0 0 6px; }
+.beat-1 { animation: beat-in 0.45s ease 0.1s both; }
+.beat-2 { animation: beat-in 0.45s ease 0.8s both; }
+h1.beat { animation: beat-in 0.45s ease 1.5s both; margin-top: 6px; }
+@keyframes beat-in { from { opacity: 0; } to { opacity: 1; } }
+.cap-dialog {
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  max-width: 36rem;
+  padding: 20px;
+}
+.cap-dialog::backdrop { background: rgba(23, 32, 42, 0.45); }
 
 .install-command {
-  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   font-size: var(--text-sm);
   background: var(--surface);
   color: var(--ink);
@@ -328,6 +367,23 @@ button.ghost {
 
 @media (max-width: 720px) {
   .paste-next { grid-template-columns: 1fr; }
+  .menu-toggle { display: inline-flex; }
+  .menu-links {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    padding: 8px 24px 16px;
+    z-index: 3;
+  }
+  .menu-links.is-open { display: flex; }
+  .account-panel { position: static; border: 0; padding: 0; }
 }
 
 /* Small screens. Buttons go full width so every target clears 44px. */
@@ -338,7 +394,9 @@ button.ghost {
   button + button { margin-left: 0; }
   .scan-secondary { flex-direction: column; }
   .tabs [role="tab"] { width: 100%; }
-  .top-menu { flex-wrap: wrap; }
+  .top-menu { flex-wrap: nowrap; }
+  .top-menu button { width: auto; }
+  a.button { width: 100%; }
 }
 
 /* Intermediate width. The check list and the report stay readable rather than

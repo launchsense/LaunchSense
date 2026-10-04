@@ -1,11 +1,11 @@
 ---
 name: launchsense
-description: Use when a coding tool should run LaunchSense on the files already open. Governs the local MCP review. Does not scan GitHub and does not invent findings.
+description: Use when a checkout of LaunchSense should review files already open. The public connection is the hosted MCP URL. This skill does not invent findings.
 ---
 
 # LaunchSense
 
-The job runs here, on the files already on this machine. The website is the first look, not this job.
+This skill is for a checkout of LaunchSense. The public connection is `https://harmless-chihuahua-667.convex.site/mcp`. People do not clone this repo to use that address.
 
 ## When to call the review
 

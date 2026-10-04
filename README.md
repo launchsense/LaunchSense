@@ -4,11 +4,22 @@ LaunchSense checks the codebase, not the business. It does not say if the app wi
 
 You built the app with an AI coding tool. It works, and you are about to share the repo. You do not know what to ask Codex, so the check never starts. LaunchSense already knows what to ask. It says what is wrong, in plain words, and gives a prompt you can paste. It never changes your code.
 
+## AI, and where it is going
+
+The checks are fixed. A model does not invent a finding, and it does not choose which checks run.
+
+AI is already in the product, in two places. Both are still evolving.
+
+- Plain words. When an AI provider is configured, it rewrites a finding the checks already produced. If it fails, fixed wording is used. None is configured in this release, so fixed wording is what you see.
+- Order. A decision model may reorder findings inside one severity band. If it does not answer, a fixed table sets the order. This release uses that table.
+
+The next step is a reinforcement learning loop, and it is not a trained model yet. A later scan shows what was fixed, what is still broken, and what is unknown. A person can use that record to change a check. The model does not add the check, and it does not train on the code.
+
 ## Three ways in
 
 - Public repo, no account. Paste the GitHub URL. A guest read stops at 200 files and about 2MB.
 - Private repo, or a larger public read. Sign in with GitHub. The scan uses your token and stops at 1,000 files and about 8MB.
-- Alpha harness. On the live site, open Install the review. From a checkout, run `sh install.sh`. The review reads the files on your machine and does not download GitHub.
+- Coding tool. On the live site, open Connect LaunchSense. Add `https://harmless-chihuahua-667.convex.site/mcp`. That call reads one public GitHub repo on our server. You do not clone this repo.
 
 ## How to use
 
@@ -28,7 +39,7 @@ Things a vibe coder has no name for:
 - A missing README, tests, or CI.
 - Duplicate files and huge files.
 
-The installed review also checks repeated function text. The website paste checks duplicate files and large files.
+The website paste and the hosted MCP check duplicate files and large files.
 
 ## Why use it
 
@@ -74,10 +85,10 @@ The findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASV
 ## Limits
 
 - A guest paste uses the shared GitHub quota. A signed-in scan uses that person's token and does not change the guest meter.
-- The installed review reads the files on your machine. The live home page shows the install command. It does not upload code.
+- The hosted MCP reads a public GitHub repo on our server. The Connect page shows the address. It does not read a repo that exists only on your laptop.
 - GitHub quota for guest scans is shared, so heavy use can pause those scans until the quota resets.
 - A guest scan reads at most 200 files and 2 MB. Signed in, the cap is 1,000 files and about 8MB. The rest is listed as not checked.
-- Plain words explanations use an AI provider when one is configured. None is configured in this release, so fixed wording is shown.
+- Plain words and ordering are described under "AI, and where it is going." None is configured in this release, so fixed wording is shown, and the fixed table sets the order.
 - More detail: `docs/LIMITS.md`. Privacy detail: `docs/PRIVACY.md`.
 
 ## Run it locally
