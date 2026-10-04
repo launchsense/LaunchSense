@@ -20,7 +20,7 @@ Rule: a `noted` row gets a PLAN only (never code, owner agreement first). A
 `done` row gets an AUDIT (does the code actually do what the row claims).
 Every audit cites the real file/line; a claim with no code is a defect.
 
-13. TODO Audit done rows against code (feature-board-audit.md):
+13. DONE Audit done rows against code (feature-board-audit.md): 8 done rows, 6 TRUE 2 PARTIAL 0 FALSE, 4 cited fixes
     - Hosted MCP: two launches? caps, 2/hr + 8/hr, no login, no laptop repo.
     - Signed-in scan: 1000 files/8MB, token deleted on sign-out.
     - Policy text on files read: OR expression stays a choice.
