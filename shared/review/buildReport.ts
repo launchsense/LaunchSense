@@ -77,7 +77,7 @@ export interface ReviewReport {
   findings: ReviewFinding[];
   lead: string;
   prompts: string[];
-  orderSource: "jev" | "perplexity" | "table";
+  orderSource: "local" | "jev" | "perplexity" | "table";
   orderNote: string;
   lockNote: string;
   sbom: { tool: string; components: number; omissions: string[] } | null;

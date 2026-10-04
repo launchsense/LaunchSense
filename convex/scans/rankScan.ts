@@ -20,7 +20,7 @@ export const rankScan = internalAction({
   args: { scanId: v.id("scans") },
   returns: v.object({
     order: v.array(v.string()),
-    source: v.union(v.literal("jev"), v.literal("perplexity"), v.literal("table")),
+    source: v.union(v.literal("local"), v.literal("jev"), v.literal("perplexity"), v.literal("table")),
     note: v.string(),
   }),
   handler: async (ctx, args) => {
