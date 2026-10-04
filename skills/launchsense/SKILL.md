@@ -11,6 +11,12 @@ This skill is for a checkout of LaunchSense. The public connection is `https://h
 
 Call `launchsense_scan_repo` when the person wants to know what is wrong before they share. Do not call `launchsense_scan_public` to download a repo. That tool does not download GitHub.
 
+## Full review, not secrets only
+
+The full local review reads the whole tree and runs every check: secrets, risky code, deps, licenses, hygiene, duplicates, large files, plus OSV, registry facts, ordering, one fix prompt, coverage, and the not-checked list.
+
+`tests/corpus-harness.ts` is a secrets-only precision tool. It counts credential-pattern hits so a rule can be judged true or false. It is never a full review and its output is never a pass. A run sheet counts as a check only when it carries the coverage line, the not-checked list quoted as-is, the caps, and the decision source.
+
 ## What you may say
 
 - Repeat the findings, the coverage line, and the not-checked list.

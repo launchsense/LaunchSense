@@ -72,6 +72,12 @@ const POSITIVE_CLAIMS = [
     why: "a clean result must state its scope in the same sentence",
   },
   { phrase: /\bchecks\s+found\s+nothing\b/i, why: "most of the repo was never read" },
+  // A bare "full check passed" reads as if every check ran. The secrets-only
+  // corpus harness is the usual way this lie happens: it counts one rule and
+  // calls the run a check. A verdict is allowed when its scope is named on
+  // the same line, the same rule as "no findings" above.
+  { phrase: /\bfull\s+(check|review|scan)\s+passed\b/i, qualifier: "not checked", why: "a bare full-check verdict hides the checks that did not run" },
+  { phrase: /\bcomplete\s+(check|review|scan)\s+passed\b/i, qualifier: "not checked", why: "a bare complete-check verdict hides the checks that did not run" },
   // The product promises in three public docs that AI never decides what is a
   // finding, only the fixed checks do. The decision lane (Jev, Perplexity) may only
   // ORDER findings the checks already produced. This rule blocks copy that lets a
