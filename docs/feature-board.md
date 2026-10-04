@@ -48,13 +48,66 @@ What it does not do:
 
 ### Local MCP review
 
-- Status: agreed
+- Status: done
 - Named: 2026-10-04
 
-Starts after GitHub sign-in on the website is finished and proven. The coding tool loads our process. That process reads the files already on disk and runs LaunchSense checks and the decision order. It does not call GitHub, and it does not send the repo to the server.
+The coding tool loads the local review. That review reads the files already on disk and runs the shared checks. It does not call GitHub, and it does not send the repo to the server. Alpha has no login. `install.sh` installs the command and one skill.
 
-What it does not do yet:
+What it does not do:
 
-- It does not run. The public MCP route still asks the server to scan GitHub.
+- It does not run on the live website until this commit is deployed.
+- The public HTTP route can still ask the server to scan GitHub. That route is rate limited. It is not the harness.
 - It does not store raw file contents or raw secret values.
 - A model does not add a finding. It may only reorder inside one severity band.
+
+The job to be done lives here: in the coding tool, on the files already open. The website is the basic public check, not that job.
+
+### Policy text on files we already read
+
+- Status: done
+- Named: 2026-10-04
+
+License family names and source-available names are read from text the review already has. An OR expression stays a choice. Unknown stays unknown. A model may quote a next look. That quote is not a finding. This is not a full SPDX grammar.
+
+### Lockfile inventory and transitive advisories
+
+- Status: done
+- Named: 2026-10-04
+
+The alpha review lists direct and transitive npm packages from the lockfile. It asks OSV about up to 50 of those exact versions and lists how many were not queried. A missing lockfile stays incomplete. Install scripts are named and not run. A deprecated flag and a publish date come from deps.dev. Archived status stays unknown. The website OSV path still stops at 50 targets.
+
+### Registry facts
+
+- Status: done
+- Named: 2026-10-04
+
+When the review is online it asks deps.dev, then ClearlyDefined if that is empty. Scorecard is a dated fact when a GitHub repo is named. Offline, those stay not checked. Not a score, and not a legal source.
+
+### Repeated functions and dead copies
+
+- Status: done
+- Named: 2026-10-04
+
+The alpha review reports repeated 12-line function text, a generated marker on a large file, and duplicate files. Dynamic import stays unknown. This is not a quality score.
+
+### Deep local reads
+
+- Status: done
+- Named: 2026-10-04
+
+The alpha review can name a vendored tree it did not read, a host it did not contact, a lockfile SBOM with omissions, and a model or dataset card. ScanCode is not included.
+
+### Relationship questions
+
+- Status: noted
+- Named: 2026-10-04
+- Launch: later
+
+A visible link between the project and a package it ships, shown as a question the owner can dismiss. A shared name is not a finding. Corporate commit emails stay in this row.
+
+### More code patterns
+
+- Status: done
+- Named: 2026-10-04
+
+New findings use code.* ids. Old secret.* ids still score. Added innerHTML, child_process exec, weak crypto, and a CORS wildcard. SQL stays a shape, not a proved injection.

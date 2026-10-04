@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { registerStaticRoutes } from "@convex-dev/static-hosting";
-import { components, api } from "./_generated/api";
+import { components, api, internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 
@@ -58,6 +58,11 @@ http.route({
     const record = (body ?? {}) as Record<string, unknown>;
     const repoUrl = typeof record["repoUrl"] === "string" ? record["repoUrl"] : "";
     if (!repoUrl) return json({ error: "repoUrl is required." }, 400);
+    const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, { caller: forwarded });
+    if (!gate.allowed) {
+      return json({ error: "This route is paused until the shared quota window resets." }, 429);
+    }
     const scan = await ctx.runAction(api.scans.actions.runScan, { repoUrl });
     if (scan.status === "failed") return json({ error: "Scan could not start.", scanId: scan.scanId }, 422);
     const analyzed = await ctx.runAction(api.scans.analyze.analyzeScan, { scanId: scan.scanId });
@@ -75,6 +80,38 @@ http.route({
         line: f.line,
       })),
     });
+  }),
+});
+
+http.route({
+  path: "/api/mcp/usage",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Send JSON usage counts." }, 400);
+    }
+    const record = (body ?? {}) as Record<string, unknown>;
+    const tier = typeof record["tier"] === "string" ? record["tier"] : "";
+    if (tier === "enterprise") return json({ stored: false });
+    const counts = record["ruleCounts"];
+    if (typeof counts !== "object" || counts === null) return json({ error: "ruleCounts is required." }, 400);
+    const ruleCounts = JSON.stringify(counts);
+    if (ruleCounts.length > 4000 || /"path"|"content"|"snippet"|"title"/.test(ruleCounts)) {
+      return json({ error: "Usage counts cannot include file text." }, 400);
+    }
+    await ctx.runMutation(internal.mcpLimit.recordUsage, {
+      stage: typeof record["stage"] === "string" ? record["stage"] : "alpha",
+      tier,
+      harness: typeof record["harness"] === "string" ? record["harness"] : "local",
+      version: typeof record["version"] === "string" ? record["version"] : "alpha",
+      durationMs: typeof record["durationMs"] === "number" ? record["durationMs"] : 0,
+      orderSource: typeof record["orderSource"] === "string" ? record["orderSource"] : "table",
+      ruleCounts,
+    });
+    return json({ stored: true });
   }),
 });
 

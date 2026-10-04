@@ -8,7 +8,7 @@ LaunchSense is for a public repo and a private one.
 
 - Public repo: paste the URL. No account. A guest read stops at 200 files and about 2MB.
 - Private repo, or a larger public read: sign in with GitHub. The scan uses your token and stops at 1,000 files and about 8MB.
-- MCP: a coding tool review that reads the files on your machine is not running yet.
+- Alpha harness: a coding tool review that reads the files on your machine. Run sh install.sh from this repository. It is not on the live site until this commit is deployed.
 
 Two useful moments:
 

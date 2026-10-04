@@ -192,6 +192,17 @@ export default defineSchema({
     count: v.number(),
     updatedAt: v.number(),
   }).index("by_key", ["key"]).index("by_day", ["day"]),
+  usageDiagnostics: defineTable({
+    day: v.string(),
+    stage: v.string(),
+    tier: v.string(),
+    harness: v.string(),
+    version: v.string(),
+    durationMs: v.number(),
+    orderSource: v.string(),
+    ruleCounts: v.string(),
+    createdAt: v.number(),
+  }).index("by_day", ["day"]),
   analyticsEvents: defineTable({
     day: v.string(),
     kind: v.union(

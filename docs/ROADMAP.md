@@ -20,10 +20,35 @@ The guest scan works today and needs no account.
 - Missions: the next actions worth taking, in order.
 - One repository archive per scan instead of one request per file.
 
-## Being built
+## Alpha
 
-**Connected repository deep scan.** Sign in with GitHub, install a read-only app
-on the repositories you choose, and scan deeper than a guest scan can.
+**Local review in the coding tool.** `install.sh` installs the MCP command and one skill. The review reads the files on the machine. It does not download GitHub. Alpha has no login. An auth slot is present and not enforced.
+
+The website stays the first look: paste a public repo, read a report, copy a prompt. Case studies are a page. None are published until a real story exists.
+
+Unknown stays unknown. A model may quote one next look. That quote is not a finding. Repeated quotes are how a person later adds a fixed check.
+
+Usage counts, after agreement, are on for alpha and pro. Enterprise leaves them off. The counts are rule ids, not code.
+
+## Later
+
+Paid auth can use the empty slot. Pro keeps usage counts on. Enterprise keeps them off.
+
+The guest paste and the signed-in archive read stay as they are. A GitHub App installed on selected repositories is not this build.
+
+## What this stage still will not do
+
+- It does not say the app will sell.
+- It does not edit the repo.
+- It does not turn unknown into a clearance.
+- It does not send file text in the usage share.
+
+## Older note, not the current build
+
+**Connected repository read.** An earlier note described a GitHub App on selected repositories. That is not what alpha is building.
+
+Sign in with GitHub, install a read-only app
+on the repositories you choose, and read further than a guest scan can.
 
 Why it is worth building: a guest scan is deliberately bounded. It reads public
 data only, stops at 200 files and about 2MB, and shares the GitHub quota that

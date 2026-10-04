@@ -35,6 +35,9 @@ alone, about to hit publish, cannot be misled.
 5. **Buttons say what they do.** `Run scan`, not `Get started`.
 6. **Honest beats impressive.** No fake urgency, no trophy, no celebration when the
    result is clean.
+7. **The site is the front door.** The page can explain the harness. It does not
+   look like the harness already ran on the visitor's machine. Coverage stays in
+   the same box as the answer.
 
 ## Colours and sizes
 

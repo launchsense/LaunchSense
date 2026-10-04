@@ -31,7 +31,7 @@ Who they trust on this decision: their AI coding tool (Cursor, Claude, v0) and t
 Would they pay: yes. CheckVibe charges from $24 per month and locks its fix prompts behind the paid plan. People already pay to have their AI-built app checked. The pain is big enough.
 
 PRODUCT
-Onboarding: a public repo is one paste. A guest read stops at 200 files and about 2MB. Sign in with GitHub to read one private repo, or more of a public one, up to 1,000 files and about 8MB. A coding tool review that reads the files on the machine is not running yet. In the first two minutes they see real findings in their own repo, and they leave knowing the exact thing to tell their AI tool next. That is the aha moment.
+Onboarding: a public repo is one paste. A guest read stops at 200 files and about 2MB. Sign in with GitHub to read one private repo, or more of a public one, up to 1,000 files and about 8MB. A coding tool review that reads the files on the machine is alpha in this repository. In the first two minutes they see real findings in their own repo, and they leave knowing the exact thing to tell their AI tool next. That is the aha moment.
 
 The core loop (user stories, written by me):
 - I paste my repo and get the truth about it in plain words.

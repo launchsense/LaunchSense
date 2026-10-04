@@ -102,9 +102,49 @@ const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[
     checklist: ["Remove console noise, keeping one intentional error log per failure path."],
   },
   "secret.sql-pattern": {
-    title: "Check database queries for injection",
-    why: "String-built queries let crafted input run database commands.",
-    checklist: ["Use parameterized queries everywhere.", "Review each flagged query by hand."],
+    title: "Check the query shape",
+    why: "The line matches SELECT ... FROM. That does not prove injection.",
+    checklist: ["Read the flagged line.", "Use a parameter if the query is built from text."],
+  },
+  "code.eval-use": {
+    title: "Review eval calls",
+    why: "Eval turns text into code. This is the shape of a call, not proof it is reachable.",
+    checklist: ["Find the eval call.", "Replace it if the string is not fully trusted."],
+  },
+  "code.debugger-statement": {
+    title: "Remove debugger statements",
+    why: "A debugger statement can freeze the app for anyone who opens it.",
+    checklist: ["Delete the debugger statement."],
+  },
+  "code.debug-leftover": {
+    title: "Clean up debug output",
+    why: "Console output can leak internals.",
+    checklist: ["Remove console noise you do not mean to ship."],
+  },
+  "code.sql-pattern": {
+    title: "Check the query shape",
+    why: "The line matches SELECT ... FROM. That does not prove injection.",
+    checklist: ["Read the flagged line.", "Use a parameter if the query is built from text."],
+  },
+  "code.inner-html": {
+    title: "Review innerHTML assignments",
+    why: "Assigning innerHTML can run markup as HTML.",
+    checklist: ["Confirm the value is not attacker-controlled."],
+  },
+  "code.child-process": {
+    title: "Review child process exec calls",
+    why: "exec passes a string to a shell. This review did not run it.",
+    checklist: ["Prefer execFile with an argument list when a shell is not required."],
+  },
+  "code.weak-crypto": {
+    title: "Review weak hash or cipher calls",
+    why: "md5, sha1, or createCipher showed up as a call.",
+    checklist: ["Use a current hash or cipher if this protects a secret."],
+  },
+  "code.cors-wildcard": {
+    title: "Review the CORS wildcard",
+    why: "A star origin allows any site to call this response.",
+    checklist: ["Confirm a star origin is intended."],
   },
   "deps.vulnerability": {
     title: "Patch vulnerable dependencies",
@@ -116,8 +156,8 @@ const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[
   },
   "deps.install-script": {
     title: "Review install scripts",
-    why: "Install scripts run automatically on every install, including attacks.",
-    checklist: ["Read each postinstall or preinstall script.", "Remove any you did not write or no longer need."],
+    why: "The manifest names a lifecycle script. The scan did not run it.",
+    checklist: ["Read the named lifecycle script.", "Remove any you did not write or no longer need."],
   },
   "deps.unpinned-version": {
     title: "Pin dependency versions",
@@ -150,6 +190,14 @@ const STEP_ORDER = [
   "secret.debugger-statement",
   "secret.debug-leftover",
   "secret.sql-pattern",
+  "code.eval-use",
+  "code.debugger-statement",
+  "code.debug-leftover",
+  "code.sql-pattern",
+  "code.inner-html",
+  "code.child-process",
+  "code.weak-crypto",
+  "code.cors-wildcard",
   "deps.vulnerability",
   "deps.install-script",
   "deps.unpinned-version",

@@ -110,8 +110,40 @@ const SECRET_TEXT: Record<string, { title: string; why: string }> = {
     why: "Console noise leaks internals and looks unfinished to anyone reviewing.",
   },
   "secret.sql-pattern": {
-    title: "Possible string-built database query",
-    why: "String-built queries let crafted input run database commands.",
+    title: "This line looks like a database query",
+    why: "The line matches SELECT ... FROM. That does not prove injection.",
+  },
+  "code.eval-use": {
+    title: "Eval runs strings as code",
+    why: "Eval turns text into code. This is the shape of a call, not proof it is reachable.",
+  },
+  "code.debugger-statement": {
+    title: "Debugger statement left in code",
+    why: "A debugger statement can freeze the app for anyone who opens it.",
+  },
+  "code.debug-leftover": {
+    title: "Debug output left in source",
+    why: "Console output can leak internals. This is one hit per file.",
+  },
+  "code.sql-pattern": {
+    title: "This line looks like a database query",
+    why: "The line matches SELECT ... FROM. That does not prove injection.",
+  },
+  "code.inner-html": {
+    title: "innerHTML is assigned",
+    why: "Assigning innerHTML can run markup as HTML. This is a shape, not proof of an exploit.",
+  },
+  "code.child-process": {
+    title: "A child process exec call is present",
+    why: "exec and execSync pass a string to a shell. This line was not run.",
+  },
+  "code.weak-crypto": {
+    title: "A weak hash or cipher call is present",
+    why: "md5, sha1, or createCipher showed up as a call. This is not a certificate verdict.",
+  },
+  "code.cors-wildcard": {
+    title: "A CORS wildcard is set",
+    why: "A star origin allows any site to call this response. Confirm that is intended.",
   },
 };
 
@@ -561,8 +593,8 @@ export const analyzeScan = action({
         path: script.manifest,
         line: manifestLine(manifestByPath.get(script.manifest) ?? "", script.script),
         severity: "high",
-        title: `Install script runs on every install (${script.script})`,
-        why: "Install scripts run automatically, which makes them a delivery route for attacks.",
+        title: `Lifecycle script ${script.script} is declared`,
+        why: `The ${script.script} script is named in the manifest. This scan did not run it.`,
         bucket: "actionable",
         rawSnippet: `install script present: ${script.script}`,
       });
@@ -675,7 +707,7 @@ export const analyzeScan = action({
           line: manifestLine(manifestByPath.get(dep.manifest) ?? "", dep.name),
           severity: sev,
           title: `${vuln.id} affects ${dep.name}@${dep.version}`,
-          why: "A public vulnerability record exists for this exact installed version.",
+          why: `${vuln.id} is a public advisory record for this exact version. This is not a statement that the app is exploitable.`,
           bucket: "actionable",
           rawSnippet: `${vuln.id} ${dep.name} ${dep.version} ${vuln.summary}`,
         });

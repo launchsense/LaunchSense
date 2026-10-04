@@ -21,6 +21,9 @@ export default function Home() {
       <section className="scan-section" id="scan" aria-labelledby="scan-title">
         <h2 id="scan-title">Paste a public repo URL</h2>
         <p>
+          This page is the first look. The review you keep using runs in your coding tool, on the files already there. That review is in alpha.
+        </p>
+        <p>
           No account needed. Guest scans read public repos only and produce a clear partial report when files are skipped.
         </p>
         <GuestScan />
