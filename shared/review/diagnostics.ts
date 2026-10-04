@@ -6,7 +6,7 @@ export interface DiagnosticPayload {
   harness: string;
   version: string;
   durationMs: number;
-  orderSource: "jev" | "perplexity" | "table";
+  orderSource: "local" | "jev" | "perplexity" | "table";
   ruleCounts: Record<string, number>;
 }
 

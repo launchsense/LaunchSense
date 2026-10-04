@@ -29,7 +29,7 @@ export interface RankableFinding {
 export interface RankResult {
   /** Ordered fingerprints, most urgent first. Always covers every actionable finding. */
   order: string[];
-  source: "jev" | "perplexity" | "table";
+  source: "local" | "jev" | "perplexity" | "table";
   /** One plain line explaining the ordering, safe to show a user. */
   note: string;
 }
@@ -125,7 +125,7 @@ export interface NoulAnswerLike {
 export function rankFromAnswers(
   findings: RankableFinding[],
   answers: Record<string, NoulAnswerLike> | null,
-  source: "jev" | "perplexity" | "table",
+  source: "local" | "jev" | "perplexity" | "table",
 ): RankResult {
   const pool = actionableFindings(findings);
   const floor = tableOrder(pool);
