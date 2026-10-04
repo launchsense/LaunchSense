@@ -2,9 +2,11 @@
 
 What this release does not do. Everything here is stated so nothing looks finished when it is not.
 
+LaunchSense does not say if the product will sell. It does not judge the market or the idea. Repeated functions are not checked yet. Duplicate files and huge files are.
+
 ## Code we can read
 
-- Public GitHub repos only. Private repos are not readable, so nothing about them is checked or claimed.
+- The paste box reads public GitHub repos. A private repo is the GitHub login path, and that scan is not running yet, so nothing about a private repo is checked or claimed today.
 - Guest scans only. There are no accounts yet, so each scan stands alone.
 - GitHub quota is shared. When it runs out, scans show partial with a retry time.
 - One scan makes about four GitHub requests: repository metadata, the latest commit, the file list, and one repository archive.
@@ -28,7 +30,7 @@ What this release does not do. Everything here is stated so nothing looks finish
 ## Signals, not verdicts
 
 - Share Readiness is a signal from the files we could read. It is not a certification and it does not decide the quality of your product.
-- Standards mappings are an OWASP ASVS 5.0.0 subset with version, coverage, and caveat on every line. No mapping claims full coverage it cannot prove.
+- Standards lines cover an OWASP ASVS 5.0.0 subset, OWASP Top 10:2025 categories we can see, OSV for npm, PyPI, and Go, and three CWE labels on checks we already run. deps.dev and OpenSSF Scorecard are not-checked. Every line has a version, a caveat, and a source. No line claims a certification.
 - Repo DNA describes shape and structure, nothing about merit.
 
 ## Signals, not scores
@@ -47,7 +49,7 @@ What this release does not do. Everything here is stated so nothing looks finish
 ## Not built yet
 
 - No saved projects, no history, no rescan across sessions.
-- No MCP layer and no code upload for private repos. Local tools are the route for private code, and none is bundled here.
+- MCP today is a public-repo route. Private repos through MCP are work we will do. There is no code upload.
 - No monitoring and no scheduled scans.
 - No GitHub App yet. Connected read-only deep scans are on the roadmap, see `ROADMAP.md`.
 - No runtime performance data. GitHub does not expose it.

@@ -1,16 +1,14 @@
 # LaunchSense
 
-Check your public repo before you show it to anyone.
+LaunchSense checks the codebase, not the business. It does not say if the app will sell.
 
-LaunchSense reads public GitHub repos. It looks at your code and your live app the way a stranger would, and lists problems with proof. It gives one fix prompt for the top 3. It never changes your code.
+You built the app with an AI coding tool. It works, and you are about to share the repo. You do not know what to ask Codex, so the check never starts. LaunchSense already knows what to ask. It says what is wrong, in plain words, and gives a prompt you can paste. It never changes your code.
 
-## Public repos only
+## Three ways in
 
-This reads public repos. It cannot see a private one.
-
-- Repo already public: scan it any time.
-- Repo still private: scan it after you flip it public, before you share the link anywhere.
-- Need to check a private repo: not supported yet. Local tooling such as MCP is the route for that, and it is not built.
+- Public repo, no account. Paste the GitHub URL. This is what runs today.
+- Private repo. Sign in with GitHub and check a repo you can already read. That scan is not running yet. Signing in today does not start it.
+- MCP. The same check from your coding helper. A small public-repo route exists. Private repos through MCP are work we will do.
 
 ## How to use
 
@@ -19,16 +17,38 @@ This reads public repos. It cannot see a private one.
 3. Copy the top 3 prompt into your coding helper.
 4. Fix the items, then scan again.
 
-## What it checks
+## What it solves
 
-- Secrets left in tracked files, like keys, tokens, and passwords.
-- Risky code patterns, like eval, debug leftovers, and string-built database queries.
-- Dependencies, like known vulnerabilities, floating versions, and install scripts.
-- Licenses, like missing terms or copyleft terms that need a human decision.
-- Project hygiene, like README, tests, CI, and duplicate or large files.
+Things a vibe coder has no name for:
+
+- A leaked key, token, password, or private key in a tracked file.
+- A license that does not fit the tool, including missing terms or copyleft. That is a signal for a person, not legal advice.
+- A dependency with a known hole, or one with no fixed version.
+- Risky code, like eval, or a database query built from text.
+- A missing README, tests, or CI.
+- Duplicate files and huge files.
+
+Repeated functions, and a wider read of code bloat, are the next rules in that same layer. They are not checked yet.
+
+## Why use it
+
+- You do not need the name of the problem. The report names it.
+- The checks are fixed. A model does not invent a finding.
+- You leave with a prompt you can paste into Codex, Cursor, or Claude.
+- It says what it did not read. A gap is not a pass.
+- It does not change your code, and it does not block a deploy.
+- It does not judge the market, the idea, or whether anyone will pay.
+- After you fix, scan again and see what changed.
+
+## Policies and standards
+
+Policy means the rules for the codebase, not a sales policy and not only a license check. A license is one rule inside the layer.
+
+The findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASVS, OSV for dependency holes, and CWE. Each line is a signal with a caveat. It is not a certification.
 
 ## What it does not do
 
+- It does not say if the product will sell.
 - It never changes your code and never blocks publishing.
 - It never stores raw secret values or raw file text. Secret patterns are replaced before anything is written.
 - A partial result is never shown as a pass. Unchecked work stays listed as not checked.
@@ -46,15 +66,15 @@ This reads public repos. It cannot see a private one.
 ## After the scan
 
 - Re-scan on the new commit and compare: fixed, still broken, new, back again, unknown.
-- OWASP ASVS 5.0.0 subset lines with coverage and caveats. Signals, never a certification.
+- Standards lines for OWASP ASVS 5.0.0, OWASP Top 10:2025, OSV, and three CWE labels. deps.dev and Scorecard stay not-checked. Signals, never a certification.
 - Seven missions in order, and achievements earned only when the scan proves them.
 - Plain text handoff for a developer friend with no coding agent.
 - One fix prompt for the top 3, ranked across your code and your live app.
 
 ## Limits
 
-- Public repos only. Private repos cannot be read, and no local agent or MCP setup is included.
-- Guest scans only in this release. Saving and history need sign-in, which is not built.
+- The paste box reads public repos. A private scan after GitHub login is not running yet.
+- MCP today is a public-repo route. Private repos through MCP are work we will do.
 - GitHub quota is shared, so heavy use can pause scans until the quota resets.
 - Each scan reads at most 200 files and 2 MB in total. The rest is listed as not checked.
 - Plain words explanations use an AI provider when one is configured. None is configured in this release, so fixed wording is shown.

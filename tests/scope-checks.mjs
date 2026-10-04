@@ -160,6 +160,18 @@ describe("verdict and scope are rendered together", () => {
     assert.doesNotMatch(guest, /Analyzed \{scan\.fetchedFileCount\} files, skipped/);
   });
 
+  it("renders the lead and the three prompts after the scope line", () => {
+    const scope = report.indexOf("{verdict.scope}");
+    const lead = report.indexOf('aria-label="One thing to look at"');
+    const actions = report.indexOf('aria-label="Three actions"');
+    const fix = report.indexOf('aria-label="Fix before you share"');
+    assert.ok(scope !== -1 && lead !== -1 && actions !== -1 && fix !== -1);
+    assert.ok(scope < lead && lead < actions && actions < fix);
+    const actionsBlock = report.slice(actions, fix);
+    assert.match(actionsBlock, /priority-note/);
+    assert.doesNotMatch(report, /\b(safe to share|certified|is secure)\b/i);
+  });
+
   it("passes every scope input the verdict needs", () => {
     for (const prop of [
       "status=",

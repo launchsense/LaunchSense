@@ -322,10 +322,9 @@ not have to parse a word to know that.
 Ignore: shield icons, score dials, coloured pills with rounded corners and a drop
 shadow. Those read as decoration and this product has already banned them.
 
-Applied, and not yet done: severity is currently plain text (`high`, `medium`,
-`low`, `info`) with no visual treatment at all. The next UI pass should give high
-severity a single weight-and-colour step from `--action`, and no badge, no icon, no
-shadow. This is the one open item in this section.
+Applied: `high` uses `--action` for colour and a heavier weight, via
+`.severity-high`. Medium, low, and info stay plain text. No badge, no icon, no
+shadow.
 
 ### Loading and progress: take from a download, ignore a spinner
 

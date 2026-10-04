@@ -47,6 +47,7 @@ export default function Stage5Panels(props: {
   }>;
   live: { reaches: boolean } | null;
   partial: boolean;
+  coverageNote?: string | null;
 }) {
   const [tab, setTab] = useState<TabId>("dna");
   const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
@@ -96,8 +97,9 @@ export default function Stage5Panels(props: {
         findings: props.findings.map((f) => ({ ruleId: f.ruleId, severity: f.severity })),
         analyzedFiles: dna.analyzedFiles,
         liveChecked: props.live !== null,
+        coverageNote: props.coverageNote,
       }),
-    [props.findings, props.live, dna.analyzedFiles],
+    [props.findings, props.live, props.coverageNote, dna.analyzedFiles],
   );
 
   const missions = useMemo(() => {

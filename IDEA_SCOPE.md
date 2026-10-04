@@ -31,7 +31,7 @@ Who they trust on this decision: their AI coding tool (Cursor, Claude, v0) and t
 Would they pay: yes. CheckVibe charges from $24 per month and locks its fix prompts behind the paid plan. People already pay to have their AI-built app checked. The pain is big enough.
 
 PRODUCT
-Onboarding: paste a public repo link. In the first two minutes they see real findings in their own repo, and they leave knowing the exact thing to tell their AI tool next. That is the aha moment.
+Onboarding: a public repo is one paste. A private repo is GitHub login, on a repo they can already read. MCP is the same check from their coding helper, and that private path is work we will do. In the first two minutes they see real findings in their own repo, and they leave knowing the exact thing to tell their AI tool next. That is the aha moment. The paste that runs today is public. Private scanning is not running yet.
 
 The core loop (user stories, written by me):
 - I paste my repo and get the truth about it in plain words.

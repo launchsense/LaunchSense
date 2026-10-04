@@ -1,6 +1,6 @@
 # Secrets and setup safety
 
-LaunchSense reads your public repo. It should never need your real secret values. It only records rule IDs, paths, line numbers, fingerprints, and redacted snippets.
+LaunchSense reads the repo you point it at. It should never need your real secret values. It only records rule IDs, paths, line numbers, fingerprints, and redacted snippets.
 
 When you connect a project, the setup guard should check:
 
