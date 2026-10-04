@@ -4,7 +4,7 @@
 
 On the website, only the repo URL you paste. The website does not read your machine.
 
-The alpha harness reads files on your machine and does not upload them. After you agree, alpha and pro may send how the review was used: rule id counts, the harness name, the version, how long it took, and which order source ran. That share does not include code, paths, titles, or function names. Enterprise leaves this off. The switch is `diagnostics` in `~/.config/launchsense/config.json`.
+The hosted MCP reads a public GitHub repo on our server, the same way the paste does. A checkout of this repository can run a local review that reads files on that machine and does not upload them. After you agree, alpha and pro may send how that local review was used: rule id counts, the harness name, the version, how long it took, and which order source ran. That share does not include code, paths, titles, or function names. Enterprise leaves this off. The switch is `diagnostics` in `~/.config/launchsense/config.json`.
 
 ## What we save
 

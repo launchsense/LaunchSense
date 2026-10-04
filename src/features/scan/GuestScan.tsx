@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "../../../convex/_generated/api";
@@ -221,7 +221,7 @@ export default function GuestScan() {
       // The scan row or its commit is gone, so there is nothing to resume.
       setQueuedScan(null);
       setPhase("idle");
-      setSubmitError("That waiting scan is gone. Press Run scan to start a new one.");
+      setSubmitError("That waiting scan is gone. Press Run a sample check to start a new one.");
     }
   }
 
@@ -329,10 +329,19 @@ export default function GuestScan() {
       scan.truncated === true ||
       (scan.fetchedFileCount ?? 0) >= 200);
   const showSignIn = !isAuthenticated && (guestCapHit || repoMiss);
+  const capDialog = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const node = capDialog.current;
+    if (node === null) return;
+    if (!node.open) node.showModal();
+    return () => {
+      if (node.open) node.close();
+    };
+  }, [showSignIn]);
 
   return (
     <section aria-label="Guest repository scan">
-      {!isAuthenticated && <AuthPanel />}
       {isAuthenticated && hasGitHubToken === false && (
         <p role="status">Sign in again so this scan can use your GitHub token.</p>
       )}
@@ -355,7 +364,7 @@ export default function GuestScan() {
               ? "Analyzing files"
               : phase === "live"
                 ? "Checking live site"
-                : "Run scan"}
+                : "Run a sample check"}
         </button>
         <div className="scan-secondary">
           <button className="ghost" type="button" onClick={() => setRepoUrl(SELF_REPO_URL)}>
@@ -400,7 +409,7 @@ export default function GuestScan() {
       <details>
         <summary>Privacy note</summary>
         <p>
-          A guest read uses the shared GitHub quota and stops at 200 files and about 2MB. Signed in, the same check uses your GitHub token and reads up to 1,000 files and about 8MB, including one private repo you can already read. We do not store the file contents. We delete the token when you sign out. The extra checks run after you install the review on your machine. A partial result is not a pass.
+          A guest read uses the shared GitHub quota and stops at 200 files and about 2MB. Signed in, the same check uses your GitHub token and reads up to 1,000 files and about 8MB, including one private repo you can already read. We do not store the file contents. We delete the token when you sign out. The Connect page shows how to call this same public read from your coding tool. A partial result is not a pass.
         </p>
       </details>
       {scan === null && <CapacityMeter waiting={0} running={0} quota={null} />}
@@ -409,7 +418,7 @@ export default function GuestScan() {
           <p>
             Servers are busy. Your scan is saved in waiting place{" "}
             {queuedScan.position} of {queuedScan.limit}. Press the button below and it
-            picks up from that same place. Pressing Run scan instead starts a new scan
+            picks up from that same place. Pressing Run a sample check instead starts a new scan
             at the back of the line.
           </p>
           <button type="button" disabled={phase !== "idle"} onClick={() => void onResume()}>
@@ -585,10 +594,11 @@ export default function GuestScan() {
       )}
       {scan !== null && <CapacityMeter waiting={0} running={0} quota={null} />}
       {showSignIn && (
-        <section className="limit-signin" aria-labelledby="limit-signin-title">
+        <dialog ref={capDialog} className="cap-dialog" aria-labelledby="limit-signin-title">
           <h2 id="limit-signin-title">Sign in to read more</h2>
+          <p>This sample stopped at the guest cap, or the repo was not public.</p>
           <AuthPanel />
-        </section>
+        </dialog>
       )}
     </section>
   );

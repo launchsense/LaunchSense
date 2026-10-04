@@ -2,7 +2,7 @@ import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { resetLocalAuthState } from "./resetLocalAuthState";
 import { SIGN_IN_OFFER, SIGN_IN_POLICY } from "../../../shared/copy/signIn";
 
-// Shown only while signed out. The top menu keeps Sign out for a signed-in person.
+// Shown only in the cap dialog, while signed out. Signed-in people use Sign out in the menu.
 export function AuthPanel() {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();

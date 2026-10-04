@@ -3,6 +3,7 @@ import { registerStaticRoutes } from "@convex-dev/static-hosting";
 import { components, api, internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
+import { formatPublicScan, formatReport, handleMcpMessage, wantsEventStream, type ToolName } from "./mcpHttp";
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
@@ -114,6 +115,138 @@ http.route({
     return json({ stored: true });
   }),
 });
+
+const mcpCors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id",
+  "Cache-Control": "no-store",
+};
+
+http.route({
+  path: "/mcp",
+  method: "OPTIONS",
+  handler: httpAction(async () => new Response(null, { status: 204, headers: mcpCors })),
+});
+
+http.route({
+  path: "/mcp",
+  method: "GET",
+  handler: httpAction(async () =>
+    json({ error: "POST a JSON-RPC message to this URL." }, 405),
+  ),
+});
+
+http.route({
+  path: "/mcp",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Invalid JSON." } },
+        { status: 400, headers: { ...mcpCors, "Content-Type": "application/json" } },
+      );
+    }
+    const caller = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const result = await handleMcpMessage(body, (name, args) => callHostedTool(ctx, caller, name, args));
+    if (result.status === 202 || result.body === null) {
+      return new Response(null, { status: 202, headers: mcpCors });
+    }
+    const payload = JSON.stringify(result.body);
+    const accept = request.headers.get("accept") ?? "";
+    if (wantsEventStream(accept)) {
+      return new Response(`event: message\ndata: ${payload}\n\n`, {
+        status: result.status,
+        headers: { ...mcpCors, "Content-Type": "text/event-stream" },
+      });
+    }
+    return new Response(payload, {
+      status: result.status,
+      headers: { ...mcpCors, "Content-Type": "application/json" },
+    });
+  }),
+});
+
+async function callHostedTool(
+  ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
+  caller: string,
+  name: ToolName,
+  args: Record<string, unknown>,
+): Promise<{ text: string; isError: boolean }> {
+  switch (name) {
+    case "launchsense_scan_public":
+      return scanPublicTool(ctx, caller, typeof args.repoUrl === "string" ? args.repoUrl : "");
+    case "launchsense_get_report":
+      return reportTool(ctx, typeof args.scanId === "string" ? args.scanId : "");
+    default: {
+      const _never: never = name;
+      return _never;
+    }
+  }
+}
+
+async function scanPublicTool(
+  ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
+  caller: string,
+  repoUrl: string,
+): Promise<{ text: string; isError: boolean }> {
+  if (!repoUrl) return { text: "repoUrl is required.", isError: true };
+  const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, { caller });
+  if (!gate.allowed) {
+    return { text: "This route is paused until the shared quota window resets.", isError: true };
+  }
+  const scan = await ctx.runAction(api.scans.actions.runScan, { repoUrl });
+  if (scan.status === "failed") {
+    return { text: `Scan could not start. Scan ${scan.scanId}`, isError: true };
+  }
+  const analyzed = await ctx.runAction(api.scans.analyze.analyzeScan, { scanId: scan.scanId });
+  const report = await ctx.runQuery(api.scans.queries.getResults, { scanId: scan.scanId });
+  return {
+    text: formatPublicScan({
+      scanId: scan.scanId,
+      status: analyzed.status,
+      coverageNote: report.scan?.coverageNote ?? null,
+      findingCount: report.findings.length,
+      findings: report.findings.map((finding) => ({
+        ruleId: finding.ruleId,
+        severity: finding.severity,
+        title: finding.title,
+        path: finding.path,
+        line: finding.line,
+      })),
+    }),
+    isError: false,
+  };
+}
+
+async function reportTool(
+  ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
+  scanId: string,
+): Promise<{ text: string; isError: boolean }> {
+  if (!scanId) return { text: "scanId is required.", isError: true };
+  const report = await ctx.runQuery(api.scans.queries.getResults, { scanId: scanId as never });
+  if (report.scan === null) return { text: "Scan not found.", isError: true };
+  return {
+    text: formatReport({
+      scanId,
+      sha: report.scan.sha ?? null,
+      status: report.scan.status,
+      coverageNote: report.scan.coverageNote ?? null,
+      findingCount: report.findings.length,
+      findings: report.findings.map((finding) => ({
+        ruleId: finding.ruleId,
+        severity: finding.severity,
+        title: finding.title,
+        path: finding.path,
+        line: finding.line,
+      })),
+    }),
+    isError: false,
+  };
+}
 
 http.route({
   path: "/api/mcp/report",

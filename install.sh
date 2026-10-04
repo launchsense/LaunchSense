@@ -1,5 +1,7 @@
 #!/bin/sh
-# Installs the LaunchSense MCP command and the one skill that governs it.
+# Local review for a checkout of this repository.
+# People using LaunchSense add https://harmless-chihuahua-667.convex.site/mcp
+# They do not run this script.
 # Alpha has no login. Usage counts are on unless you set LAUNCHSENSE_DIAGNOSTICS=off
 # or pass --enterprise.
 
@@ -15,8 +17,9 @@ if [ "${LAUNCHSENSE_DIAGNOSTICS:-}" = "off" ]; then
   DIAGNOSTICS=off
 fi
 
-echo "LaunchSense alpha install."
-echo "The review reads files on this machine. It does not upload them."
+echo "LaunchSense local review for this checkout."
+echo "Public users add https://harmless-chihuahua-667.convex.site/mcp and do not run this script."
+echo "This local review reads files on this machine. It does not upload them."
 echo "If diagnostics stay on, we receive rule id counts, the harness name, the version, duration, and which order source ran. We do not receive code, paths, titles, or function names."
 if [ "$DIAGNOSTICS" = "on" ]; then
   echo "Diagnostics: on. Set LAUNCHSENSE_DIAGNOSTICS=off to refuse."

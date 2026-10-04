@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toShareCard } from "../../shared/reports/shareCard";
+import { SiteFrame } from "../features/site/SiteFrame";
 
 export default function SharePage({ shareId }: { shareId: string }) {
   const logEvent = useMutation(api.scans.queries.logEvent);
@@ -24,19 +25,25 @@ export default function SharePage({ shareId }: { shareId: string }) {
     }
   }, [page, shareId, logEvent]);
 
-  if (page === undefined) return <main><p>Loading the shared scan. Please wait.</p></main>;
+  if (page === undefined) {
+    return (
+      <SiteFrame>
+        <p>Loading the shared scan. Please wait.</p>
+      </SiteFrame>
+    );
+  }
   if (page === null || card === null) {
     return (
-      <main id="main-content" tabIndex={-1}>
+      <SiteFrame>
         <h1>Share link not found</h1>
         <p>This link is wrong or was never created. Ask the sender for a fresh link.</p>
         <p><a href="/">Scan your own repo</a></p>
-      </main>
+      </SiteFrame>
     );
   }
 
   return (
-    <main id="main-content" tabIndex={-1}>
+    <SiteFrame>
       <h1>
         {page.scan.owner}/{page.scan.repo}
       </h1>
@@ -79,6 +86,6 @@ export default function SharePage({ shareId }: { shareId: string }) {
           Scan your own repo
         </a>
       </p>
-    </main>
+    </SiteFrame>
   );
 }

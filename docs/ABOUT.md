@@ -13,7 +13,7 @@ You built the app with an AI coding tool. It works, and you are about to share t
 - A missing README, tests, or CI.
 - Duplicate files and huge files.
 
-The installed review also checks repeated function text. The website paste checks duplicate files and large files.
+The website paste and the hosted MCP check duplicate files and large files.
 
 ## Why use it
 
@@ -25,13 +25,13 @@ Policy means the rules for the codebase. A license is one rule inside that, not 
 
 ## Who it is for
 
-People who ship fast with AI coding tools and have no name for these problems. A public repo needs no account. Sign in to read one private repo, or more of a public one. The extra checks run after you install the review. The home page shows the command.
+People who ship fast with AI coding tools and have no name for these problems. A public repo needs no account. Sign in to read one private repo, or more of a public one. The Connect page shows the MCP address a coding tool adds.
 
 ## The moment it is built for
 
 The moment before you share the link, whether the repo is public or still private. The leaked key or the copyleft license is already in the history. Checking the code before anyone else sees it is the job. Judging the market is not.
 
-What runs today is the public paste, a signed-in read of one repository on your GitHub token, and the installed review on your machine. A guest read stops at 200 files and about 2MB. Signed in, the cap is 1,000 files and about 8MB. The home page shows how to install the review.
+What runs today is the public paste, a signed-in read of one repository on your GitHub token, and the same public read from the hosted MCP. A guest read stops at 200 files and about 2MB. Signed in, the cap is 1,000 files and about 8MB. The Connect page shows the MCP address.
 
 ## What it will not do
 

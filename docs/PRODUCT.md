@@ -11,22 +11,40 @@ prompt to paste. It never edits your code and never blocks a deploy.
 
 Policy means those rules for the codebase. A license is one rule inside the
 layer, not the name of the product. The lines sit on OWASP Top 10, OWASP ASVS,
-OSV, and CWE. They are signals with a caveat, not a certification. The
-installed review also checks repeated function text. The paste on the website
-checks duplicate files and large files.
+OSV, and CWE. They are signals with a caveat, not a certification. The public
+read checks duplicate files and large files.
 
-The job runs in the coding tool, on the files already on the machine. This website is the first look. Alpha is the name of this stage. Alpha has no login.
+The product people keep is the hosted MCP. The website is the front door. It says who the check is for, lets someone taste a public read, and sends them to Connect. It is not a second app, and it does not ask anyone to clone this repo.
 
-Three ways in:
+The address is `https://harmless-chihuahua-667.convex.site/mcp`. A coding tool sends one JSON-RPC message. `launchsense_scan_public` reads one public GitHub repo on our server. `launchsense_get_report` reads a report by scan id. That call is the same public read as the sample on the site. Alpha is the name of this stage. Alpha has no login on that address. Two scans an hour from one caller, and eight an hour in total, then the route pauses. It does not read a repo that exists only on a laptop.
 
-- Public repo, no account. Paste the URL. This is the guest read: 200 files and about 2MB. This is the live site.
-- Private repo, or a larger public read. Sign in with GitHub. The scan uses your token for one archive and stops at 1,000 files and about 8MB.
-- Alpha harness. The home page shows the install. `sh install.sh` from a checkout installs the command and one skill. The review reads the working tree and does not download GitHub. The extra checks run there, not in the paste.
+Three ways in, in the order the site uses:
+
+- Taste it. Paste a public GitHub URL on the home page. No account. A guest read stops at 200 files and about 2MB.
+- Keep it. Connect adds the MCP address in Cursor or Claude Code. Same public caps. This is the check you keep.
+- A larger public read, or one private repo you can already read. Sign in with GitHub appears only after the guest cap, in one dialog. The scan uses your token and stops at 1,000 files and about 8MB. Sign in is not in the menu.
+
+The same frame is on every page. The menu is LaunchSense, Why, How, Connect, and Blog. On a narrow screen those four links sit behind one Menu button. When someone is signed in, the end of the menu says Signed in and opens Sign out.
+
+- `/` says who it is for, then three lines: you built it, you do not know what to ask, LaunchSense already asks. One button goes to Connect. Under that is the sample paste.
+- `/why` is who it is for, what the check names, and what it will not say. It does not say the app will sell.
+- `/how` is the two paths in order, then the caps. A partial result is not a pass.
+- `/connect` is the MCP address, the Cursor block, the Claude line, and what that call does and does not do.
+- `/blog` lists two posts: the policy essay, and what the research says. `/case-studies` says none are published yet.
+- The sample opens a report. `/s/<id>` is a share link. `/p/<id>` is a passport. Those pages keep their jobs. They do not grow marketing sections.
 
 Unknown stays unknown. A model may quote one next look. That quote is not a finding. If the same suggestion keeps appearing, a person may later turn it into a fixed check. The model does not add the check.
 
 Status: Phase 1, shipped and live at `https://harmless-chihuahua-667.convex.site`.
 Source: `https://github.com/launchsense/LaunchSense`.
+
+## AI, and where it is going
+
+Read this before the rest. The checks are fixed. A model does not invent a finding, and it does not choose which checks run.
+
+AI is already in two places, and both are evolving. A writing model may turn a finding into plain words. A decision model may reorder findings inside one severity band. If either one fails, fixed wording and a fixed table are used. This release has no writing provider configured, so the table and the fixed wording are what ship.
+
+The start of reinforcement learning is the rescan, not a trained model. Fixed, still broken, new, back again, and unknown are the record. A person may later change a check from that record. The model does not add the check, and it does not train on the code.
 
 ## The problem
 
@@ -236,7 +254,10 @@ builder is about to hit publish.
   your GitHub token on our server to download that one repository, including one
   private repo you can already read. We do not store the file contents. We delete
   the token when you sign out. A coding tool review that reads the files on your
-  machine is alpha. The live home page shows the install command. The review does not upload code.
+  machine is a checkout of this repository. The public connection is the hosted MCP
+  address on the Connect page. That address reads a public GitHub repo on our server.
+- The website loads Libre Franklin and IBM Plex Mono from Google Fonts. That request
+  sends the visitor's IP address to Google. The scan does not.
 - No raw file contents are stored, ever. Only owner, repo, commit SHA, file paths,
   sizes, hashes, and redacted finding snippets.
 - No raw secret values, anywhere. One redaction function covers every output path:
@@ -247,11 +268,12 @@ builder is about to hit publish.
 
 ## Known limits, stated up front
 
-- The running scan is a public paste, or a signed-in read of one repository.
-  A coding tool review that reads the files on your machine is alpha. The live home page shows the install command.
+- The running scan is a public paste, a signed-in read of one repository, or the
+  hosted MCP. The MCP call is the same public read, with the same guest caps.
+  The Connect page is where the address lives. The home page does not repeat it.
 - 200 files and about 2MB per guest scan. 1,000 files and about 8MB when signed in.
 - No browser rendering. The live check reads served HTML, not a rendered phone.
-- The check runs when you press Run, or from the read-only MCP endpoints. There is no
+- The check runs when you press Run, or when a coding tool calls the hosted MCP. There is no
   automatic reminder and no monitoring in Phase 1, so a stale result stays stale
   until you rescan.
 - A hung advisory lookup is **unknown**, never a pass.
@@ -359,10 +381,13 @@ whether the person who gets it cares, we have not seen.
 These are stages of building, not proof. Do not start one until the milestone before
 it has been met.
 
-- **Phase 1, live now.** Guest scan, plain report, one fix prompt, rescan compare,
-  share and passport, Repo DNA, Share readiness, and missions. Also read-only MCP
-  endpoints and a small adapter script. The MCP part is kept small on purpose. It is
-  there to show the shape works, not to be the product.
+- **Phase 1, live now.** The website is the front door. The hosted MCP is the check
+  people keep: one public repo, then that report, with no login on the address.
+  Also the guest sample, plain report, one fix prompt, rescan compare, share and
+  passport, Repo DNA, Share readiness, and missions. Sign in with GitHub is the
+  larger or private read on the site, shown only after the guest cap. A checkout
+  of this repository can still review files on that machine. The public site does
+  not ask anyone to clone it, and there is no CLI page.
 - **Phase 2, waits on M1.** GitHub App on a repo you choose, monitoring, checks
   triggered by a push, history, score trends, fuller standards maps, SBOM signals.
   Monitoring only makes sense once people come back on their own. If M1 fails, this
@@ -383,9 +408,12 @@ a plan we wrote before we had users would be the plan serving itself.
 
 What we are doing and why:
 
-- **MCP moves earlier, as a small read-only surface.** The routes that exist scan
-  a public repo and read a report. No writes, no account. Private repos through
-  MCP are work we will do, on a repo the helper can already read.
+- **MCP moves earlier, as a small read-only surface.** That surface is now what
+  people keep. `launchsense_scan_public` scans one public repo.
+  `launchsense_get_report` reads a report. No writes. Alpha has no login on
+  `https://harmless-chihuahua-667.convex.site/mcp`. The Connect page is how a
+  coding tool adds that address. A private repo still uses Sign in with GitHub
+  on the sample. Private repos through MCP are later work.
 - **The gate on M4 still stands for everything else in Phase 3.** Teams, roles,
   audit logs, and retention all wait. Those are large, and M4 is still unproven.
 - **M1 is still the number that matters.** MCP users are the same people who would
@@ -436,8 +464,8 @@ not been run yet.
 ## How it is built, for the record
 
 React and Vite on the front end. Convex for database, backend, and hosting. GitHub
-holds the source. 192 automated tests run on every change, and a claim guard fails
-the build on copy that asserts something the code cannot back.
+holds the source. `npm run check` runs the tests and a claim guard on every change.
+The guard fails the build on copy that asserts something the code cannot back.
 
 The guard is not decoration. It carries 33 rules across three classes: unsupported
 claims, safety promises that must be backed by the code, and retention numbers that
@@ -449,6 +477,6 @@ understand. It now scans this document too.
 ## What is not built, plainly
 
 There is no saved history. Paid login for the harness is not built. The auth slot is empty. Sign-in on the website reads one repository, up to 1,000 files and
-about 8MB, and then stops. The alpha review installs from the command on the live home page. It runs on your machine.
+about 8MB, and then stops. The Connect page shows the MCP address a coding tool adds. That address runs the public read. It does not read a repo that exists only on a laptop. Alpha has no login on that address. There is no CLI page.
 There is no monitoring, no browser rendering, and no share revocation. The
 interface says so.

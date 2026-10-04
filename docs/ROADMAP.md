@@ -22,7 +22,7 @@ The guest scan works today and needs no account.
 
 ## Alpha
 
-**Local review in the coding tool.** `install.sh` installs the MCP command and one skill. The review reads the files on the machine. It does not download GitHub. Alpha has no login. An auth slot is present and not enforced.
+**Hosted MCP.** The Connect page shows `https://harmless-chihuahua-667.convex.site/mcp`. A coding tool adds that address. The tool `launchsense_scan_public` reads one public GitHub repo on our server, with the same caps as the paste. Alpha has no login. An auth slot is present and is not enforced. A checkout of this repository can still run a local review. That local review is not the public connection.
 
 The website stays the first look: paste a public repo, read a report, copy a prompt. Case studies are a page. None are published until a real story exists.
 

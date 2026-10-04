@@ -1,34 +1,36 @@
 # LaunchSense
 
-LaunchSense checks the codebase, not the business. The job runs in the coding tool, on the files already on the machine. The website is the first look: a public paste, a plain report, and pages for awareness and case studies.
+LaunchSense checks the codebase, not the business. The website is the public read: paste a GitHub URL, get a plain report. A coding tool calls the same public read at the hosted MCP address. You do not clone this repo to use it.
 
 This stage is alpha. Alpha has no login. An auth slot exists and is not enforced.
 
-## Install
-
-From this repository, run:
+## Connect
 
 ```
-sh install.sh
+https://harmless-chihuahua-667.convex.site/mcp
 ```
 
-The script installs the MCP server command and one skill, `launchsense`. That skill governs the review.
+Cursor adds that URL under `mcpServers.launchsense`. Claude Code:
 
-## Review
+```
+claude mcp add launchsense --transport http https://harmless-chihuahua-667.convex.site/mcp
+```
 
-The tool is `launchsense_scan_repo`. It reads the working tree. It does not call api.github.com. It does not upload file bodies.
+The client POSTs one JSON-RPC message. The server returns one JSON answer.
 
-Guest limits of 200 files and about 2MB apply to the website paste. The local review has its own cap and lists what it did not read. A partial result is not a pass.
+## Tools
+
+`launchsense_scan_public` takes `repoUrl` like `https://github.com/owner/repo`. It reads that public repo on our server. Guest limits of 200 files and about 2MB apply. OSV covers up to 50 packages. deps.dev is not asked. Two scans an hour from one caller, and eight an hour in total, then the route pauses.
+
+`launchsense_get_report` takes `scanId` and returns the coverage line and the findings.
+
+A partial result is not a pass. This address does not read a repo that exists only on a laptop. A private repo uses Sign in on the website.
 
 ## Checks
 
-Fixed checks cover secrets, code shapes, dependency names, license text, and project hygiene. The local review also reads an npm lockfile, asks OSV about up to 50 of those exact versions, and lists how many were not queried. It may ask deps.dev and ClearlyDefined for terms, a publish date, and a deprecated flag. Archived status stays unknown. It can flag repeated function text, duplicate files, a named host, a model card, and a generated marker.
+Fixed checks cover secrets, code shapes, dependency names, license text, and project hygiene, plus duplicate files and large files.
 
-License lines are signals, not legal advice. Unknown stays unknown. A model may quote one next look. That quote is not a finding. The priority table always orders the report. The decision API may reorder inside one severity band. The model does not choose which findings exist.
-
-## Diagnostics
-
-After agreement, alpha and pro may send rule id counts, the harness name, the version, how long the review took, and which order source ran. Enterprise leaves this off. The share does not include code, paths, titles, or function names.
+License lines are signals, not legal advice. Unknown stays unknown. A model may quote one next look. That quote is not a finding. The priority table always orders the report. The decision API may reorder inside one severity band. The model does not choose which findings exist. Plain-word rewriting and that reorder are in the product and still evolving. No writing provider is configured in this release, so fixed wording is what ships. A reinforcement learning loop, based on what a later scan shows as fixed or still broken, is the next step. It is not a trained model, and it does not train on the code.
 
 ## Do not claim
 
