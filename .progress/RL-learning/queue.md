@@ -12,7 +12,7 @@
 9. DONE  wave-full 10 mobile/other (wave-full-10.md, 10/10, 144 of 145 H/M are FPs from one credential-name defect, WQ-4)
 10. DONE M4 monitoring query + coverage remainder (monitoring-reading.md, convex/decisionMonitoring.ts, .progress walk exclusion, OSV honesty line, 8 new tests, 393/393 suite green, tsc clean)
 11. DONE M5 counts-only case drafts (cases/, 4 drafts + index, counts only, all totals reconcile)
-12. TODO morning-report.md
+12. DONE morning-report.md (morning-report.md, every item status, models, failures, secrets, top classes, next action)
 
 ## Feature-board work (from docs/feature-board.md, added 2026-10-05)
 
