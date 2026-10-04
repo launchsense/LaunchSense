@@ -9,6 +9,7 @@ import {
   hasReadmeIn,
   hasTestsIn,
 } from "../../shared/analyzers/projectSignals";
+import { codingToolsIn } from "../../shared/reports/codingTool";
 
 const scanStatus = v.union(
   v.literal("validating"),
@@ -63,6 +64,7 @@ const scanFields = {
   liveUrl: v.optional(v.string()),
   mainAction: v.optional(v.string()),
   rescanOf: v.optional(v.id("scans")),
+  signedIn: v.optional(v.boolean()),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
@@ -97,14 +99,15 @@ export const getScan = query({
     scan: v.union(v.object(scanFields), v.null()),
     samplePaths: v.array(v.object({ path: v.string(), type: v.string() })),
     storedEntries: v.number(),
+    codingTools: v.array(v.union(v.literal("Cursor"), v.literal("Claude"), v.literal("Codex"))),
   }),
   handler: async (ctx, args) => {
     const scan = await ctx.db.get("scans", args.scanId);
     if (scan === null) {
-      return { scan: null, samplePaths: [], storedEntries: 0 };
+      return { scan: null, samplePaths: [], storedEntries: 0, codingTools: [] };
     }
     if (scan.sha === undefined) {
-      return { scan, samplePaths: [], storedEntries: 0 };
+      return { scan, samplePaths: [], storedEntries: 0, codingTools: [] };
     }
     const trees = await ctx.db
       .query("repoTrees")
@@ -114,11 +117,12 @@ export const getScan = query({
       .order("desc")
       .take(1);
     const tree = trees[0] ?? null;
-    if (tree === null) return { scan, samplePaths: [], storedEntries: 0 };
+    if (tree === null) return { scan, samplePaths: [], storedEntries: 0, codingTools: [] };
     return {
       scan,
       samplePaths: tree.entries.slice(0, 100),
       storedEntries: tree.entryCountStored,
+      codingTools: codingToolsIn(tree.entries.map((entry) => entry.path)),
     };
   },
 });
@@ -438,7 +442,15 @@ export const getCapacity = query({
     const quota = await ctx.runQuery(internal.scans.quota.getQuota, {});
     const stats = await ctx.runQuery(internal.scans.quota.queueStats, {});
     return {
-      quota,
+      quota:
+        quota === null
+          ? null
+          : {
+              remaining: quota.remaining,
+              limit: quota.limit,
+              resetAt: quota.resetAt,
+              scansPerHour: quota.scansPerHour,
+            },
       waiting: stats.waiting,
       running: stats.running,
       limit: stats.limit,

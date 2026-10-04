@@ -6,9 +6,9 @@ LaunchSense checks the codebase, not the business. It does not say if the app wi
 
 LaunchSense is for a public repo and a private one.
 
-- Public repo: paste the URL. No account. This is what runs today.
-- Private repo: sign in with GitHub and check a repo you can already read. That scan is not running yet.
-- MCP: your coding helper runs the same check. The route that exists today reads a public repo. Private repos through MCP are work we will do.
+- Public repo: paste the URL. No account. A guest read stops at 200 files and about 2MB.
+- Private repo, or a larger public read: sign in with GitHub. The scan uses your token and stops at 1,000 files and about 8MB.
+- MCP: a coding tool review that reads the files on your machine is not running yet.
 
 Two useful moments:
 
@@ -26,7 +26,7 @@ Two useful moments:
 
 1. You paste your repo link plus your live app URL.
 2. We read the repo file list and pin the latest commit. Everything after this points at that one commit.
-3. We fetch up to 200 files, up to 2 MB in total.
+3. A guest scan fetches up to 200 files, up to 2 MB in total. Signed in, the cap is 1,000 files and about 8MB.
 4. We fetch the served live page HTML.
 5. Fixed checks run: secrets, risky patterns, dependencies, licenses, and hygiene.
 6. You get one fix prompt for the top 3, then the rest of the list.

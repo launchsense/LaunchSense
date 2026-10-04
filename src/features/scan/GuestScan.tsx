@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { buildFixPlan } from "../../../shared/reports/fixPlan";
 import type { PlanFinding } from "../../../shared/reports/fixPlan";
 import ScanReport from "../report/ScanReport";
+import { AuthPanel } from "../auth/AuthPanel";
 import CompareView from "../report/CompareView";
 import Stage5Panels from "../report/Stage5Panels";
 import CapacityMeter from "../report/CapacityMeter";
+import { ToolCard } from "../report/ToolCard";
 import { toUserError } from "./userError";
 
 // This project's own public repo, so a first-time visitor can see a real
@@ -32,6 +35,8 @@ function readRef(): string | null {
 }
 
 export default function GuestScan() {
+  const { isAuthenticated } = useConvexAuth();
+  const hasGitHubToken = useQuery(api.github.sessionToken.hasGitHubToken);
   const runScan = useAction(api.scans.actions.runScan);
   const analyzeScan = useAction(api.scans.analyze.analyzeScan);
   const checkLive = useAction(api.scans.livecheck.checkLive);
@@ -80,6 +85,7 @@ export default function GuestScan() {
     position: number;
     limit: number;
   } | null>(null);
+  const capacity = useQuery(api.scans.queries.getCapacity, {});
   const scanState = useQuery(
     api.scans.queries.getScan,
     scanId === null ? "skip" : { scanId },
@@ -102,7 +108,11 @@ export default function GuestScan() {
     setPassportId(null);
     setWasCached(false);
     if (repoUrl.trim().length === 0) {
-      setSubmitError("Paste a public GitHub repository URL to start.");
+      setSubmitError(
+        isAuthenticated
+          ? "Paste a GitHub repository URL to start."
+          : "Paste a public GitHub repository URL to start.",
+      );
       return;
     }
     setQueuedScan(null);
@@ -308,12 +318,26 @@ export default function GuestScan() {
   );
   const plan = useMemo(() => buildFixPlan(findings), [findings]);
   const analyzed = resultsState?.analyzed === true;
+  const quotaExhausted = capacity?.quota != null && capacity.quota.remaining <= 0;
+  const repoMiss = scan?.errorKind === "not_found";
+  const guestCapHit =
+    scan !== null &&
+    scan.signedIn !== true &&
+    (quotaExhausted ||
+      scan.errorKind === "rate_limited" ||
+      scan.errorKind === "truncated" ||
+      scan.truncated === true ||
+      (scan.fetchedFileCount ?? 0) >= 200);
+  const showSignIn = !isAuthenticated && (guestCapHit || repoMiss);
 
   return (
     <section aria-label="Guest repository scan">
-      <h2>Check your public repo</h2>
+      {!isAuthenticated && <AuthPanel />}
+      {isAuthenticated && hasGitHubToken === false && (
+        <p role="status">Sign in again so this scan can use your GitHub token.</p>
+      )}
       <form onSubmit={(e) => void onSubmit(e)}>
-        <label htmlFor="guest-repo-url">Public GitHub URL</label>
+        <label htmlFor="guest-repo-url">{isAuthenticated ? "GitHub URL" : "Public GitHub URL"}</label>
         <input
           id="guest-repo-url"
           name="repoUrl"
@@ -324,20 +348,28 @@ export default function GuestScan() {
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
         />
-        <p>
-          <button type="button" onClick={() => setRepoUrl(SELF_REPO_URL)}>
+        <button className="paste-bar" type="submit" disabled={phase !== "idle"}>
+          {phase === "fetching"
+            ? "Fetching files"
+            : phase === "analyzing"
+              ? "Analyzing files"
+              : phase === "live"
+                ? "Checking live site"
+                : "Run scan"}
+        </button>
+        <div className="scan-secondary">
+          <button className="ghost" type="button" onClick={() => setRepoUrl(SELF_REPO_URL)}>
             Load this repo
           </button>
-        </p>
-        <p>
           <button
+            className="ghost"
             type="button"
             aria-expanded={showLive}
             onClick={() => setShowLive((v) => !v)}
           >
             {showLive ? "Hide the live app check" : "Also check my live app"}
           </button>
-        </p>
+        </div>
         {showLive && (
           <>
             <label htmlFor="guest-live-url">Live app URL, optional but recommended</label>
@@ -364,23 +396,14 @@ export default function GuestScan() {
             />
           </>
         )}
-        <button type="submit" disabled={phase !== "idle"}>
-          {phase === "fetching"
-            ? "Fetching files"
-            : phase === "analyzing"
-              ? "Analyzing files"
-              : phase === "live"
-                ? "Checking live site"
-                : "Run scan"}
-        </button>
       </form>
       <details>
         <summary>Privacy note</summary>
         <p>
-          This box reads a public repo. A private repo uses GitHub login, and that scan is not running yet. We read the file list and one archive in memory. We keep only the owner, repo, commit SHA, file paths, sizes, hashes, and redacted finding snippets. No raw secret values. Quota exhaustion shows as partial, never as a pass.
+          A guest read uses the shared GitHub quota and stops at 200 files and about 2MB. Signed in, the same check uses your GitHub token and reads up to 1,000 files and about 8MB, including one private repo you can already read. We do not store the file contents. We delete the token when you sign out. A coding tool review that reads the files on your machine is not running yet. A partial result is not a pass.
         </p>
       </details>
-      <CapacityMeter waiting={0} running={0} quota={null} />
+      {scan === null && <CapacityMeter waiting={0} running={0} quota={null} />}
       {queuedScan !== null && (
         <div aria-label="Waiting scan">
           <p>
@@ -440,12 +463,15 @@ export default function GuestScan() {
               priorityNote={scan.priorityNote}
             />
           )}
+          {analyzed && scanState !== undefined && (
+            <ToolCard tools={scanState.codingTools} />
+          )}
           {analyzed && (
-            <div aria-label="Rescan">
-              <button type="button" disabled={phase !== "idle"} onClick={() => void onRescan()}>
+            <div aria-label="Rescan" className="scan-secondary">
+              <button className="ghost" type="button" disabled={phase !== "idle"} onClick={() => void onRescan()}>
                 {phase !== "idle" ? "Working" : "Re-scan for new commits"}
-              </button>{" "}
-              <button type="button" disabled={phase !== "idle"} onClick={() => void onExplain()}>
+              </button>
+              <button className="ghost" type="button" disabled={phase !== "idle"} onClick={() => void onExplain()}>
                 Explain in plain words
               </button>
               {rescanNote.length === 0 && comparePair === null && (
@@ -485,8 +511,10 @@ export default function GuestScan() {
                 </p>
                 <p>It never shows file paths, line numbers, code, or secret values.</p>
               </div>
-              <button type="button" onClick={() => void onShare()}>Create share link</button>{" "}
-              <button type="button" onClick={() => void onPassport()}>Issue passport</button>
+              <div className="scan-secondary">
+                <button className="ghost" type="button" onClick={() => void onShare()}>Create share link</button>
+                <button className="ghost" type="button" onClick={() => void onPassport()}>Issue passport</button>
+              </div>
               {shareError.length > 0 && <p role="alert">{shareError}</p>}
               {shareId !== null && (
                 <p>
@@ -554,6 +582,13 @@ export default function GuestScan() {
             </details>
           )}
         </article>
+      )}
+      {scan !== null && <CapacityMeter waiting={0} running={0} quota={null} />}
+      {showSignIn && (
+        <section className="limit-signin" aria-labelledby="limit-signin-title">
+          <h2 id="limit-signin-title">Sign in to read more</h2>
+          <AuthPanel />
+        </section>
       )}
     </section>
   );

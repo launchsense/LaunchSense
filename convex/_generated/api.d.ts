@@ -20,6 +20,8 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as entitlements from "../entitlements.js";
 import type * as github_app from "../github/app.js";
+import type * as github_readToken from "../github/readToken.js";
+import type * as github_sessionToken from "../github/sessionToken.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as projects from "../projects.js";
@@ -55,6 +57,8 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   entitlements: typeof entitlements;
   "github/app": typeof github_app;
+  "github/readToken": typeof github_readToken;
+  "github/sessionToken": typeof github_sessionToken;
   health: typeof health;
   http: typeof http;
   projects: typeof projects;

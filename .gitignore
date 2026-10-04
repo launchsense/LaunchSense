@@ -5,6 +5,7 @@
 # Dependencies, build output, and private machine configuration.
 node_modules/
 /dist/
+/mcp/launchsense-mcp
 .env*
 !.env.example
 *.tsbuildinfo

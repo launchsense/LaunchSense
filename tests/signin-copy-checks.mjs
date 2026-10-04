@@ -95,12 +95,24 @@ describe("sign-in copy never promises unbuilt capability", () => {
     );
   });
 
-  it("states plainly that signing in changes nothing today", () => {
+  it("states the signed-in token policy and does not sell an install", () => {
     const home = readFileSync(new URL("../src/pages/Home.tsx", import.meta.url), "utf8");
+    const guest = readFileSync(new URL("../src/features/scan/GuestScan.tsx", import.meta.url), "utf8");
     const authPanel = readFileSync(new URL("../src/features/auth/AuthPanel.tsx", import.meta.url), "utf8");
-    assert.match(home, /Signing in does not change your scan today\./);
-    assert.match(authPanel, /Signing in today saves nothing and unlocks nothing\./);
-    assert.match(authPanel, /This changes nothing yet\./);
+    const why = readFileSync(new URL("../src/pages/Why.tsx", import.meta.url), "utf8");
+    const policySource = readFileSync(new URL("../shared/copy/signIn.ts", import.meta.url), "utf8");
+    const policy = "When you are signed in, LaunchSense uses your GitHub token on our server to download that one repository.";
+    assert.doesNotMatch(home, /Sign in is optional/);
+    assert.match(policySource, new RegExp(policy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(authPanel, /SIGN_IN_POLICY/);
+    assert.match(why, /SIGN_IN_POLICY/);
+    assert.match(guest, /<AuthPanel/);
+    assert.match(why, /1,000 files and about 8MB/);
+    assert.match(guest, /1,000 files and about 8MB/);
+    assert.doesNotMatch(guest, /deeper scan/i);
+    assert.doesNotMatch(authPanel, /deeper scan/i);
+    assert.doesNotMatch(`${guest}\n${why}\n${authPanel}`, /Install MCP/i);
+    assert.doesNotMatch(guest, /reads every file/i);
   });
 
   it("uses no em dashes in the sign-in surface", () => {
