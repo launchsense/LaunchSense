@@ -10,5 +10,6 @@ Short guides for users. Start with HOW-IT-WORKS.
 6. `ABOUT.md`: who LaunchSense is for and what it will not do.
 7. `SELF-SCAN-LOG.md`: we scan our own repository with LaunchSense after every stage, and publish what it found.
 8. `ROADMAP.md`: what is shipped, what is being built, and what we will not build.
+9. `feature-board.md`: ideas named in chat. A row is not a running feature.
 
 For release history, see `CHANGELOG.md` at the repo root.

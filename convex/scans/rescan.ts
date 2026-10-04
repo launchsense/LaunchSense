@@ -10,11 +10,25 @@ import {
   fetchGitHubJson,
   isRateLimitStatus,
   normalizeTreeEntries,
+  type RateLimitInfo,
 } from "../adapters/github";
+import type { ActionCtx } from "../_generated/server";
 import { compareFindings, depOfVuln } from "../../shared/reports/compare.ts";
+import { readSessionToken } from "../github/readToken";
 import type { ComparedFinding } from "../../shared/reports/compare.ts";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function rememberGuestQuota(ctx: ActionCtx, signedIn: boolean, rate: RateLimitInfo): Promise<void> {
+  if (signedIn) return;
+  if (rate.remaining === null || rate.limit === null || rate.resetAtMs === null) return;
+  await ctx.runMutation(internal.scans.quota.recordQuota, {
+    remaining: rate.remaining,
+    limit: rate.limit,
+    resetAt: rate.resetAtMs,
+    now: Date.now(),
+  });
+}
 
 export const rescanScan = action({
   args: { scanId: v.id("scans") },
@@ -32,9 +46,12 @@ export const rescanScan = action({
       throw new Error("Only an analyzed scan can be rescanned.");
     }
     const { owner, repo } = base;
+    const token = await readSessionToken(ctx);
+    const signedIn = token !== null;
 
-    const meta = await fetchGitHubJson(`https://api.github.com/repos/${owner}/${repo}`);
+    const meta = await fetchGitHubJson(`https://api.github.com/repos/${owner}/${repo}`, token);
     if (isRateLimitStatus(meta.status, meta.rate)) {
+      await rememberGuestQuota(ctx, signedIn, meta.rate);
       throw new Error("GitHub quota is exhausted. Try the rescan after the quota resets.");
     }
     if (meta.status !== 200) throw new Error("Could not reach the repository. Try again.");
@@ -43,8 +60,10 @@ export const rescanScan = action({
 
     const commit = await fetchGitHubJson(
       `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(defaultBranch)}`,
+      token,
     );
     if (isRateLimitStatus(commit.status, commit.rate)) {
+      await rememberGuestQuota(ctx, signedIn, commit.rate);
       throw new Error("GitHub quota is exhausted. Try the rescan after the quota resets.");
     }
     const sha = asRecord(commit.data)?.["sha"];
@@ -65,6 +84,7 @@ export const rescanScan = action({
       repo,
       repoUrl: base.repoUrl,
       rescanOf: args.scanId,
+      signedIn,
       now,
     });
     await ctx.runMutation(internal.scans.internal.markFetching, {
@@ -78,6 +98,7 @@ export const rescanScan = action({
       repo,
       sha,
       sinceMs: now - CACHE_TTL_MS,
+      signedIn,
     });
     if (cached !== null && cached._id !== newScanId) {
       const cachedTree = await ctx.runQuery(internal.scans.internal.getTreeEntries, {
@@ -116,8 +137,10 @@ export const rescanScan = action({
 
     const tree = await fetchGitHubJson(
       `https://api.github.com/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`,
+      token,
     );
     if (isRateLimitStatus(tree.status, tree.rate)) {
+      await rememberGuestQuota(ctx, signedIn, tree.rate);
       await ctx.runMutation(internal.scans.internal.markPartial, {
         scanId: newScanId,
         sha,

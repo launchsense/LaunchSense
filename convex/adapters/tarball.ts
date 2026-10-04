@@ -12,14 +12,19 @@ declare const process: { env: Record<string, string | undefined> };
 import { extractTar } from "../../shared/tar";
 import type { TarEntry } from "../../shared/tar";
 import { FETCH_TIMEOUT_MS, MAX_BYTES_PER_FILE } from "./github";
+import {
+  DOWNLOAD_MAX_BYTES,
+  GUEST_MAX_BYTES,
+  GUEST_MAX_FILES,
+} from "../../shared/scanCaps";
 
 // Convex Node actions have zlib available; the convex tsconfig has no ambient
 // node module types, so the import is declared locally.
 declare function require(name: string): { gunzipSync: (data: Uint8Array) => Uint8Array };
 const { gunzipSync } = require("node:zlib");
 
-export const MAX_TOTAL_BYTES = 2000000;
-export const MAX_FILES = 200;
+export const MAX_TOTAL_BYTES = GUEST_MAX_BYTES;
+export const MAX_FILES = GUEST_MAX_FILES;
 export const MAX_LOCKFILE_BYTES = 500000;
 
 function isRateLimitStatus(status: number, remaining: string | null): boolean {
@@ -60,13 +65,20 @@ export async function fetchRepoTarball(
   owner: string,
   repo: string,
   sha: string,
+  options?: { userToken?: string | null; maxFiles?: number; maxTotalBytes?: number },
 ): Promise<TarballResult> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "LaunchSense/1.0",
   };
-  const token = process.env.GITHUB_TOKEN;
+  const userToken = options?.userToken;
+  const token =
+    userToken !== undefined && userToken !== null && userToken.length > 0
+      ? userToken
+      : process.env.GITHUB_TOKEN;
   if (token !== undefined && token.length > 0) headers.Authorization = `Bearer ${token}`;
+  const maxFiles = options?.maxFiles ?? MAX_FILES;
+  const maxTotalBytes = options?.maxTotalBytes ?? MAX_TOTAL_BYTES;
 
   let response: Response;
   try {
@@ -95,7 +107,7 @@ export async function fetchRepoTarball(
   }
 
   const declared = Number(response.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > 20_000_000) {
+  if (Number.isFinite(declared) && declared > DOWNLOAD_MAX_BYTES) {
     return { status: "too-large", entries: [], truncated: false, rawBytes: declared, quota, resetAtMs: null };
   }
 
@@ -105,15 +117,15 @@ export async function fetchRepoTarball(
   } catch {
     return { status: "error", entries: [], truncated: false, rawBytes: 0, quota, resetAtMs: null };
   }
-  if (bytes.length > 20_000_000) {
+  if (bytes.length > DOWNLOAD_MAX_BYTES) {
     return { status: "too-large", entries: [], truncated: false, rawBytes: bytes.length, quota, resetAtMs: null };
   }
 
   const result = extractTar(bytes, gunzipSync, {
-    maxEntries: MAX_FILES,
+    maxEntries: maxFiles,
     maxBytesPerFile: MAX_BYTES_PER_FILE,
     maxLockfileBytes: MAX_LOCKFILE_BYTES,
-    maxTotalBytes: MAX_TOTAL_BYTES,
+    maxTotalBytes,
   });
   return {
     status: "ok",

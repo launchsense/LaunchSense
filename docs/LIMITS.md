@@ -6,11 +6,11 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 
 ## Code we can read
 
-- The paste box reads public GitHub repos. A private repo is the GitHub login path, and that scan is not running yet, so nothing about a private repo is checked or claimed today.
-- Guest scans only. There are no accounts yet, so each scan stands alone.
-- GitHub quota is shared. When it runs out, scans show partial with a retry time.
+- The paste box reads a public GitHub repo with no account. That guest read stops at 200 files and about 2MB, and it uses the shared GitHub quota.
+- Sign in with GitHub to read one private repo you can already read, or more of a public one. That read uses your GitHub token on our server for one archive download, then the token is deleted when you sign out. The signed-in cap is 1,000 files and about 8MB. The download stops at 20MB either way. We do not store the file contents.
+- GitHub quota for a guest scan is shared. When it runs out, scans show partial with a retry time. A signed-in scan spends that person's GitHub quota and does not change the guest meter.
 - One scan makes about four GitHub requests: repository metadata, the latest commit, the file list, and one repository archive.
-- Caps per scan: 200 files, 2 MB in total, 100 KB per file. Lockfiles may be read up to 500 KB so exact installed versions can be checked. Skipped files are listed as not checked.
+- Caps: 100 KB per file. Lockfiles may be read up to 500 KB so exact installed versions can be checked. Skipped files are listed as not checked.
 - Binary files and generated folders like node_modules, dist, and build are skipped.
 
 ## Capacity, and what we show you
@@ -49,9 +49,9 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 ## Not built yet
 
 - No saved projects, no history, no rescan across sessions.
-- MCP today is a public-repo route. Private repos through MCP are work we will do. There is no code upload.
+- A coding tool review that reads the files on your machine is not running yet. There is no code upload.
 - No monitoring and no scheduled scans.
-- No GitHub App yet. Connected read-only deep scans are on the roadmap, see `ROADMAP.md`.
+- No GitHub App installation scan yet. That connected read is on the roadmap, see `ROADMAP.md`. Sign-in today downloads one archive with the person's token.
 - No runtime performance data. GitHub does not expose it.
 - No blog posts published yet.
 

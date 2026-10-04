@@ -47,6 +47,7 @@ const scanDoc = v.object({
   liveUrl: v.optional(v.string()),
   mainAction: v.optional(v.string()),
   rescanOf: v.optional(v.id("scans")),
+  signedIn: v.optional(v.boolean()),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -66,7 +67,7 @@ const treeDoc = v.object({  _id: v.id("repoTrees"),
 });
 
 export const findInFlight = internalQuery({
-  args: { owner: v.string(), repo: v.string(), sinceMs: v.number() },
+  args: { owner: v.string(), repo: v.string(), sinceMs: v.number(), signedIn: v.boolean() },
   returns: v.union(scanDoc, v.null()),
   handler: async (ctx, args) => {
     const recent = await ctx.db
@@ -75,7 +76,12 @@ export const findInFlight = internalQuery({
       .order("desc")
       .take(20);
     for (const scan of recent) {
-      if (scan.updatedAt >= args.sinceMs && (scan.status === "validating" || scan.status === "fetching")) {
+      const sameMode = (scan.signedIn === true) === args.signedIn;
+      if (
+        sameMode &&
+        scan.updatedAt >= args.sinceMs &&
+        (scan.status === "validating" || scan.status === "fetching")
+      ) {
         return scan;
       }
     }
@@ -84,7 +90,7 @@ export const findInFlight = internalQuery({
 });
 
 export const findCachedScan = internalQuery({
-  args: { owner: v.string(), repo: v.string(), sha: v.string(), sinceMs: v.number() },
+  args: { owner: v.string(), repo: v.string(), sha: v.string(), sinceMs: v.number(), signedIn: v.boolean() },
   returns: v.union(scanDoc, v.null()),
   handler: async (ctx, args) => {
     const matches = await ctx.db
@@ -95,7 +101,8 @@ export const findCachedScan = internalQuery({
       .order("desc")
       .take(5);
     for (const scan of matches) {
-      if (scan.updatedAt >= args.sinceMs && (scan.status === "completed" || scan.status === "partial")) {
+      const sameMode = (scan.signedIn === true) === args.signedIn;
+      if (sameMode && scan.updatedAt >= args.sinceMs && (scan.status === "completed" || scan.status === "partial")) {
         return scan;
       }
     }
@@ -123,6 +130,7 @@ export const createScan = internalMutation({
     owner: v.string(),
     repo: v.string(),
     repoUrl: v.string(),
+    signedIn: v.boolean(),
     now: v.number(),
   },
   returns: v.id("scans"),
@@ -132,6 +140,7 @@ export const createScan = internalMutation({
       repo: args.repo,
       repoUrl: args.repoUrl,
       status: "validating",
+      signedIn: args.signedIn,
       createdAt: args.now,
       updatedAt: args.now,
     });

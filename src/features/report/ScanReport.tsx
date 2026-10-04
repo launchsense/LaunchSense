@@ -141,62 +141,62 @@ export default function ScanReport(props: {
     () => buildNotCheckedList({ aiConfigured: props.aiConfigured, liveProvided: props.liveProvided }),
     [props.aiConfigured, props.liveProvided],
   );
+  const nextPrompts = top.prompts.filter((item) => item.ruleId !== top.lead?.ruleId).slice(0, 2);
+  const promptHeading = nextPrompts.length === 1 ? "One more thing to fix" : "Two more things to fix";
 
   return (
-    <div aria-label="Scan report">
+    <div aria-label="Scan report" className="paste">
       <section aria-label="Result and scope" className="verdict">
-        <h3>{verdict.headline}</h3>
-        <p className="verdict-scope">{verdict.scope}</p>
-        <p className="verdict-counts">
-          Findings: {counts.high} high, {counts.medium} medium, {counts.low} low, {counts.info} info.
-        </p>
-        <ul className="verdict-stages">
-          {verdict.stages.map((stage) => (
-            <li key={stage.label}>
-              <strong>{stage.label}:</strong> {SCOPE_LABEL[stage.state]}. {stage.detail}
-            </li>
-          ))}
-        </ul>
-        <details className="not-checked">
-          <summary>What was not checked</summary>
-          <ul>
-            {notChecked.map((item) => (
-              <li key={item}>{item}</li>
+        <h3 className="paste-headline">{verdict.headline}</h3>
+        <p className={top.lead === null ? "verdict-scope paste-close" : "verdict-scope"}>{verdict.scope}</p>
+        <div className="paste-meta">
+          <p className="verdict-counts">
+            Findings: {counts.high} high, {counts.medium} medium, {counts.low} low, {counts.info} info.
+          </p>
+          <ul className="verdict-stages">
+            {verdict.stages.map((stage) => (
+              <li key={stage.label}>
+                <strong>{stage.label}:</strong> {SCOPE_LABEL[stage.state]}. {stage.detail}
+              </li>
             ))}
           </ul>
-        </details>
+          <details className="not-checked">
+            <summary>What was not checked</summary>
+            <ul>
+              {notChecked.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </details>
+        </div>
       </section>
 
       {top.lead !== null && (
-        <div aria-label="One thing to look at">
-          <h4>The one thing to look at</h4>
-          <p>This is the item a first check usually misses.</p>
-          <p style={{ whiteSpace: "pre-line" }}>{top.lead.prompt}</p>
-          <button type="button" onClick={() => copyPrompt("lead", top.lead?.prompt ?? "")}>
+        <div aria-label="One thing to look at" className="paste-lead">
+          <p className="paste-lead-text">{top.lead.prompt}</p>
+          <button className="paste-bar" type="button" onClick={() => copyPrompt("lead", top.lead?.prompt ?? "")}>
             {promptCopied === "lead" ? "Copied" : "Copy this prompt"}
           </button>
         </div>
       )}
 
       {top.prompts.length > 0 && (
-        <div aria-label="Three actions">
-          <h4>
-            {top.prompts.length === 1
-              ? "One thing to fix first"
-              : top.prompts.length === 2
-                ? "Two things to fix first"
-                : "Three things to fix first"}
-          </h4>
-          <ol>
-            {top.prompts.map((item, index) => (
-              <li key={item.ruleId}>
-                <p style={{ whiteSpace: "pre-line" }}>{item.prompt}</p>
-                <button type="button" onClick={() => copyPrompt(item.ruleId, item.prompt)}>
-                  {promptCopied === item.ruleId ? "Copied" : `Copy prompt ${index + 1}`}
-                </button>
-              </li>
-            ))}
-          </ol>
+        <div aria-label="Three actions" className="paste-actions">
+          {nextPrompts.length > 0 && (
+            <>
+              <h4>{promptHeading}</h4>
+              <div className="paste-next">
+                {nextPrompts.map((item) => (
+                  <div className="paste-card" key={item.ruleId}>
+                    <p>{item.prompt}</p>
+                    <button type="button" onClick={() => copyPrompt(item.ruleId, item.prompt)}>
+                      {promptCopied === item.ruleId ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
           {props.priorityNote !== undefined && props.priorityNote.length > 0 && (
             <p className="priority-note">{props.priorityNote}</p>
           )}
@@ -279,7 +279,7 @@ export default function ScanReport(props: {
               Where: {f.path}:{f.line}
             </p>
             <p>{f.why}</p>
-            <button type="button" onClick={() => copyFinding(f)}>
+            <button className="ghost" type="button" onClick={() => copyFinding(f)}>
               {copied === f.fingerprint ? "Copied" : "Copy finding"}
             </button>
           </article>

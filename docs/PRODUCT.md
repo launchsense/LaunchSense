@@ -17,11 +17,10 @@ They are not checked yet.
 
 Three ways in:
 
-- Public repo, no account. Paste the URL. This is what runs today.
-- Private repo. Sign in with GitHub and check a repo you can already read. That
-  scan is not running yet.
-- MCP. The same check from a coding helper. A public-repo route exists. Private
-  repos through MCP are work we will do.
+- Public repo, no account. Paste the URL. This is the guest read: 200 files and about 2MB.
+- Private repo, or a larger public read. Sign in with GitHub. The scan uses your
+  token for one archive and stops at 1,000 files and about 8MB.
+- MCP. A coding tool review that reads the files on your machine is not running yet.
 
 Status: Phase 1, shipped and live at `https://harmless-chihuahua-667.convex.site`.
 Source: `https://github.com/launchsense/LaunchSense`.
@@ -175,8 +174,9 @@ and never decides anything.
   run. deps.dev and OpenSSF Scorecard are listed as not-checked. A model does
   not set these rows.
 
-Caps are stated in the interface, not buried: 200 files, about 2MB, 100KB per file
-when a single file is read, and 5000 stored tree entries.
+Caps are stated in the interface, not buried: a guest read is 200 files and about 2MB.
+Signed in, the same check reads up to 1,000 files and about 8MB. A single file stops
+at 100KB, and 5000 tree entries can be stored.
 
 One naming note, since it appears in older planning: the readiness band is called
 `Judge Readiness` in the internal plan and `Share readiness` in the shipped
@@ -229,8 +229,11 @@ builder is about to hit publish.
 
 ## Privacy and what we store
 
-- The paste box reads a public repo. A private repo uses GitHub login, and that
-  scan is not running yet, so a private repo is not read today.
+- The paste box reads a public repo with no account. Sign in and LaunchSense uses
+  your GitHub token on our server to download that one repository, including one
+  private repo you can already read. We do not store the file contents. We delete
+  the token when you sign out. A coding tool review that reads the files on your
+  machine is not running yet.
 - No raw file contents are stored, ever. Only owner, repo, commit SHA, file paths,
   sizes, hashes, and redacted finding snippets.
 - No raw secret values, anywhere. One redaction function covers every output path:
@@ -241,9 +244,9 @@ builder is about to hit publish.
 
 ## Known limits, stated up front
 
-- The running scan is a public paste. Private repos after GitHub login are not
-  running yet. MCP for a private repo is work we will do.
-- 200 files and about 2MB per guest scan.
+- The running scan is a public paste, or a signed-in read of one repository.
+  A coding tool review that reads the files on your machine is not running yet.
+- 200 files and about 2MB per guest scan. 1,000 files and about 8MB when signed in.
 - No browser rendering. The live check reads served HTML, not a rendered phone.
 - The check runs when you press Run, or from the read-only MCP endpoints. There is no
   automatic reminder and no monitoring in Phase 1, so a stale result stays stale
@@ -253,8 +256,8 @@ builder is about to hit publish.
   signal, not yet the fix.
 - Share links and passports do not expire and cannot be revoked today. The interface
   says so before you create one, not after.
-- Signing in unlocks nothing yet. It says so plainly instead of implying a richer
-  scan is one click away.
+- Signing in reads up to 1,000 files and about 8MB on your GitHub token. It does
+  not read the whole repository, and it does not install a coding tool.
 
 ## Milestones, riskiest first
 
@@ -442,7 +445,8 @@ understand. It now scans this document too.
 
 ## What is not built, plainly
 
-Sign-in unlocks nothing today. There is no saved history, and a private repo scan
-after GitHub login is not running yet. MCP for a private repo is work we will do.
+There is no saved history. A coding tool review that reads the files on your
+machine is not running yet. Sign-in reads one repository, up to 1,000 files and
+about 8MB, and then stops.
 There is no monitoring, no browser rendering, and no share revocation. The
 interface says so.

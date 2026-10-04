@@ -1,20 +1,40 @@
 "use node";
 
 import { action } from "../_generated/server";
+import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { parseGitHubRepoUrl } from "../../shared/githubUrl";
+import { readSessionToken } from "../github/readToken";
 import {
   MAX_STORED_ENTRIES,
   asRecord,
   fetchGitHubJson,
   isRateLimitStatus,
   normalizeTreeEntries,
+  type RateLimitInfo,
 } from "../adapters/github";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const INFLIGHT_WINDOW_MS = 2 * 60 * 1000;
+
+const SIGNED_OUT_MISS =
+  "This repository did not open. If it is yours, sign in with GitHub and try the same URL again.";
+const SIGNED_IN_MISS = "This repository did not open. Sign in with an account that can read it, and try again.";
+const CONTENTS_DENIED =
+  "GitHub did not allow this read. Turn on Contents: Read for the LaunchSense login, then sign in again.";
+
+async function rememberGuestQuota(ctx: ActionCtx, signedIn: boolean, rate: RateLimitInfo): Promise<void> {
+  if (signedIn) return;
+  if (rate.remaining === null || rate.limit === null || rate.resetAtMs === null) return;
+  await ctx.runMutation(internal.scans.quota.recordQuota, {
+    remaining: rate.remaining,
+    limit: rate.limit,
+    resetAt: rate.resetAtMs,
+    now: Date.now(),
+  });
+}
 
 function rateLimitMessage(resetAtMs: number | null): string {
   if (resetAtMs !== null) {
@@ -42,11 +62,14 @@ export const runScan = action({
     }
     const { owner, repo, normalizedUrl } = parsed.value;
     const now = Date.now();
+    const token = await readSessionToken(ctx);
+    const signedIn = token !== null;
 
     const inFlight = await ctx.runQuery(internal.scans.internal.findInFlight, {
       owner,
       repo,
       sinceMs: now - INFLIGHT_WINDOW_MS,
+      signedIn,
     });
     // Only reuse an in-flight row once it has a commit pinned, otherwise the
     // caller would get a scan that cannot be analyzed yet.
@@ -59,15 +82,17 @@ export const runScan = action({
       owner,
       repo,
       repoUrl: normalizedUrl,
+      signedIn,
       now,
     });
     await ctx.runMutation(internal.scans.internal.markFetching, { scanId, now });
 
     let defaultBranch = "main";
     try {
-      const meta = await fetchGitHubJson(`https://api.github.com/repos/${owner}/${repo}`);
+      const meta = await fetchGitHubJson(`https://api.github.com/repos/${owner}/${repo}`, token);
       if (isRateLimitStatus(meta.status, meta.rate)) {
-        const resetAt = meta.rate.resetAtMs ?? meta.rate.retryAfterMs !== null ? (meta.rate.resetAtMs ?? Date.now() + (meta.rate.retryAfterMs ?? 0)) : null;
+        const resetAt = meta.rate.resetAtMs ?? (meta.rate.retryAfterMs !== null ? Date.now() + meta.rate.retryAfterMs : null);
+        await rememberGuestQuota(ctx, signedIn, meta.rate);
         const message = rateLimitMessage(resetAt);
         await ctx.runMutation(internal.scans.internal.markPartial, {
           scanId,
@@ -82,7 +107,16 @@ export const runScan = action({
         await ctx.runMutation(internal.scans.internal.markFailed, {
           scanId,
           errorKind: "not_found",
-          errorMessage: "Repository was not found. It may be private, renamed, or deleted.",
+          errorMessage: signedIn ? SIGNED_IN_MISS : SIGNED_OUT_MISS,
+          now: Date.now(),
+        });
+        return { scanId, status: "failed", cached: false };
+      }
+      if ((meta.status === 401 || meta.status === 403) && !isRateLimitStatus(meta.status, meta.rate)) {
+        await ctx.runMutation(internal.scans.internal.markFailed, {
+          scanId,
+          errorKind: "unknown",
+          errorMessage: CONTENTS_DENIED,
           now: Date.now(),
         });
         return { scanId, status: "failed", cached: false };
@@ -96,6 +130,7 @@ export const runScan = action({
         });
         return { scanId, status: "failed", cached: false };
       }
+      await rememberGuestQuota(ctx, signedIn, meta.rate);
       const metaRecord = asRecord(meta.data);
       const branch = metaRecord?.["default_branch"];
       if (typeof branch === "string" && branch.length > 0) defaultBranch = branch;
@@ -116,9 +151,11 @@ export const runScan = action({
     try {
       const commit = await fetchGitHubJson(
         `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(defaultBranch)}`,
+        token,
       );
       if (isRateLimitStatus(commit.status, commit.rate)) {
         const resetAt = commit.rate.resetAtMs ?? null;
+        await rememberGuestQuota(ctx, signedIn, commit.rate);
         await ctx.runMutation(internal.scans.internal.markPartial, {
           scanId,
           defaultBranch,
@@ -168,6 +205,7 @@ export const runScan = action({
       repo,
       sha,
       sinceMs: Date.now() - CACHE_TTL_MS,
+      signedIn,
     });
     if (cached !== null && cached._id !== scanId) {
       const cachedTree = await ctx.runQuery(internal.scans.internal.getTreeEntries, { owner, repo, sha });
@@ -202,9 +240,11 @@ export const runScan = action({
     try {
       const tree = await fetchGitHubJson(
         `https://api.github.com/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`,
+        token,
       );
       if (isRateLimitStatus(tree.status, tree.rate)) {
         const resetAt = tree.rate.resetAtMs ?? null;
+        await rememberGuestQuota(ctx, signedIn, tree.rate);
         await ctx.runMutation(internal.scans.internal.markPartial, {
           scanId,
           sha,

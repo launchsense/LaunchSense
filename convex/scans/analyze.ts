@@ -18,11 +18,11 @@ import {
 } from "../../shared/redaction";
 import { fetchBlobContent } from "../adapters/github";
 import { fetchRepoTarball, MAX_LOCKFILE_BYTES } from "../adapters/tarball";
+import { readSessionToken } from "../github/readToken";
+import { GUEST_MAX_BYTES, GUEST_MAX_FILES, SIGNED_MAX_BYTES, SIGNED_MAX_FILES } from "../../shared/scanCaps";
 import { isLockfilePath } from "../../shared/tar";
 import { queryOsvBatch } from "../adapters/osv";
 
-const MAX_FILES_FETCHED = 200;
-const MAX_TOTAL_BYTES = 2000000;
 // Convex actions time out at 10 minutes. Stop well before that so a slow
 // upstream produces an honest partial result instead of a dropped action.
 const ANALYZE_DEADLINE_MS = 150000;
@@ -195,9 +195,41 @@ export const analyzeScan = action({
   }> => {
     const scan = await ctx.runQuery(internal.scans.store.fetchScan, { scanId: args.scanId });
     if (scan === null || scan.sha === undefined) {
+      if (scan !== null && (scan.status === "partial" || scan.status === "failed")) {
+        return {
+          scanId: args.scanId,
+          status: scan.status,
+          findingCount: 0,
+          evidenceCount: 0,
+          fetched: 0,
+          skipped: 0,
+        };
+      }
       throw new Error("Scan is not ready for analysis yet. Fetch the tree first.");
     }
     const { owner, repo, sha } = scan;
+    const signedRead = scan.signedIn === true;
+    const token = await readSessionToken(ctx);
+    if (signedRead && token === null) {
+      await ctx.runMutation(internal.scans.internal.markFailed, {
+        scanId: args.scanId,
+        errorKind: "unknown",
+        errorMessage: "Sign in again so this scan can download the repository.",
+        now: Date.now(),
+      });
+      return {
+        scanId: args.scanId,
+        status: "failed",
+        findingCount: 0,
+        evidenceCount: 0,
+        fetched: 0,
+        skipped: 0,
+      };
+    }
+    const maxFiles = signedRead ? SIGNED_MAX_FILES : GUEST_MAX_FILES;
+    const maxBytes = signedRead ? SIGNED_MAX_BYTES : GUEST_MAX_BYTES;
+    const fileCapReason = `file cap (${maxFiles} files)`;
+    const byteCapReason = `byte budget (${Math.round(maxBytes / 1_000_000)}MB)`;
 
     // Admission control. Sprint day brings many visitors at once, so a scan
     // either gets one of the few analysis slots or is told its place and told
@@ -260,17 +292,21 @@ export const analyzeScan = action({
       return 3;
     };
     candidates.sort((a, b) => priority(a) - priority(b) || (a < b ? -1 : 1));
-    const selected = candidates.slice(0, MAX_FILES_FETCHED);
-    for (const path of candidates.slice(MAX_FILES_FETCHED)) {
-      skipped.push({ path, reason: "file cap (200 files)" });
+    const selected = candidates.slice(0, maxFiles);
+    for (const path of candidates.slice(maxFiles)) {
+      skipped.push({ path, reason: fileCapReason });
     }
 
     // One tarball request replaces up to 200 per-file content requests. This is
     // the difference between a scan that fits an unauthenticated GitHub quota
     // and one that exhausts it on the first visitor.
     const deadline = Date.now() + ANALYZE_DEADLINE_MS;
-    const tarball = await fetchRepoTarball(owner, repo, sha);
-    if (tarball.quota !== null) {
+    const tarball = await fetchRepoTarball(owner, repo, sha, {
+      userToken: signedRead ? token : null,
+      maxFiles,
+      maxTotalBytes: maxBytes,
+    });
+    if (!signedRead && tarball.quota !== null) {
       await ctx.runMutation(internal.scans.quota.recordQuota, {
         remaining: tarball.quota.remaining,
         limit: tarball.quota.limit,
@@ -286,8 +322,8 @@ export const analyzeScan = action({
     if (tarball.status === "ok") {
       for (const entry of tarball.entries) {
         if (Date.now() > deadline) break;
-        if (files.length >= MAX_FILES_FETCHED || bytesUsed >= MAX_TOTAL_BYTES) break;
-        if (bytesUsed + entry.size > MAX_TOTAL_BYTES) break;
+        if (files.length >= maxFiles || bytesUsed >= maxBytes) break;
+        if (bytesUsed + entry.size > maxBytes) break;
         files.push({ path: entry.path, content: entry.content, size: entry.size });
         bytesUsed += entry.size;
         processed += 1;
@@ -333,8 +369,12 @@ export const analyzeScan = action({
         nextIndex += 1;
         const path = missing[index];
         if (path === undefined) return;
-        if (bytesUsed >= MAX_TOTAL_BYTES) {
-          skipped.push({ path, reason: "byte budget (2MB)" });
+        if (files.length >= maxFiles) {
+          skipped.push({ path, reason: fileCapReason });
+          continue;
+        }
+        if (bytesUsed >= maxBytes) {
+          skipped.push({ path, reason: byteCapReason });
           continue;
         }
 
@@ -344,6 +384,7 @@ export const analyzeScan = action({
           sha,
           path,
           isLockfilePath(path) ? MAX_LOCKFILE_BYTES : undefined,
+          signedRead ? token : null,
         );
         processed += 1;
         if (blob.status === "rate-limited") {
@@ -364,8 +405,8 @@ export const analyzeScan = action({
           skipped.push({ path, reason: "fetch failed" });
           continue;
         }
-        if (bytesUsed + blob.size > MAX_TOTAL_BYTES) {
-          skipped.push({ path, reason: "byte budget (2MB)" });
+        if (bytesUsed + blob.size > maxBytes) {
+          skipped.push({ path, reason: byteCapReason });
           continue;
         }
         // Size and content hash only. No file body is persisted anywhere.

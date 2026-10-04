@@ -62,6 +62,8 @@ export default defineSchema({
     liveUrl: v.optional(v.string()),
     mainAction: v.optional(v.string()),
     rescanOf: v.optional(v.id("scans")),
+    /** True when this scan used the signed-in GitHub token and the higher file cap. */
+    signedIn: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -82,6 +84,12 @@ export default defineSchema({
     entries: v.array(v.object({ path: v.string(), type: v.string() })),
     etag: v.optional(v.string()),
   }).index("by_repo_sha", ["owner", "repo", "sha"]),
+  // GitHub user token for one signed-in archive download. Never returned to the browser.
+  githubScanTokens: defineTable({
+    userId: v.id("users"),
+    accessToken: v.string(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
   fileContents: defineTable({
     owner: v.string(),
     repo: v.string(),
