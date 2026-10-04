@@ -18,7 +18,7 @@ edits. Shapes only, no value is ever printed.
 | chainstacklabs/web3-ai-trading-agent | ffcc1c3 | 40/2 | 5 | 1 | network 10, eval 4 | README placeholder key, cleared |
 | opentensor/validators | 9e2172f | 63/1 | 0 | 1 | network 10, license 1 | clean repo |
 | mwritescode/smart-contracts-vulnerabilities | d755f0f | 25/5 | 2 | 1 | network 5, eval 2 | `model.eval()` FP, notebook FP |
-| dharmpatel28/Ethereum-Price-Prediction | 3a1f919 | 20/7 | 3 | 2 | credential 3, network 2, eval 1 | WQ-3 real Django SECRET_KEY |
+| dharmpatel28/Ethereum-Price-Prediction | 3a1f919 | 20/7 | 3 | 2 | credential 3, network 2, eval 1 | WQ-5 real Django SECRET_KEY |
 
 ## LIVE SEVERITY
 

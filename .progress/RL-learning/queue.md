@@ -7,9 +7,9 @@
 4. DONE  M1b maths scoring pass: 12 bands scored on local nimble (0-3 rubric, values 2.16-2.94), sample /tmp/opencode/maths-band-sample.json
 5. DONE  wave-full 06 PHP/Ruby (wave-full-06.md, sheet written by a concurrent coordinator; I re-verified its 2 owner-queue rows against the clones and both hold)
 6. DONE  wave-full 07 C/C++ (wave-full-07.md, 10/10, 1 clone-name fallback: yyjson-tldr/yyjson does not exist, ibireme/yyjson scanned instead)
-7. DONE  wave-full 08 crypto/ML (wave-full-08.md, 10/10, WQ-3 real Django SECRET_KEY)
+7. DONE  wave-full 08 crypto/ML (wave-full-08.md, 10/10, WQ-5 real Django SECRET_KEY)
 8. DONE  wave-full 09 infra (wave-full-09.md, 10/10, quietest wave, 1 high and it is a FP)
-9. DONE  wave-full 10 mobile/other (wave-full-10.md, 10/10, 144 of 145 H/M are FPs from one credential-name defect, WQ-4)
+9. DONE  wave-full 10 mobile/other (wave-full-10.md, 10/10, 144 of 145 H/M are FPs from one credential-name defect, WQ-9)
 10. DONE M4 monitoring query + coverage remainder (monitoring-reading.md, convex/decisionMonitoring.ts, .progress walk exclusion, OSV honesty line, 8 new tests, 393/393 suite green, tsc clean)
 11. DONE M5 counts-only case drafts (cases/, 4 drafts + index, counts only, all totals reconcile)
 12. DONE morning-report.md (morning-report.md, every item status, models, failures, secrets, top classes, next action)

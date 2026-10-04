@@ -129,6 +129,84 @@ Format: one block per finding. `shape` describes form and length, never content.
   replace it with a real key.
 - likely verdict: not a live key, and recorded so nobody re-derives this.
 
+---
+
+## WQ-7: shaunjanssens/homelab, committed Immich service credentials
+
+- revision: `8a48606` (depth 1, 2026-10-05)
+- path: `immich/.env`
+- shape: the file has 14 lines, 8 of them assigned variables. Two assignments
+  carry secret-bearing names: `TYPESENSE_API_KEY` at line 5, 16 characters, and
+  `DB_PASSWORD` at line 6, 8 characters. Both consist only of lowercase letters
+  and hyphens, so they are word-shaped, not random.
+- why it matters: a committed database password for a self-hosted photo server
+  in a public homelab repo. The word-shape suggests a weak chosen password
+  rather than a generated one, which makes it guessable rather than merely
+  exposed. It also points at a local Typesense instance.
+- what lowers it: this is a personal homelab template, the services are
+  local-only, and the values are low-entropy words. Still committed and still
+  readable by every clone.
+- what the scanner did: it reported one `secret.tracked-env` high on
+  `immich/.env` line 1. Line 1 is a documentation comment, so the anchor is
+  wrong, but the file-level call was right. The two actual credentials on lines
+  5 and 6 were not individually reported. This is the inverse of the wave 06
+  case: right verdict, wrong anchor, and under-reporting inside the file.
+
+---
+
+## WQ-8: nullclaw/nullhub, `platform_key` and `auth_mode` literals in source and plans
+
+- revision: `825b0cd` (depth 1, 2026-10-05)
+- paths:
+  - `src/api/meta.zig` lines 384, 394, 404. Three `auth_mode` literals,
+    15 characters each, lowercase with underscores, entropy about 3.37 bits per
+    character.
+  - `docs/superpowers/plans/2026-03-18-report-command.md` lines 683, 704, 722,
+    743. Four `platform_key` literals, 12 to 13 characters, digits plus
+    hyphens.
+- why it matters: named `platform_key` and read as a config value, this is the
+  shape of a committed integration key. The `auth_mode` values are mode names
+  such as an auth strategy identifier, which is the weaker of the two.
+- what lowers it: every checked literal is word-shaped or slug-shaped, not
+  random, so none of these look like generated credentials. Recorded because the
+  naming and the plan-document context are the kind of thing that becomes a real
+  key later without another review.
+- scanner verdict: 20 highs in this repo are capped, see the wave sheet. These 7
+  were within the cap.
+
+## Checked and cleared in wave 10, so it is not re-queued
+
+- `deretame/Breeze`, `android/Breeze-key.keystore`, 2734 bytes, and
+  `.env.proxy`. Both looked like committed secrets and neither is one. The
+  `.gitattributes` marks the keystore and `android/key.properties` with
+  `filter=git-crypt`, and `AGENTS.md:327` confirms it, so in the clone the
+  keystore is ciphertext, confirmed by inspecting the first bytes. The
+  `.env.proxy` file holds two lines, one a Chinese comment and one `proxy=`
+  assignment, and its own comment says to run `git update-index --skip-worktree`
+  on it. No secret.
+- `jellyfin/jellyfin-android`, `UserDao.kt:53`. The line is a Room `@Query`
+  string where `access_token = :accessToken` is a bind parameter, not a literal.
+  The scanner matched the column name. Refuted.
+
+## Refuted in wave 10, shapes only
+
+- The mobile credential regex matches almost any identifier containing `key`,
+  `token` or `flag`: `forKey`, `dispatchQueueKey`, `keyDownCallback`,
+  `FLAG_SECURE`, `CHANNEL`, `autoresizingMask`, `color key=`, Android
+  `collectLatest` lambdas, and `setOnClickListener` blocks. 20 highs in 5 of 10
+  repos are the global cap being filled entirely with this class. Highest false
+  positive rate of any wave: 175 of 176 HIGH/MEDIUM rows are false.
+- `MacPaw/OpenAI`, `.github/api-breakage-allowlist.txt`, 20 highs. That file is
+  a generated list of Swift API breakages. Long Swift signatures read as key
+  material because they contain the word `authorization` or `promptCacheKey`.
+- `hungps/flutter_pokedex`, iOS storyboard XML, 20 highs. `<autoresizingMask
+  key="frame">` and `<color key="textColor">` are Interface Builder attributes.
+- `zachlatta/freeflow`, Swift, 20 highs. `UserDefaults.standard.double(forKey:
+  "...")` and `DispatchSpecificKey<UInt8>()`.
+- `pentacent/keila`, 14 innerHTML rows in a campaign email block editor. It is
+  the product's own markup builder, that is what it does. Not a vulnerability
+  row on its own.
+
 ## Refuted in wave 08, shapes only
 
 - `mohin-io/Decentralized-Autonomous-Hedge-Fund-AI-DAO`,
@@ -180,9 +258,9 @@ Format: one block per finding. `shape` describes form and length, never content.
 A second worker ran waves 07 to 10 over the same 40 repos. Its findings are folded
 into the rows above rather than duplicated: WQ-3 and WQ-4 already carry its
 civetweb and mongoose private-key rows. The Django key is WQ-5 above. Two rows
-below are new from this pass, numbered from WQ-7 so no number is reused.
+below are new from this pass, numbered WQ-9 and WQ-10 so no number is reused.
 
-### WQ-7: pentacent/keila, committed Phoenix secret_key_base in the base config
+### WQ-9: pentacent/keila, committed Phoenix secret_key_base in the base config
 
 - revision: `2308beb` (depth 1, 2026-10-05)
 - path: `config/config.exs`, line 18
@@ -198,7 +276,7 @@ below are new from this pass, numbered from WQ-7 so no number is reused.
   override.
 - value exposure note: none. This row was masked correctly on the first read.
 
-### WQ-8: two secret values printed into an agent session on this machine
+### WQ-10: two secret values printed into an agent session on this machine
 
 - what happened: twice, while confirming rows by hand, the masking helper in my
   wave harness did not catch a committed secret literal and the value printed
@@ -237,11 +315,13 @@ below are new from this pass, numbered from WQ-7 so no number is reused.
 
 ## Counts for waves 07 to 10
 
-- Rows needing an owner decision across both passes: WQ-1 through WQ-8, 8 rows.
+- Rows needing an owner decision across both passes: WQ-1 through WQ-10, 10 rows.
 - Of those, WQ-1, WQ-3, WQ-4, and WQ-5 are committed key material that is real
   as a shape. WQ-2 is a shipped default that must be rotated on a real install.
-  WQ-6 is a key shape in documentation. WQ-7 is a development default. WQ-8 is a
-  masking incident on this machine, not a finding about a repo.
+  WQ-6 is a key shape in documentation. WQ-7 is a weak committed service password
+  and WQ-8 is a config-key shape that is word-shaped rather than random. WQ-9 is
+  a development default. WQ-10 is a masking incident on this machine, not a
+  finding about a repo.
 - Cleared and recorded as refuted: 10 entries covering 18 findings.
 - Nothing here is a credential of ours. Nothing was sent to a network service.
   No private key body was read or copied at any point.

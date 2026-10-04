@@ -19,7 +19,7 @@ is one defect. That is the finding worth taking from it.
 | jellyfin/jellyfin-android | b39a27a | 602/28 | 3 | 1 | sql 16, network 10 | SQL @Query string, cleared |
 | hungps/flutter_pokedex | 7e2b6d4 | 237/85 | 20 | 1 | credential 20 | storyboard XML, FP |
 | deretame/Breeze | 5853c2b | 849/127 | 20 | 1 | credential 20 | storyboard XML + MethodChannel, FP |
-| pentacent/keila | 2308beb | 702/106 | 6 | 15 | inner-html 14, credential 6 | WQ-4 Phoenix key, cleared |
+| pentacent/keila | 2308beb | 702/106 | 6 | 15 | inner-html 14, credential 6 | WQ-9 Phoenix key, cleared |
 | dmjio/miso | 4b93016 | 299/13 | 6 | 5 | debug 9, eval 5, inner-html 4 | real Haskell FFI eval, correct high |
 | nullclaw/nullhub | 825b0cd | 177/10 | 20 | 1 | credential 20 | Zig enum/option strings, FP |
 

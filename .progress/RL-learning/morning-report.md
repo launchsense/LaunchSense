@@ -110,6 +110,7 @@ The M1b maths pass in an earlier part of this run did score 12 bands on the loca
 | Two masked-value leaks | See section 6. | Widened the masker, tested it against 11 sample lines, then re-verified every affected row. |
 | Two concurrent writers on the same files | A coordinator wrote `wave-full-06.md` and `owner-queue.md` while I was writing the same paths. | Did not clobber. Re-verified its two owner-queue rows, kept its numbering, renumbered mine from WQ-7 so no number was reused, and folded my duplicate Django row into its existing WQ-5. |
 | Six line citations in my first audit draft | Pointed at lines that had moved after my own edits earlier in the run. | Re-verified every citation with `sed -n` and corrected four. |
+| A second worker rewrote wave sheets 07, 08, 09, 10 with counts that do not reproduce | Same repository, same revision, different read and skip counts. Example: mongoose claimed 806/324 where the scan says 1711/321. | Re-ran the scans on two disputed repos. My numbers reproduced exactly, theirs did not. Restored my sheets, kept their two verified owner-queue rows, and then checked all 50 rows across all 5 sheets against the scan JSON. Zero mismatches. Written up in `numbers-dispute.md`. |
 
 **No item failed twice, so nothing is DEFERRED.**
 
@@ -117,7 +118,8 @@ The M1b maths pass in an earlier part of this run did score 12 bands on the loca
 
 ## 5. Live-looking secrets found
 
-Eight rows in `owner-queue.md`. Shapes only, no value recorded in any file.
+Ten rows in `owner-queue.md`, written by three different worker sessions. Shapes
+only, no value recorded in any file.
 
 | Row | What | Verdict |
 |---|---|---|
@@ -127,13 +129,15 @@ Eight rows in `owner-queue.md`. Shapes only, no value recorded in any file.
 | WQ-4 | mongoose, one committed EC key in a tutorial | Real material, demo fixture. |
 | WQ-5 | A Django `SECRET_KEY` with the `django-insecure-` prefix, committed | Real shape, development config (`DEBUG = True`, empty `ALLOWED_HOSTS`). |
 | WQ-6 | An OpenRouter-shaped key literal in a README | Documentation. Refuted by reading the line's own comment. |
-| WQ-7 | keila, a 64-character Phoenix `secret_key_base` in the base config | Real shape, low risk: `runtime.exs` reads the real key from the environment. |
-| WQ-8 | Two secret values printed into an agent session on this machine | Not a finding about a repo. A masking defect on my side. See section 6. |
+| WQ-7 | homelab, a committed `DB_PASSWORD` and `TYPESENSE_API_KEY` in a personal homelab template | Real shape, low entropy. A committed password is a committed password whatever its entropy. Filed by the second worker, verified by me. |
+| WQ-8 | nullhub, `platform_key` and `auth_mode` literals in source and plans | Word-shaped, not random. Recorded because the naming becomes a real key later. Filed by the second worker, verified by me. |
+| WQ-9 | keila, a 64-character Phoenix `secret_key_base` in the base config | Real shape, low risk: `runtime.exs` reads the real key from the environment. |
+| WQ-10 | Two secret values printed into an agent session on this machine | Not a finding about a repo. A masking defect on my side. See section 6. |
 
 Also cleared and recorded so they are not re-reported: 10 entries covering 18
 findings, each refuted by opening the actual file.
 
-**Needs an owner decision: WQ-1, WQ-2, WQ-5, and WQ-8.** The rest are recorded for
+**Needs an owner decision: WQ-1, WQ-2, WQ-5, and WQ-10.** The rest are recorded for
 completeness. No private key body was read, opened, or copied at any point.
 
 ---
@@ -207,7 +211,7 @@ appears anywhere in the output.
 
 ---
 
-## 9. The three things worth the owner's attention
+## 9. The four things worth the owner's attention
 
 **First, precision.** The tool is right about 1 row in 8. That is measured, not
 estimated, and it is on the file in `cases/case-1-fifty-repos-counts.md`. The fix
@@ -223,7 +227,16 @@ advertises `launchsense_scan_public_repo` and a third tool,
 `launchsense_explain_findings`, that has no handler anywhere in the codebase. Four
 fixes, all cited to a file and line, in `feature-board-audit.md`.
 
-**Third, the decision lane has never been measured and now says so.** The monitoring
+**Third, a numbers dispute between two workers, and how it settled.** A second
+coordinator session wrote wave sheets 07, 08, 09 and 10 from the same scan corpus
+and got different file counts for the same revisions. Re-running the scans settled
+it: my numbers reproduce exactly, theirs did not. Their sheets are reverted and all
+50 rows across all 5 sheets are now verified against the scan output, zero
+mismatches. Their two new owner-queue rows were verified by me and kept, and one of
+them, WQ-7, is a better finding than the note I had filed for the same repository.
+Full detail in `numbers-dispute.md`.
+
+**Fourth, the decision lane has never been measured and now says so.** The monitoring
 reading exists and reports 0 rows, because the table it reads is only written when
 a deployment variable is set and it is not set. That is the honest answer. Whether
 the hosted deployment should send usage counts at all is an open question involving
