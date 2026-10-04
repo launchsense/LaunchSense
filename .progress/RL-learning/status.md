@@ -32,3 +32,4 @@ on PyTorch `model.eval()`, `code.inner-html` firing on generated, vendored and
 first-party markup builders, and license advice issued where a LICENSE file
 already exists. Precision is the single blocker on this analyzer for
 non-JavaScript ecosystems, not recall.- 2026-10-05 item 14 done: feature-board plans for 5 noted rows, plans only, zero code. Key line for the owner: the two bot rows depend on the 12pct precision measurement, so precision work is upstream of both, and whose-GitHub-quota is one question that unblocks two rows.
+- 2026-10-05 item 15 done: feature-board reconciliation across 10 product commits since the rows were named. 0 of 8 done rows drifted into false. 2 improved from my own 5e0e731. 2 rows under-claim (deep local reads missing the skipped-directory item, more code patterns missing code.eval-use), both in the safe direction. Deployed behaviour explicitly NOT verified, stated as the gap.

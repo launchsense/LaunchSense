@@ -38,7 +38,7 @@ Every audit cites the real file/line; a claim with no code is a defect.
     - Giving the bots a computer (Grok Bot chosen; fallbacks noted).
     Each plan: what it is, the seam, the never-list, and what must be decided by
     the owner before code.
-15. TODO Feature-board reconciliation: for each done row, is it TRUE *today* on
+15. DONE Feature-board reconciliation (feature-board-reconciliation.md): 0 of 8 done rows drifted into being false, 2 became more accurate, 2 under-claim and need a board edit; deployed behaviour not verified and that gap is stated
     the live deploy? Flag any row the code no longer backs (claim drift).
 
 
