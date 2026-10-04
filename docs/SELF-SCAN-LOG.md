@@ -26,6 +26,46 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
+### Stage alpha harness
+
+Scanned local commit `9c485b7133056f6f6b82485d9aa393f73a37eab2`. This SHA is not pushed. The scan read a git archive of that commit, so ignored folders were not included. Status: partial. 169 files read, 0 files skipped by the walk.
+
+Coverage note, as printed:
+
+> We read 169 files. 0 skips are listed. A partial result is not a pass.
+
+Not-checked lines that are not a package publish date:
+
+> Archived status is not in the deps.dev record. Unknown stays unknown.
+
+> Queried 50 lockfile packages. 266 were not queried.
+
+The other 15 not-checked lines are publish dates for the 15 packages the review asked deps.dev about. Lockfile lists 348 packages. Order source: table. No model quote was returned.
+
+Raw counts on `9c485b7`:
+
+| Severity | Count |
+| --- | ---: |
+| high | 5 |
+| medium | 2 |
+| low | 7 |
+| info | 18 |
+| total | 32 |
+
+The commit before the pattern fix, `701aab57779757f4559a859bd4fe3a950155d069`, was scanned the same way. That pass was 35 findings: high 7, medium 2, low 7, info 19. The fix removed three generated-file rows, two child-process rows, and one weak-crypto row that were the detector or a Convex `_generated` import. The re-scan then shows the planted call shapes in `tests/local-review-checks.mjs`, and one more credential row in `tests/secret-false-positive-checks.mjs` that the per-file cap had hidden.
+
+Triage of what remains:
+
+- `secret.credential-pattern` on `convex/auth.ts:23` and `:34`, `convex/scans/analyze.ts:75`, `package-lock.json:346`, and `shared/entitlements.ts:1`. False positive. These are a type name that contains "token", an optional-chaining read, a TypeScript type after a colon, an npm bin path named auth, and a feature-key array. No literal secret is assigned. Not retuned in this pass, because that gate is shared with the website scan and a looser skip would hide a real value.
+- `secret.credential-pattern` and `secret.private-key` under `tests/`. Expected. Those files plant the shapes on purpose. The extra row in `tests/secret-false-positive-checks.mjs` is the same class.
+- `code.sql-pattern` on `convex/scans/analyze.ts`, `shared/reports/fixPlan.ts`, and `shared/review/buildReport.ts`. False positive. The lines are the check describing `SELECT ... FROM`. Left in place. A query built inside a string is still the shape this rule is for.
+- `code.debug-leftover` on `scripts/check-claims.mjs` and `tests/corpus-harness.ts`. False positive for an app leftover. Those files are command-line tools and they print on purpose.
+- `code.child-process` and `code.weak-crypto` in `tests/local-review-checks.mjs`. Expected. The test plants the call shape.
+- `license.policy` on `LICENSE.txt`. True as stated. The file has no marker this reader knows. It was not changed into an open-source license.
+- `code.repeated-function` on `src/features/report/SignalPanels.tsx`. Info. Two files share a 12-line hash. Not merged.
+- `code.network-hint`, ten rows. The check names a host and does not contact it. That is the check, not a defect.
+- OSV left 266 lockfile packages unqueried. That is the cap of 50. A partial result is not a pass.
+
 ### Stage GitHub App token helper
 
 Scanned `b2eb4469b0515a5d9900bce56982a3ca87e2b087`. Status: partial, 99 fetched, 1 skipped.
