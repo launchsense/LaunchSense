@@ -137,3 +137,70 @@ A visible link between the project and a package it ships, shown as a question t
 - Named: 2026-10-04
 
 New findings use code.* ids. Old secret.* ids still score. Added innerHTML, child_process exec, weak crypto, and a CORS wildcard. SQL stays a shape, not a proved injection.
+
+### Concepts node (code name `concepts`)
+
+- Status: noted
+- Named: 2026-10-04
+- Launch: later
+
+The harness a coding tool already runs can manage sub-agents, red team a change, and blue team a change. The MCP review today cannot reach that power. It reads the working tree, runs the shared checks, orders the findings, and returns a lead. A concepts node is the data and structure flow that would let it reach the harness instead of only reporting beside it.
+
+The code name is `concepts`. It is an internal handle for one node. It is not a user-facing word, not a menu item, and not a brand.
+
+What the node holds is concepts, not file text. Each concept carries a name, what it describes, the harness capability it maps to, when it is worth calling, the evidence it needs, and what it must never do. The edges let a concept start a sub-agent run, a red team pass, or a blue team pass, and let the result fold back into the same findings table the report already builds.
+
+The role of AI is that a user never has to learn a new command. The flow decides for itself when a concept is the better path than the plain report, calls it, and folds the result back. The report then says what ran. It is never silent.
+
+This row is shared with the owner first. The owner reads it. Only then does the status move to agreed, and only then does any code move.
+
+What it does not do:
+
+- It does not run today. Nothing on this row is built.
+- It does not ask the user to know it exists, and it never hides what it ran.
+- It does not edit the repository.
+- It does not send file text to Convex or anywhere else. Concepts stay on the machine.
+- It does not add a finding and it does not drop one. A concept result folds into the fixed checks and the fixed table order.
+- It does not turn unknown into a pass, and it is never a clearance.
+- A model does not add a check by itself. If it keeps naming the same check, a person may later turn it into one.
+
+### Giving the bots a computer (AWS Lambda, Cloudflare Workers, the Grok CLI tool, or Grok Bot)
+
+- Status: noted
+- Named: 2026-10-04
+- Launch: later
+
+The two bot rows above both stop at the same wall. The 24/7 public-repo learner cannot scan all day on the shared GitHub quota, and the outreach bot has no way to read a repo properly before it writes. Neither bot has a machine. A bot cannot fetch an archive, unpack it, and run the checks without somewhere to run that code. This row is that somewhere. It attaches to both bot rows, so the same compute serves the learner and the outreach bot.
+
+Four candidates, named so the choice is visible. Nothing is built. The owner's direction is a dedicated Grok Bot, written under that heading below. Two candidates are compute we would run ourselves. Two are a product somebody signs into. That difference matters and is written out below.
+
+AWS Lambda. It can run the same Node analyzers the website uses, unpack an archive into its own temporary disk, and finish inside one invocation. Current published limits are 10,240 MB of memory and a 900 second timeout. Published price is $0.0000166667 per GB-second and $0.20 per 1M requests, with a free tier of 1M requests and 400,000 GB-seconds a month. This is the only one of the four we have read a price for, so it is the honest starting point.
+
+Cloudflare Workers. Cheaper and always on, but it is a short request, not a batch job. The reported memory figure is 128MB per isolate, and paid CPU time can be raised from a short default up to 5 minutes. Whether a repo archive fits inside that memory is not measured by us, so it stays unknown. Unknown stays unknown until someone runs one archive through it.
+
+The Grok CLI tool. Already installed on this machine. It is a real tool with its own agent loop, not an API call we write. It could do the thinking half of a review, the part that reads a finding and asks what the author missed. What it is not: it is not a scheduler, it is not 24/7, and it runs on one machine that has to be awake. It cannot be the answer to "run all day". It may be a good answer to "read one repo carefully and write the note". Which of those two it is has to be decided by a person, not assumed here.
+
+Grok Bot. A separate xAI product, and not the same thing as the Grok CLI tool above. Per xAI's own pages it launched in beta on 2026-08-11. Each Bot has a computer of its own in the cloud, signs into tools the way a person does, and keeps working 24/7 after the laptop is closed. Bots can run in parallel, message each other, and learn a workflow after watching it once. This is the closest published answer to the wall this row describes, so it is named here on purpose.
+
+Where it does not fit our shape. Grok Bot is a product a person subscribes to and messages, not compute our code calls. There is no documented way for LaunchSense to hand it a repo and get a finding back on a schedule. So it could be the machine that runs the 24/7 learner as a supervised human-in-the-loop job, while it can never become part of the scanner itself. The checks stay in our code. Someone still has to start each run and read each note.
+
+Access today is through Cursor Pro, Pro+, and Ultra, SuperGrok tiers, Cursor Teams, or Enterprise. Published tiers are $20 a month on Cursor Pro, $30 a month on SuperGrok, and $40 a seat a month on Cursor Teams Standard. Weekly usage is included and extra usage is billed by token cost. We have not used it and we have not measured a run, so this row claims no cost per scan.
+
+The owner's direction. There will be a dedicated Grok Bot for this work, separate from anything else it is used for. One Bot, kept for the learner and the outreach bot, so their runs do not share a session with unrelated work. That is a decision the owner has made, not a thing that runs today.
+
+One boundary matters more than the price. A Bot signs into real accounts and works in a shared cloud machine. Every Grok Bot on one account shares that computer, files, browser, and logins, and isolation is per user rather than per Bot. A dedicated Bot makes our own runs easier to keep apart from each other. It does not make them private, because the machine and the session are still not ours. A repository we are reviewing would sit on that cloud machine. The owner knows this and chose it.
+
+On Grok for starting and for scale. Using the Grok CLI tool to start a review is cheap and quick, because the tool is already on the machine. Using it for scale is a different question. A machine that is awake runs one pass at a time. More passes means paid compute somewhere, and the price is per token, not per machine. This row does not claim a number for a scaled bot run, because we have not run one.
+
+A worker is compute only. It does not add a finding and it does not drop one. The fixed checks and the fixed table order stay the same, whether the code runs on a laptop, in Lambda, in a Worker, or under a Bot that a person is watching. If a worker cannot read a file, that file is listed as not checked. A worker never turns a skip into a pass.
+
+What it does not do:
+
+- It does not run today. Nothing on this row is built, and no worker is started.
+- It is not finished being decided. The owner has chosen a dedicated Grok Bot. The other three are still on the board as the fallback if that one does not work.
+- It does not raise the guest scan cap of 200 files and about 2MB. A worker does not become a way around the quota. Whose quota a worker spends is a separate question that has to be answered before any worker runs.
+- It does not send raw file contents or raw secret values out of the machine. The redaction and hashing rules are the same rules the website uses, and a worker does not get a looser version of them.
+- It does not edit a repository and it does not open a pull request.
+- It does not turn unknown into a pass, and it never upgrades a partial result into a clearance.
+- The repository sits on that Bot's cloud machine, not on ours. The owner chose that. The checks still run on LaunchSense code, not on the Bot.
+- A model working inside a worker does not add a check by itself. If it keeps naming the same check, a person may later turn it into one.
