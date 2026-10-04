@@ -185,6 +185,17 @@ article[aria-label="Scan result"] {
 }
 .menu-links .auth-state { color: var(--ink-faint); font-size: var(--text-sm); }
 
+.install-command {
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+  font-size: var(--text-sm);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  padding: 12px 14px;
+  overflow-x: auto;
+  max-width: 40rem;
+}
+
 /* The report is one message. Headline, unread line, and lead share one
    hairline frame. The copy bar is as wide as that frame. */
 .paste {

@@ -13,7 +13,7 @@ You built the app with an AI coding tool. It works, and you are about to share t
 - A missing README, tests, or CI.
 - Duplicate files and huge files.
 
-Repeated functions, and a wider read of code bloat, are the next rules in this same layer. They are not checked yet.
+The installed review also checks repeated function text. The website paste checks duplicate files and large files.
 
 ## Why use it
 
@@ -25,13 +25,13 @@ Policy means the rules for the codebase. A license is one rule inside that, not 
 
 ## Who it is for
 
-People who ship fast with AI coding tools and have no name for these problems. A public repo needs no account. Sign in to read one private repo, or more of a public one. A coding tool review that reads the files on your machine is alpha in this repository. Run sh install.sh. It is not on the live site until this commit is deployed.
+People who ship fast with AI coding tools and have no name for these problems. A public repo needs no account. Sign in to read one private repo, or more of a public one. The extra checks run after you install the review. The home page shows the command.
 
 ## The moment it is built for
 
 The moment before you share the link, whether the repo is public or still private. The leaked key or the copyleft license is already in the history. Checking the code before anyone else sees it is the job. Judging the market is not.
 
-What runs today is the public paste, and a signed-in read of one repository on your GitHub token. A guest read stops at 200 files and about 2MB. Signed in, the cap is 1,000 files and about 8MB. A coding tool review that reads the files on your machine is alpha in this repository. Run sh install.sh. It is not on the live site until this commit is deployed.
+What runs today is the public paste, a signed-in read of one repository on your GitHub token, and the installed review on your machine. A guest read stops at 200 files and about 2MB. Signed in, the cap is 1,000 files and about 8MB. The home page shows how to install the review.
 
 ## What it will not do
 

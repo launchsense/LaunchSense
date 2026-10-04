@@ -400,7 +400,7 @@ export default function GuestScan() {
       <details>
         <summary>Privacy note</summary>
         <p>
-          A guest read uses the shared GitHub quota and stops at 200 files and about 2MB. Signed in, the same check uses your GitHub token and reads up to 1,000 files and about 8MB, including one private repo you can already read. We do not store the file contents. We delete the token when you sign out. A coding tool review that reads the files on your machine is alpha in this repository. Run install.sh. It is not on the live site until this commit is deployed. A partial result is not a pass.
+          A guest read uses the shared GitHub quota and stops at 200 files and about 2MB. Signed in, the same check uses your GitHub token and reads up to 1,000 files and about 8MB, including one private repo you can already read. We do not store the file contents. We delete the token when you sign out. The extra checks run after you install the review on your machine. A partial result is not a pass.
         </p>
       </details>
       {scan === null && <CapacityMeter waiting={0} running={0} quota={null} />}

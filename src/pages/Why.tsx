@@ -46,7 +46,7 @@ export default function Why() {
             </li>
             <li>
               <strong>Duplicate files and huge files</strong>
-              <p>Repeated functions, and a wider read of code bloat, are the next rules in this same layer. They are not checked yet.</p>
+              <p>The paste on this site checks duplicate files and large files. The installed review also checks repeated function text. <a href="/#install">Install it</a>.</p>
             </li>
           </ul>
           <h3>Why use it</h3>
@@ -60,7 +60,7 @@ export default function Why() {
           </ul>
           <h3>Rules and the model</h3>
           <p>
-            The rules are fixed. They look for a leaked key, a license that needs a person, a dependency with a known hole or no fixed version, risky code, a missing README, tests, or CI, and duplicate or huge files. Repeated functions are not checked yet.
+            The rules are fixed. They look for a leaked key, a license that needs a person, a dependency with a known hole or no fixed version, risky code, a missing README, tests, or CI, and duplicate or huge files. The installed review also checks repeated function text.
           </p>
           <p>
             A finding can also sit on a standard: OWASP Top 10, OWASP ASVS, OSV, or CWE. That line is a signal with a caveat. It is not a certification.
@@ -82,7 +82,7 @@ export default function Why() {
             A skill in the chat can read a repo. It still falls short. It runs only when you open a chat. It keeps no shared memory of the last check. It gives you no link a reviewer can open. It does not keep a fixed count of what was not read.
           </p>
           <p>
-            The review that reads the files on your machine is alpha, in this repository. Run install.sh from the repo. It is not a control on the live site until that site is deployed from this commit. The website paste stays the first look. The report names Cursor, Codex, or Claude only when the repo shows that tool.
+            The review that reads the files on your machine is alpha. <a href="/#install">Install it from this site</a>. The website paste stays the first look. The report names Cursor, Codex, or Claude only when the repo shows that tool.
           </p>
           <p>
             We do not edit the repo. The prompt goes back into the same tool.
@@ -243,7 +243,7 @@ export default function Why() {
             Sign in to read one private repo, or more of a public one, up to 1,000 files and about 8MB.
           </p>
           <p>
-            {SIGN_IN_POLICY} A coding tool review that reads the files on your machine is alpha in this repository. Run install.sh. It is not on the live site until this commit is deployed.
+            {SIGN_IN_POLICY} The extra checks run in the installed review, not in this paste. <a href="/#install">Install the review</a>.
           </p>
           <ul>
             <li>Partial result is never a pass.</li>
