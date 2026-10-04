@@ -80,7 +80,7 @@ The coding tool loads the local review. That review reads the files already on d
 
 What it does not do:
 
-- It does not run on the live website until this commit is deployed.
+- The live home page shows how to install it. The review itself still runs on your machine, not inside the paste.
 - The public HTTP route can still ask the server to scan GitHub. That route is rate limited. It is not the harness.
 - It does not store raw file contents or raw secret values.
 - A model does not add a finding. It may only reorder inside one severity band.
