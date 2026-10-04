@@ -24,12 +24,37 @@ A bot keeps running and checks public repos of one chosen size. The size to star
 
 Each run writes a note in a private repo we control. The note is the bugs, the issues, and what the check missed or got wrong. We use that private trail to change LaunchSense. The notes are not a public report.
 
+A first manual pass ran on 2026-10-04. Five public repos were reviewed locally, offline. That pass is a written trail a person can use to tighten a check. It is not this bot, and a model does not train on it.
+
 What it does not do:
 
 - It does not run today.
 - It does not store raw file contents or raw secret values.
 - A model does not invent a finding, and it does not add a check by itself. The checks stay fixed until a person changes them from the trail.
 - It cannot honestly scan all day on the shared GitHub quota. A later row has to say whose quota it spends before the bot is allowed to run.
+
+### Outreach bot
+
+- Status: noted
+- Named: 2026-10-04
+
+After the public-repo learner has a real finding, a second bot prepares one report and one reach-out. The report is ours: what was read, what was not checked, and the fixed findings. A partial result is not a pass. The note says who LaunchSense is, why we wrote, and why the MCP review is the tool that fits that repo.
+
+The channel follows the repo, in this order:
+
+1. Read `CONTRIBUTING.md`, the security policy, and any "do not contact" line. If those say not to write, the bot stops.
+2. Where a public GitHub comment is allowed, one comment on an existing issue or discussion. No new spam thread. No secrets, no exploit steps, no demand.
+3. Where email is the published contact, one email to that address. The same identification and the same short pitch.
+4. If the repo names a maintainer and a public social contact, the bot may read that page and draft a note. It still says who is writing.
+
+What it does not do:
+
+- It does not run today.
+- It does not send email, post a comment, or open a pull request.
+- It does not hide that the sender is LaunchSense.
+- It does not write to a repo that asks not to be contacted.
+- It does not attach file contents, secret values, or a private report link that exposes the code.
+- A model may draft the words. A person approves the first batch before anything is sent. After that, the bot may repeat only the approved shape.
 
 ### Signed-in scan
 
