@@ -207,6 +207,10 @@ export default function ScanReport(props: {
         <p className="priority-note">{props.priorityNote}</p>
       )}
 
+      <p className="priority-note">
+        Checks decide the findings. A model may only reorder items that share a severity. It does not add one, and it does not drop one.
+      </p>
+
       {restSteps.length > 0 && (
         <div aria-label="Fix before you share">
           <h4>The rest of the fix list</h4>

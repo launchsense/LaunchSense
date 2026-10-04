@@ -66,9 +66,15 @@ export default function Home() {
           <li>It does not change your code, and it does not block a deploy.</li>
           <li>After you fix, scan again and see what changed.</li>
         </ul>
-        <h3>Policies and standards</h3>
+        <h3>Rules and the model</h3>
         <p>
-          Policy here means the rules for the codebase. Those findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASVS, OSV for dependency holes, and CWE. Each line is a signal with a caveat. It is not a certification, and it is not a verdict that the product will sell.
+          The rules are fixed. They look for a leaked key, a license that needs a person, a dependency with a known hole or no fixed version, risky code, a missing README, tests, or CI, and duplicate or huge files. Repeated functions are not checked yet.
+        </p>
+        <p>
+          A finding can also sit on a standard: OWASP Top 10, OWASP ASVS, OSV, or CWE. That line is a signal with a caveat. It is not a certification.
+        </p>
+        <p>
+          A model does not invent a finding. It may only reorder items that share a severity. If it does not answer, the order is severity and credential risk alone.
         </p>
       </section>
 

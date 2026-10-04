@@ -158,7 +158,7 @@ The lines under it use only four words: `Checked`, `Partial`, `Not checked`,
 The order is a trust decision, so it is fixed and a test holds it in place:
 
 1. The answer and what was not checked, together.
-2. The three things to fix first, as one prompt.
+2. One lead, then up to three separate prompts, then the line that says a model only reorders inside one severity.
 3. The rest of the fix list.
 4. Live app check.
 5. All findings, each with its file and line.

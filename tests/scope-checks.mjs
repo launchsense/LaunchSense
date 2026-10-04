@@ -169,6 +169,7 @@ describe("verdict and scope are rendered together", () => {
     assert.ok(scope < lead && lead < actions && actions < fix);
     const actionsBlock = report.slice(actions, fix);
     assert.match(actionsBlock, /priority-note/);
+    assert.match(actionsBlock, /A model may only reorder items that share a severity/);
     assert.doesNotMatch(report, /\b(safe to share|certified|is secure)\b/i);
   });
 
