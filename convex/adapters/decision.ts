@@ -38,7 +38,17 @@ export const JEV_DEFAULT_MODEL = "jev-latest";
 export const PERPLEXITY_URL = "https://api.perplexity.ai/v1/decisions";
 export const PERPLEXITY_MODEL = "pplx-decider-v1-27b";
 
-export type DecisionSource = "jev" | "perplexity" | "table";
+// Local Ollama decision model. Same System One wire contract, exposed at
+// /v1/systemone since Ollama 0.35. No key, nothing leaves the machine, about a
+// tenth of a second. A hosted Convex deployment cannot reach a developer's
+// localhost, so this rung is OFF unless LAUNCHSENSE_LOCAL_DECISION is set, which
+// local corpus and ranking-math runs do. It is a development instrument, never a
+// production rung, and its answers are never presented as Jev or Perplexity.
+export const LOCAL_DECISION_URL =
+  process.env["LAUNCHSENSE_LOCAL_DECISION_URL"] ?? "http://127.0.0.1:11434/v1/systemone";
+export const LOCAL_DECISION_MODEL = process.env["LAUNCHSENSE_LOCAL_DECISION_MODEL"] ?? "nimble";
+
+export type DecisionSource = "local" | "jev" | "perplexity" | "table";
 
 /** The three question types the contract defines. Nothing else is allowed. */
 export type QuestionType = "noul" | "choice" | "score";
@@ -229,10 +239,16 @@ interface Rung {
 
 /** The rungs, in order. A rung with no key is skipped, never fatal. */
 export function decisionRungs(): Rung[] {
-  return [
+  const rungs: Rung[] = [];
+  // Local first, and only when asked. A hosted deployment cannot reach it.
+  if (process.env["LAUNCHSENSE_LOCAL_DECISION"] === "1") {
+    rungs.push({ name: "local", url: LOCAL_DECISION_URL, keyEnv: "LAUNCHSENSE_LOCAL_KEY", model: LOCAL_DECISION_MODEL });
+  }
+  rungs.push(
     { name: "jev", url: JEV_URL, keyEnv: "TYPESAFE_API_KEY", model: JEV_DEFAULT_MODEL },
     { name: "perplexity", url: PERPLEXITY_URL, keyEnv: "PERPLEXITY_API_KEY", model: PERPLEXITY_MODEL },
-  ];
+  );
+  return rungs;
 }
 
 function failed(
@@ -281,7 +297,8 @@ export async function decide(
 
   for (const rung of decisionRungs()) {
     const key = process.env[rung.keyEnv];
-    if (key === undefined || key.length === 0) {
+    // The local rung needs no key; the header is ignored by Ollama.
+    if (rung.name !== "local" && (key === undefined || key.length === 0)) {
       attempts.push({ provider: rung.name, ok: false, error: `no_key:${rung.keyEnv}` });
       continue;
     }
@@ -289,7 +306,7 @@ export async function decide(
     const started = Date.now();
     const response = await postJson(
       rung.url,
-      key,
+      key ?? "ollama",
       { model: rung.model, state, questions },
       timeoutMs,
     );
