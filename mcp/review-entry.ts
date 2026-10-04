@@ -22,6 +22,10 @@ import { parseManifests } from "../shared/analyzers/deps.ts";
 
 const SKIP = new Set([
   "node_modules", "dist", "build", ".git", "coverage", ".next", "vendor", "target", "__pycache__", "third_party",
+  // The agent working folder. It holds personal and planning material that is
+  // nobody's to review, and a review of this repo must never walk into it. Skipped
+  // by name, the same as any other unread directory, and disclosed when skipped.
+  ".progress",
 ]);
 const BINARY = new Set(["png", "jpg", "jpeg", "gif", "webp", "ico", "zip", "gz", "pdf", "woff", "woff2"]);
 const OSV_CAP = 50;
@@ -81,6 +85,8 @@ function walk(root: string): { files: ReviewFile[]; skipped: NotChecked[] } {
         const scope = relative(root, join(dir, name)).split("\\").join("/");
         if (name === "vendor" || name === "third_party") {
           skipped.push({ scope, reason: "Vendored tree was not read, so its notices were not checked." });
+        } else if (name === ".progress") {
+          skipped.push({ scope, reason: "Working notes folder. Not read, and its contents are not the repo owner's to review." });
         } else {
           skipped.push({ scope, reason: `Skipped directory ${name} was not read, so its notices were not checked.` });
         }
@@ -138,6 +144,15 @@ function rankLockPackages(packages: LockPackage[]): LockPackage[] {
   });
 }
 
+/**
+ * Query the advisory service for the lockfile versions, or return null.
+ *
+ * Returning null covers three different situations and the report has to tell
+ * them apart, because "we had a lockfile and did not check it" is a weaker
+ * claim than "there was no lockfile to check". A caller that knows a lockfile
+ * was in hand passes it in, so the not-checked line can say the exact number of
+ * versions that went unchecked instead of a bare "not queried".
+ */
 async function queryLockAdvisories(inventory: LockInventory | null, offline: boolean): Promise<AdvisoryCoverage | null> {
   if (offline || inventory === null || !inventory.complete) return null;
   const unique = new Map<string, LockPackage>();
@@ -301,7 +316,17 @@ async function main(): Promise<void> {
     ? null
     : await lookupPackages(inventory.packages.filter((pkg) => !pkg.dev).slice(0, 15));
   const advisories = await queryLockAdvisories(inventory, offline);
-  const report = buildLocalReport(files, skipped, registry, advisories);
+  const report = buildLocalReport(files, skipped, registry, advisories, lock);
+  // Offline with a complete lockfile in hand: the inventory says how many exact
+  // versions were available to check and none of them were. Say so here, in the
+  // caller's own words, rather than leaving the flat "not queried" line to imply
+  // there was nothing to query. The line is added, never replaces, so the
+  // report still carries its own not-checked entry for the same gap.
+  if (offline && inventory !== null && inventory.complete && inventory.packages.length > 0) {
+    report.lockNote =
+      `${inventory.note} This run was offline, so no version in that lockfile was checked against the advisory service. ` +
+      "A lockfile in hand that was never queried is unknown, not a pass.";
+  }
   if (!offline) {
     const pkg = files.find((file) => file.path === "package.json");
     const repo = pkg?.content.match(/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/)?.[1];

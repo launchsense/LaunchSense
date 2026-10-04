@@ -143,6 +143,7 @@ export function buildLocalReport(
   skipped: NotChecked[],
   registry: RegistryFact[] | null,
   advisories: AdvisoryCoverage | null = null,
+  lockFileInHand: ReviewFile | undefined = undefined,
 ): ReviewReport {
   const paths = files.map((file) => file.path);
   const secrets = scanSecrets(files);
@@ -226,7 +227,15 @@ export function buildLocalReport(
     });
   }
   if (advisories === null) {
-    notChecked.push({ scope: "OSV", reason: "Lockfile versions were not queried. Unknown stays unknown." });
+    // A lockfile we read but did not query is a different gap from having no
+    // lockfile at all. Naming the file keeps the two apart, so "we had versions
+    // and checked none of them" can never read as "there was nothing to check".
+    notChecked.push({
+      scope: "OSV",
+      reason: lockFileInHand === undefined
+        ? "No lockfile was in the files read, so no version could be queried. Unknown stays unknown."
+        : `${lockFileInHand.path} was in the files read and its versions were not queried. Unknown stays unknown.`,
+    });
   } else if (advisories.timedOut) {
     notChecked.push({
       scope: "OSV",
