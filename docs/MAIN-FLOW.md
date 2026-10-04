@@ -93,6 +93,10 @@ From a checkout of this repo:
 
 Then the coding tool calls `launchsense_scan_repo`. That command reads the working tree. It does not download GitHub. Its caps, lockfile inventory, and registry lookups are described in `llms.txt`. They do not run when someone uses the live paste.
 
-## Walk after this deploy
+## Walk after deploy
 
-Recorded against `https://harmless-chihuahua-667.convex.site` after `npm run deploy` of this commit. See the note appended below once that check has been done.
+Checked `https://harmless-chihuahua-667.convex.site` after the production deploy of `22a5c2b`, then this note was added.
+
+The live HTML is the app shell. The built script contains the home heading "LaunchSense checks the codebase, not the business." and the line "This page is the first look." The same script contains the case studies heading and "None are published yet." `/case-studies` is a route in that page, not a separate file on the server.
+
+A full guest paste was not run in this check, so this note does not claim a new scan result. The steps above are the code path that deploy published.
