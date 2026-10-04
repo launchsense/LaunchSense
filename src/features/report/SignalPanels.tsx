@@ -89,7 +89,9 @@ export function StandardsPanel(props: { mappings: StandardMapping[] }) {
   return (
     <div aria-label="Standards">
       <h4>Standards signals</h4>
-      <p>Signals only. This is not a certification.</p>
+      <p>
+        These rows map findings the checks already made onto OWASP Top 10, OWASP ASVS, OSV, and CWE. A row with no check stays not checked. Signals only. This is not a certification.
+      </p>
       <ul>
         {props.mappings.map((m) => (
           <li key={`${m.version}:${m.requirementId}`}>

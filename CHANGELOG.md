@@ -7,6 +7,7 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 ### Changed
 
 - Home, readme, and docs now say LaunchSense checks the codebase, not whether the app will sell. Repeated functions are named as the next rule, not as a check that runs today.
+- The home page and every report now say the rules are fixed, and a model may only reorder items that share a severity.
 
 ### Added
 
