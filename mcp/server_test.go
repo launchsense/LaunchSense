@@ -8,48 +8,37 @@ import (
 	"testing"
 )
 
-func TestPublicScanDoesNotSendAToken(t *testing.T) {
-	var got string
+func TestLocalReviewDoesNotCallGitHub(t *testing.T) {
 	s := &server{
-		apiURL: "https://example.test",
-		account: func() (Account, error) {
-			return Account{}, nil
+		apiURL:  "https://example.test",
+		account: func() (Account, error) { return Account{}, nil },
+		private: func(string, string) (bool, error) { return true, nil },
+		review: func(string) (string, error) {
+			return "LaunchSense alpha review. The job runs on the files on this machine.", nil
 		},
-		private: func(string, string) (bool, error) { return false, nil },
-		client: &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
-			body, _ := io.ReadAll(r.Body)
-			got = string(body) + " " + r.Header.Get("Authorization")
-			return &http.Response{
-				StatusCode: 200,
-				Body:       io.NopCloser(strings.NewReader(`{"scanId":"s1","findingCount":0}`)),
-				Header:     make(http.Header),
-			}, nil
+		client: &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
+			t.Fatal("local review must not call the network")
+			return nil, nil
 		})},
 	}
 	text, err := s.scanRepo("https://github.com/octocat/Hello-World")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(got, "gho_") || strings.Contains(got, "Bearer") || strings.Contains(got, "token") {
-		t.Fatalf("request carried a token: %s", got)
-	}
-	if !strings.Contains(text, "shared quota") {
+	if !strings.Contains(text, "on this machine") {
 		t.Fatalf("text = %s", text)
-	}
-	if strings.Contains(text, "gho_") {
-		t.Fatal("response contained a token")
 	}
 }
 
-func TestPrivateRepoStopsBeforeAnalysis(t *testing.T) {
+func TestPrivateCheckoutStillReviewsLocalFiles(t *testing.T) {
 	s := &server{
-		apiURL: "https://example.test",
 		account: func() (Account, error) {
 			return Account{LoggedIn: true, Login: "ada", Owner: "ada", Name: "secret", Private: true, Host: "github.com"}, nil
 		},
 		private: func(string, string) (bool, error) { return true, nil },
+		review:  func(string) (string, error) { return "local files", nil },
 		client: &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
-			t.Fatal("private repo must not call LaunchSense")
+			t.Fatal("a private checkout must not call GitHub")
 			return nil, nil
 		})},
 	}
@@ -57,23 +46,7 @@ func TestPrivateRepoStopsBeforeAnalysis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(text, "does not analyze private files yet") {
-		t.Fatalf("text = %s", text)
-	}
-	if !strings.Contains(text, "token stayed on this machine") {
-		t.Fatalf("text = %s", text)
-	}
-}
-
-func TestLoggedOutCurrentRepoTellsTheUserTheCommand(t *testing.T) {
-	s := &server{
-		account: func() (Account, error) { return Account{}, nil },
-	}
-	text, err := s.scanRepo("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(text, "gh auth login") {
+	if text != "local files" {
 		t.Fatalf("text = %s", text)
 	}
 }

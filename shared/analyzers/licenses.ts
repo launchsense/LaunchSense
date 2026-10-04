@@ -29,8 +29,33 @@ const LICENSE_MARKERS: Array<{ id: string; pattern: RegExp }> = [
   { id: "BSD-2-Clause", pattern: /bsd 2-clause/i },
   { id: "ISC", pattern: /isc license/i },
   { id: "Unlicense", pattern: /the unlicense/i },
-  { id: "Proprietary", pattern: /all rights reserved|proprietary|unlicensed/i },
+  { id: "CC0-1.0", pattern: /cc0 1\.0|creative commons zero/i },
+  { id: "BUSL-1.1", pattern: /business source license/i },
+  { id: "SSPL-1.0", pattern: /server side public license/i },
+  { id: "Commons-Clause", pattern: /commons clause/i },
+  { id: "Prosperity", pattern: /prosperity public license/i },
+  { id: "Elastic-2.0", pattern: /elastic license 2\.0/i },
 ];
+
+const SIGNAL = "Signal, not legal advice.";
+
+function noticeSentence(found: string[], files: Array<{ path: string }>): string {
+  if (!found.includes("Apache-2.0")) return "";
+  const hasNotice = files.some((file) => {
+    const base = (file.path.split("/").pop() ?? "").toUpperCase();
+    return base === "NOTICE" || base.startsWith("NOTICE.");
+  });
+  return hasNotice
+    ? " Apache-2.0 was found, and a NOTICE file was in this read."
+    : " Apache-2.0 was found. No NOTICE file was in this read.";
+}
+
+function mismatchSentence(packageLicense: string | null, fileDetected: ReadonlySet<string>): string {
+  if (packageLicense === null || fileDetected.size === 0) return "";
+  const aligned = [...fileDetected].some((id) => id.toLowerCase() === packageLicense.toLowerCase());
+  if (aligned) return "";
+  return ` Two facts: package.json says ${packageLicense}. The license files read say ${[...fileDetected].join(", ")}.`;
+}
 
 function isLicenseFile(path: string): boolean {
   const base = (path.split("/").pop() ?? path).toUpperCase();
@@ -53,12 +78,16 @@ export function analyzeLicenses(
 ): LicenseResult {
   const licenseFiles = treeBlobs.filter(isLicenseFile);
   const detected = new Set<string>();
+  const fileDetected = new Set<string>();
 
   for (const file of files) {
     if (!isLicenseFile(file.path)) continue;
     const head = file.content.slice(0, 4000);
     for (const marker of LICENSE_MARKERS) {
-      if (marker.pattern.test(head)) detected.add(marker.id);
+      if (marker.pattern.test(head)) {
+        detected.add(marker.id);
+        fileDetected.add(marker.id);
+      }
     }
   }
 
@@ -71,11 +100,14 @@ export function analyzeLicenses(
         const lic = (data as Record<string, unknown>)["license"];
         if (typeof lic === "string" && lic.length > 0) {
           packageLicense = lic;
-          if (/^MIT$/i.test(lic)) detected.add("MIT");
+          if (/^UNLICENSED$/i.test(lic)) detected.add("UNLICENSED");
+          else if (/\bOR\b/.test(lic)) detected.add(lic);
+          else if (/^MIT$/i.test(lic)) detected.add("MIT");
           else if (/^Apache-2\.0$/i.test(lic)) detected.add("Apache-2.0");
           else if (/^ISC$/i.test(lic)) detected.add("ISC");
           else if (/^BSD-/i.test(lic)) detected.add(lic.toUpperCase());
-          else if (/GPL|AGPL|LGPL/i.test(lic)) detected.add(lic.toUpperCase());
+          else if (/GPL|AGPL|LGPL/i.test(lic)) detected.add(lic);
+          else detected.add(lic);
         }
       }
     } catch {
@@ -84,6 +116,7 @@ export function analyzeLicenses(
   }
 
   const found = [...detected];
+  const suffix = `${noticeSentence(found, files)}${mismatchSentence(packageLicense, fileDetected)}`;
   if (!filesFetched) {
     return {
       detected: found,
@@ -93,13 +126,33 @@ export function analyzeLicenses(
       note: "No file contents were fetched, so licenses could not be examined.",
     };
   }
-  if (found.includes("AGPL-3.0") || found.includes("Proprietary")) {
+  const orChoice = found.some((id) => /\bOR\b/.test(id));
+  const sourceAvailable = found.some((id) => /BUSL|SSPL|Commons-Clause|Prosperity|Elastic/.test(id));
+  if (sourceAvailable) {
+    return {
+      detected: found,
+      files: licenseFiles,
+      packageLicense,
+      policy: "Review required",
+      note: `Source-available terms were read. They are not ordinary open source.${suffix} ${SIGNAL}`,
+    };
+  }
+  if (found.includes("UNLICENSED")) {
+    return {
+      detected: found,
+      files: licenseFiles,
+      packageLicense,
+      policy: "Review required",
+      note: `UNLICENSED is not the Unlicense dedication.${suffix} ${SIGNAL}`,
+    };
+  }
+  if (found.includes("AGPL-3.0")) {
     return {
       detected: found,
       files: licenseFiles,
       packageLicense,
       policy: "Not recommended",
-      note: "Strong copyleft or proprietary wording was found. A human must decide before sharing. This is not legal advice.",
+      note: `AGPL text was found in the files read. A network use question needs a person.${suffix} ${SIGNAL}`,
     };
   }
   if (found.some((d) => /GPL|LGPL|MPL/.test(d))) {
@@ -108,7 +161,16 @@ export function analyzeLicenses(
       files: licenseFiles,
       packageLicense,
       policy: "Review required",
-      note: "Copyleft wording was found. A human must decide before sharing. This is not legal advice.",
+      note: `Copyleft wording was found. The exact id is listed. It was not widened to or-later.${suffix} ${SIGNAL}`,
+    };
+  }
+  if (orChoice) {
+    return {
+      detected: found,
+      files: licenseFiles,
+      packageLicense,
+      policy: "Review required",
+      note: `An OR expression is a choice, not both licenses at once.${suffix} ${SIGNAL}`,
     };
   }
   if (found.length > 0) {
@@ -117,7 +179,7 @@ export function analyzeLicenses(
       files: licenseFiles,
       packageLicense,
       policy: "Allowed",
-      note: "Permissive license signals found. Still confirm the file covers the whole repo. This is not legal advice.",
+      note: `Permissive license signals found.${suffix} ${SIGNAL}`,
     };
   }
   return {
@@ -125,6 +187,6 @@ export function analyzeLicenses(
     files: licenseFiles,
     packageLicense,
     policy: "Unknown",
-    note: "No license signals found. Add a LICENSE file or confirm the intended terms. This is not legal advice.",
+    note: `No license signals in the license files and package.json field that were read. ${SIGNAL}`,
   };
 }

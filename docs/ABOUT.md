@@ -25,13 +25,13 @@ Policy means the rules for the codebase. A license is one rule inside that, not 
 
 ## Who it is for
 
-People who ship fast with AI coding tools and have no name for these problems. A public repo needs no account. Sign in to read one private repo, or more of a public one. A coding tool review that reads the files on your machine is not running yet.
+People who ship fast with AI coding tools and have no name for these problems. A public repo needs no account. Sign in to read one private repo, or more of a public one. A coding tool review that reads the files on your machine is alpha in this repository. Run sh install.sh. It is not on the live site until this commit is deployed.
 
 ## The moment it is built for
 
 The moment before you share the link, whether the repo is public or still private. The leaked key or the copyleft license is already in the history. Checking the code before anyone else sees it is the job. Judging the market is not.
 
-What runs today is the public paste, and a signed-in read of one repository on your GitHub token. A guest read stops at 200 files and about 2MB. Signed in, the cap is 1,000 files and about 8MB. A coding tool review that reads the files on your machine is not running yet.
+What runs today is the public paste, and a signed-in read of one repository on your GitHub token. A guest read stops at 200 files and about 2MB. Signed in, the cap is 1,000 files and about 8MB. A coding tool review that reads the files on your machine is alpha in this repository. Run sh install.sh. It is not on the live site until this commit is deployed.
 
 ## What it will not do
 

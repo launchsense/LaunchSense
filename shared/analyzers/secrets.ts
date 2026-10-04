@@ -6,6 +6,7 @@
 // NAME must look like a credential, and the VALUE must look like a credential. The
 // value gate lives in ./secretValue.ts.
 
+import { matchCodePattern } from "./codePatterns.ts";
 import { looksLikeSecretValue, PROVIDER_SHAPES } from "./secretValue.ts";
 
 export interface ScannedFile {
@@ -287,43 +288,11 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
         });
         continue;
       }
-      if (line.length <= 500 && /\beval\s*\(/.test(line)) {
-        pushCapped(out, {
-          ruleId: "secret.eval-use",
-          path: file.path,
-          line: lineNo,
-          snippet: line.trim(),
-        });
-        continue;
-      }
-      // A debugger statement halts execution for whoever opens the app, so it
-      // stays at medium. It must be a real statement, not the bare word in a
-      // comment, string, or rule definition, otherwise the checker flags its
-      // own documentation.
-      if (line.length <= 500 && /^[\s;{}]*debugger[\s;]*$/i.test(line.trim())) {
-        pushCapped(out, {
-          ruleId: "secret.debugger-statement",
-          path: file.path,
-          line: lineNo,
-          snippet: line.trim(),
-        });
-        continue;
-      }
-      if (line.length <= 500 && /console\.(log|debug|trace)\s*\(/.test(line)) {
-        pushOncePerFile(out, {
-          ruleId: "secret.debug-leftover",
-          path: file.path,
-          line: lineNo,
-          snippet: line.trim(),
-        });
-        continue;
-      }
-      if (
-        line.length <= 300 &&
-        /\bSELECT\b.+?\bFROM\b/i.test(line)
-      ) {
-        pushCapped(out, {
-          ruleId: "secret.sql-pattern",
+      const code = matchCodePattern(line);
+      if (code !== null) {
+        const push = code.oncePerFile ? pushOncePerFile : pushCapped;
+        push(out, {
+          ruleId: code.ruleId,
           path: file.path,
           line: lineNo,
           snippet: line.trim(),

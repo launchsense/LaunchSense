@@ -26,11 +26,14 @@ type toolCall struct {
 type accountFunc func() (Account, error)
 type privateFunc func(owner, name string) (bool, error)
 
+type reviewFunc func(root string) (string, error)
+
 type server struct {
 	apiURL  string
 	account accountFunc
 	private privateFunc
 	client  *http.Client
+	review  reviewFunc
 }
 
 func newServer() *server {
@@ -101,7 +104,7 @@ func toolDefs() []map[string]any {
 	return []map[string]any{
 		{
 			"name":        "launchsense_scan_public",
-			"description": "Run the free public check. No GitHub login. Uses the shared LaunchSense quota. 200 files and about 2MB.",
+			"description": "Points at the website paste. This tool does not download GitHub.",
 			"inputSchema": objectSchema(map[string]any{
 				"repoUrl": map[string]any{"type": "string", "description": "https://github.com/owner/repo"},
 			}, "repoUrl"),
@@ -120,7 +123,7 @@ func toolDefs() []map[string]any {
 		},
 		{
 			"name":        "launchsense_scan_repo",
-			"description": "Check a repo from the coding tool. A public repo with no gh login uses the shared quota. gh login is required for your own repo. Private file analysis is not running yet.",
+			"description": "Review the files already on this machine. Does not download GitHub. Alpha has no login.",
 			"inputSchema": objectSchema(map[string]any{
 				"repoUrl": map[string]any{"type": "string", "description": "Optional. Defaults to the repo gh sees as current."},
 			}, ""),
@@ -139,13 +142,7 @@ func objectSchema(props map[string]any, required string) map[string]any {
 func (s *server) callTool(call toolCall) (string, error) {
 	switch call.Name {
 	case "launchsense_scan_public":
-		var args struct {
-			RepoURL string `json:"repoUrl"`
-		}
-		if err := json.Unmarshal(call.Arguments, &args); err != nil || strings.TrimSpace(args.RepoURL) == "" {
-			return "", fmt.Errorf("repoUrl is required")
-		}
-		return s.scanPublic(args.RepoURL)
+		return "The public paste is the website. This tool reviews the files on this machine and does not download GitHub.", nil
 	case "launchsense_report":
 		var args struct {
 			ScanID string `json:"scanId"`
@@ -188,50 +185,24 @@ func accountText(account Account) string {
 	if account.Repo() == "" {
 		b.WriteString("No current repo. Pass a github.com URL, or run this inside a checkout.\n")
 	} else if account.Private {
-		fmt.Fprintf(&b, "Current repo %s is private. Your GitHub login can see it. LaunchSense does not analyze private files yet. The token stayed on this machine.\n", account.Repo())
+		fmt.Fprintf(&b, "Current repo %s is private. The local review can read a checkout on this machine. It does not send a token.\n", account.Repo())
 	} else {
 		fmt.Fprintf(&b, "Current repo %s is public.\n", account.Repo())
 	}
-	b.WriteString("A public check with no login uses the shared LaunchSense quota. Your GitHub login is only for your own repo, and that file read is not running yet.")
+	b.WriteString("The local review reads files on this machine. It does not download GitHub. Alpha has no login.")
 	return b.String()
 }
 
-func (s *server) scanRepo(repoURL string) (string, error) {
-	account, err := s.account()
+func (s *server) scanRepo(string) (string, error) {
+	root, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
-	owner, name, err := resolveRepo(repoURL, account)
-	if err != nil {
-		if !account.LoggedIn && repoURL == "" {
-			return accountText(account), nil
-		}
-		return "", err
+	run := s.review
+	if run == nil {
+		run = runNodeReview
 	}
-	if repoURL == "" && !account.LoggedIn {
-		return accountText(account), nil
-	}
-	private := false
-	if account.LoggedIn && account.Repo() == owner+"/"+name {
-		private = account.Private
-	} else if account.LoggedIn {
-		private, err = s.private(owner, name)
-		if err != nil {
-			return "", fmt.Errorf("GitHub could not open %s/%s with the local gh login", owner, name)
-		}
-	}
-	if private {
-		return fmt.Sprintf("Your GitHub login can see %s/%s. LaunchSense does not analyze private files yet. The token stayed on this machine.", owner, name), nil
-	}
-	url := "https://github.com/" + owner + "/" + name
-	report, err := s.scanPublic(url)
-	if err != nil {
-		return "", err
-	}
-	if account.LoggedIn {
-		return "GitHub login is present on this machine. This public check still uses the shared LaunchSense quota.\n" + report, nil
-	}
-	return "No gh login. This is the free public check on the shared quota.\n" + report, nil
+	return run(root)
 }
 
 func resolveRepo(repoURL string, account Account) (string, string, error) {
@@ -260,17 +231,6 @@ func parseGitHubURL(raw string) (string, string, bool) {
 	}
 	name := strings.TrimSuffix(parts[1], ".git")
 	return parts[0], name, true
-}
-
-func (s *server) scanPublic(repoURL string) (string, error) {
-	raw, err := s.postJSON("/api/mcp/scan", map[string]string{"repoUrl": repoURL})
-	if err != nil {
-		return "", err
-	}
-	if bytes.Contains(bytes.ToLower(raw), []byte("gho_")) || bytes.Contains(raw, []byte("GITHUB_APP_PRIVATE_KEY")) {
-		return "", fmt.Errorf("refusing to return a response that contains a token")
-	}
-	return string(raw), nil
 }
 
 func (s *server) postJSON(path string, body any) ([]byte, error) {

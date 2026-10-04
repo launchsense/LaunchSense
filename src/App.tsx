@@ -3,6 +3,7 @@ import PassportPage from "./pages/PassportPage";
 import Home from "./pages/Home";
 import Why from "./pages/Why";
 import BlogIndex from "./pages/BlogIndex";
+import CaseStudies from "./pages/CaseStudies";
 import WhyPolicy from "./pages/WhyPolicy";
 
 // The skip link is the first focusable thing on every page, so a keyboard user
@@ -52,6 +53,14 @@ export default function App() {
       <>
         {skip}
         <WhyPolicy />
+      </>
+    );
+  }
+  if (path === "/case-studies") {
+    return (
+      <>
+        {skip}
+        <CaseStudies />
       </>
     );
   }

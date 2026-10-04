@@ -66,6 +66,8 @@ const RULE_RANK: Record<string, number> = {
   "secret.credential-pattern": 1,
   "secret.tracked-env": 4,
   "secret.eval-use": 2,
+  "code.eval-use": 2,
+  "code.child-process": 2,
   "secret.debugger-statement": 2,
   "deps.vulnerability": 0,
   "live.down": 0,

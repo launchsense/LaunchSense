@@ -15,12 +15,17 @@ const HIGH_RULES = new Set([
   "secret.credential-pattern",
   "secret.client-exposure",
   "secret.eval-use",
+  "code.eval-use",
+  "code.child-process",
   "deps.vulnerability",
   "deps.install-script",
 ]);
 
 const MEDIUM_RULES = new Set([
   "secret.debugger-statement",
+  "code.debugger-statement",
+  "code.inner-html",
+  "code.weak-crypto",
   "deps.unpinned-version",
   "license.policy",
 ]);
@@ -28,6 +33,9 @@ const MEDIUM_RULES = new Set([
 const LOW_RULES = new Set([
   "secret.debug-leftover",
   "secret.sql-pattern",
+  "code.debug-leftover",
+  "code.sql-pattern",
+  "code.cors-wildcard",
   "deps.duplicate",
 ]);
 

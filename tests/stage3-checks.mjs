@@ -77,10 +77,10 @@ describe("scanSecrets", () => {
     assert.ok(rules.includes("secret.tracked-env:.env"));
     assert.ok(!rules.some((r) => r.endsWith(".env.example")));
     assert.ok(rules.includes("secret.client-exposure:public/app.js"));
-    assert.ok(rules.includes("secret.eval-use:src/a.ts"));
+    assert.ok(rules.includes("code.eval-use:src/a.ts"));
     assert.ok(!matches.some((m) => m.ruleId === "secret.credential-pattern"));
-    assert.ok(rules.includes("secret.debugger-statement:src/a.ts"));
-    assert.ok(rules.includes("secret.debug-leftover:src/a.ts"));
+    assert.ok(rules.includes("code.debugger-statement:src/a.ts"));
+    assert.ok(rules.includes("code.debug-leftover:src/a.ts"));
   });
 
   it("does not flag a tracked env that is only a template", () => {
@@ -93,18 +93,19 @@ describe("scanSecrets", () => {
   it("reports console noise once per file, not once per line", () => {
     const noisy = Array.from({ length: 40 }, (_, i) => `console.log(${i});`).join("\n");
     const matches = scanSecrets([{ path: "src/noisy.ts", content: noisy }]);
-    assert.equal(matches.filter((m) => m.ruleId === "secret.debug-leftover").length, 1);
+    assert.equal(matches.filter((m) => m.ruleId === "code.debug-leftover").length, 1);
     const twoFiles = scanSecrets([
       { path: "src/a.ts", content: "console.log(1)" },
       { path: "src/b.ts", content: "console.log(2)" },
     ]);
-    assert.equal(twoFiles.filter((m) => m.ruleId === "secret.debug-leftover").length, 2);
+    assert.equal(twoFiles.filter((m) => m.ruleId === "code.debug-leftover").length, 2);
   });
 
   it("keeps secrets high outside tests and informational inside fixtures", () => {
     assert.equal(severityForFinding("secret.credential-pattern", "src/auth.ts"), "high");
     assert.equal(severityForFinding("secret.credential-pattern", "tests/stage3-checks.mjs"), "info");
-    assert.equal(severityForFinding("secret.eval-use", "tests/stage3-checks.mjs"), "info");
+    assert.equal(severityForFinding("code.eval-use", "tests/stage3-checks.mjs"), "info");
+    assert.equal(severityFor("secret.eval-use"), "high");
     assert.equal(severityForFinding("secret.credential-pattern", "fixtures/example.json"), "info");
   });
 
@@ -113,9 +114,11 @@ describe("scanSecrets", () => {
       { path: "src/a.ts", content: "debugger;\nconsole.log(1);" },
     ]);
     const byRule = new Map(matches.map((m) => [m.ruleId, m.line]));
-    assert.equal(byRule.get("secret.debugger-statement"), 1);
-    assert.equal(byRule.get("secret.debug-leftover"), 2);
+    assert.equal(byRule.get("code.debugger-statement"), 1);
+    assert.equal(byRule.get("code.debug-leftover"), 2);
+    assert.equal(severityFor("code.debugger-statement"), "medium");
     assert.equal(severityFor("secret.debugger-statement"), "medium");
+    assert.equal(severityFor("code.debug-leftover"), "low");
     assert.equal(severityFor("secret.debug-leftover"), "low");
   });
 });
