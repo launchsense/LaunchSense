@@ -89,16 +89,21 @@ export function StandardsPanel(props: { mappings: StandardMapping[] }) {
   return (
     <div aria-label="Standards">
       <h4>Standards signals</h4>
-      <p>OWASP ASVS 5.0.0 subset. Signals only. This is not a certification.</p>
+      <p>Signals only. This is not a certification.</p>
       <ul>
         {props.mappings.map((m) => (
-          <li key={m.requirementId}>
+          <li key={`${m.version}:${m.requirementId}`}>
             <strong>
-              {m.requirementId} {m.title}
-            </strong>{" "}
-            ({m.coverage}): {m.status}
-            {m.evidenceCount > 0 && ` (${m.evidenceCount} evidence items)`}
+              {m.version} {m.requirementId} {m.title}
+            </strong>
+            <p>
+              {m.coverage}. {m.status}
+              {m.evidenceCount > 0 ? ` (${m.evidenceCount} evidence items)` : ""}
+            </p>
             <p>{m.caveat}</p>
+            <p>
+              <a href={m.source}>Source</a>
+            </p>
           </li>
         ))}
       </ul>

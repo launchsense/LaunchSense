@@ -149,6 +149,8 @@ describe("buildNoAgentExport", () => {
 });
 
 describe("buildStandards", () => {
+  const banned = /certified|compliant|guaranteed|full audit/i;
+
   it("reports signal-found only where evidence exists and never claims certification", () => {
     const maps = buildStandards({
       findings: [
@@ -157,13 +159,67 @@ describe("buildStandards", () => {
       ],
       analyzedFiles: 20,
       liveChecked: false,
+      coverageNote: "OSV checked 4 packages, 0 unknown",
     });
     const data = maps.find((m) => m.requirementId === "V8.1.1");
     assert.equal(data?.status, "signal-found");
     assert.equal(data?.evidenceCount, 2);
     const ui = maps.find((m) => m.requirementId === "V4.1.1");
     assert.equal(ui?.status, "not-checked");
-    for (const m of maps) assert.equal(m.version, "OWASP ASVS 5.0.0");
+    for (const m of maps.filter((row) => row.version.startsWith("OWASP ASVS"))) {
+      assert.equal(m.version, "OWASP ASVS 5.0.0");
+    }
+    for (const m of maps) {
+      assert.ok(m.version.length > 0);
+      assert.ok(m.requirementId.length > 0);
+      assert.ok(m.coverage.length > 0);
+      assert.ok(m.status.length > 0);
+      assert.ok(m.caveat.length > 0);
+      assert.match(m.source, /^https:\/\//);
+      assert.equal(banned.test(`${m.title} ${m.caveat}`), false);
+    }
+  });
+
+  it("keeps unqueried families not-checked even when other findings exist", () => {
+    const maps = buildStandards({
+      findings: [
+        { ruleId: "secret.tracked-env", severity: "high" },
+        { ruleId: "deps.install-script", severity: "high" },
+      ],
+      analyzedFiles: 20,
+      liveChecked: false,
+      coverageNote: "OSV checked 4 packages, 2 unknown",
+    });
+    for (const id of ["deps.dev", "Scorecard", "A01:2025", "A06:2025", "A07:2025", "A09:2025", "A10:2025"]) {
+      assert.equal(maps.find((m) => m.requirementId === id)?.status, "not-checked", id);
+    }
+    assert.equal(maps.find((m) => m.requirementId === "query")?.status, "not-checked");
+    assert.equal(maps.find((m) => m.requirementId === "A03:2025")?.status, "signal-found");
+  });
+
+  it("marks OSV signal-found only when a vulnerability finding exists", () => {
+    const quiet = buildStandards({
+      findings: [],
+      analyzedFiles: 10,
+      liveChecked: false,
+      coverageNote: "OSV checked 3 packages, 0 unknown",
+    });
+    assert.equal(quiet.find((m) => m.requirementId === "query")?.status, "no-signal");
+    const hit = buildStandards({
+      findings: [{ ruleId: "deps.vulnerability", severity: "high" }],
+      analyzedFiles: 10,
+      liveChecked: false,
+      coverageNote: "OSV checked 3 packages, 1 unknown",
+    });
+    assert.equal(hit.find((m) => m.requirementId === "query")?.status, "signal-found");
+    const unknown = buildStandards({
+      findings: [],
+      analyzedFiles: 10,
+      liveChecked: false,
+      coverageNote: "OSV checked 3 packages, 1 unknown",
+    });
+    assert.equal(unknown.find((m) => m.requirementId === "query")?.status, "not-checked");
+    assert.equal(unknown.find((m) => m.requirementId === "A03:2025")?.status, "not-checked");
   });
 });
 

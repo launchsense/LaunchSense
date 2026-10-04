@@ -19,12 +19,58 @@ export default function Home() {
       <TopMenu />
       <main id="main-content" tabIndex={-1} className="home">
       <header className="hero" aria-labelledby="launchsense-title">
-        <h1 id="launchsense-title">Check your public repo before you share it.</h1>
+        <h1 id="launchsense-title">LaunchSense checks the codebase, not the business.</h1>
         <p className="lead">
-          Paste a repo link. LaunchSense reads what it can, shows proof for every finding, and helps you recheck after a fix.
+          It looks for problems a vibe coder has no name for, so they never ask Codex. It says what is wrong, in plain words, and gives a prompt to fix it. It does not say if the app will sell.
         </p>
         {health === undefined && <p role="status">Connecting...</p>}
       </header>
+
+      <section className="meaning-section" aria-labelledby="meaning-title">
+        <h2 id="meaning-title">What it solves</h2>
+        <p>
+          You built the app with an AI coding tool. It works. You are about to share the repo. You do not know what to ask, so the check never starts. LaunchSense already knows what to ask. The answer is about the code, not the market.
+        </p>
+        <ul className="check-list">
+          <li>
+            <strong>A leaked key</strong>
+            <p>A token, a password, or a private key left in a tracked file.</p>
+          </li>
+          <li>
+            <strong>A license that does not fit</strong>
+            <p>Missing terms, or copyleft terms, flagged for a person to decide. Not legal advice.</p>
+          </li>
+          <li>
+            <strong>A dependency with a known hole</strong>
+            <p>Or a dependency with no fixed version, so tomorrow installs different code.</p>
+          </li>
+          <li>
+            <strong>Risky code</strong>
+            <p>Eval, or a database query built from text.</p>
+          </li>
+          <li>
+            <strong>A missing basic</strong>
+            <p>No README, no tests, or no CI.</p>
+          </li>
+          <li>
+            <strong>Duplicate files and huge files</strong>
+            <p>Repeated functions, and a wider read of code bloat, are the next rules in this same layer. They are not checked yet.</p>
+          </li>
+        </ul>
+        <h3>Why use it</h3>
+        <ul>
+          <li>You do not need the name of the problem. The report names it.</li>
+          <li>The checks are fixed. A model does not invent a finding.</li>
+          <li>You leave with a prompt you can paste into Codex, Cursor, or Claude.</li>
+          <li>It says what it did not read. A gap is not a pass.</li>
+          <li>It does not change your code, and it does not block a deploy.</li>
+          <li>After you fix, scan again and see what changed.</li>
+        </ul>
+        <h3>Policies and standards</h3>
+        <p>
+          Policy here means the rules for the codebase. Those findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASVS, OSV for dependency holes, and CWE. Each line is a signal with a caveat. It is not a certification, and it is not a verdict that the product will sell.
+        </p>
+      </section>
 
       <section className="scan-section" aria-labelledby="scan-title">
         <h2 id="scan-title">Paste a public repo URL</h2>
@@ -37,14 +83,14 @@ export default function Home() {
       <section className="connect-section" aria-labelledby="connect-title">
         <h2 id="connect-title">Sign in is optional.</h2>
         <p>
-          Signing in does not change your scan today. Guest scans are the full
-          product. Sign in only if you want to be ready for connected scans later.
+          Signing in does not change your scan today. GitHub login is the door for a
+          private repo, and that scan is not running yet.
         </p>
         <AuthPanel />
       </section>
 
       <section className="check-section" aria-labelledby="checks-title">
-        <h2 id="checks-title">What it checks</h2>
+        <h2 id="checks-title">What the report also shows</h2>
         <ul className="check-list">
           <li>
             <strong>Secrets and risky patterns</strong>
@@ -96,7 +142,7 @@ export default function Home() {
       <section className="limits-section" aria-labelledby="limits-title">
         <h2 id="limits-title">Honest limits</h2>
         <p>
-          Guest scans are capped, currently at 200 files and about 2MB. Public repos only. Private repositories, deeper reads, monitoring, and MCP are planned or separately permissioned, not forced into the guest path.
+          Guest scans are capped, currently at 200 files and about 2MB. This box reads public repos. A private repo uses GitHub login, and that scan is not running yet. MCP for a private repo is work we will do.
         </p>
         <ul>
           <li>Partial result is never a pass.</li>

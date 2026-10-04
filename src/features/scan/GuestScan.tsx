@@ -377,7 +377,7 @@ export default function GuestScan() {
       <details>
         <summary>Privacy note</summary>
         <p>
-          Public repos only. If your repo is private, flip it public first, scan it, fix what shows up, and only then share the link. We read the file list and one archive in memory. We keep only the owner, repo, commit SHA, file paths, sizes, hashes, and redacted finding snippets. No raw secret values. Quota exhaustion shows as partial, never as a pass.
+          This box reads a public repo. A private repo uses GitHub login, and that scan is not running yet. We read the file list and one archive in memory. We keep only the owner, repo, commit SHA, file paths, sizes, hashes, and redacted finding snippets. No raw secret values. Quota exhaustion shows as partial, never as a pass.
         </p>
       </details>
       <CapacityMeter waiting={0} running={0} quota={null} />
@@ -530,6 +530,7 @@ export default function GuestScan() {
               findings={resultsState.findings}
               live={resultsState.live}
               partial={scan.status === "partial"}
+              coverageNote={scan.coverageNote}
             />
           )}
           {compareState !== undefined && compareState !== null && comparePair !== null && (

@@ -75,8 +75,9 @@ Rough order, not a schedule.
 - **Private repositories without the app**, for people who would rather paste a
   short-lived read-only token than install anything. Worth having, and it is a
   support surface we would rather not open first.
-- **Public API and MCP.** A stable way to run the same checks from your tool or
-  coding helper. A guest browser scan will still work without either.
+- **MCP for a private repo.** The same check from your coding helper, including a
+  repo you can already read. A public-repo route exists today. Private repos
+  through MCP are work we will do. A guest browser scan will still work without it.
 - **Team view.** Findings across several repositories, so a team sees the same
   rule failing in four places at once.
 - **Rules from users.** A way to add a project-specific check that we do not
