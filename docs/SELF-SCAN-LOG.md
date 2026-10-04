@@ -26,6 +26,45 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
+### Stage full-review guardrails
+
+Scanned pushed commit `31a37aa050a41706dd4369a9483ad4a7c8a6a30d` via an offline local review of a git archive of that commit, so ignored folders were not included. Status: partial. 175 files read, 0 files skipped by the walk. Order source: table (offline run does not call the decision lane).
+
+Coverage note, as printed:
+
+> We read 175 files. 0 skips are listed. A partial result is not a pass.
+
+Not-checked lines:
+
+> dependency terms: deps.dev and ClearlyDefined were not queried. Unknown stays unknown.
+
+> OSV: Lockfile versions were not queried. Unknown stays unknown.
+
+Raw counts on `31a37aa`:
+
+| Severity | Count |
+| --- | ---: |
+| high | 5 |
+| medium | 2 |
+| low | 8 |
+| info | 17 |
+| total | 32 |
+
+Delta versus the `9c485b7` pass (169 files, 35 findings there, 32 here after its own fix): 6 more files read, same total of 32, low up by 1, info down by 1. The one new low is our own change: the secrets-only warning this stage added to `tests/corpus-harness.ts` prints to stderr, which is the same intentional-CLI-output class as the existing `scripts/check-claims.mjs` row. False positive with reason, kept.
+
+Triage of what remains:
+
+- `secret.credential-pattern` high on `convex/auth.ts:23` and `:34`, `convex/scans/analyze.ts:75`, `package-lock.json:346`, and `shared/entitlements.ts:1`. False positive, same as the last pass. Type names containing token, an optional-chaining read, a type after a colon, an npm bin path, a feature-key array. No literal secret assigned.
+- `secret.credential-pattern` and `secret.private-key` under `tests/`. Expected. Planted fixtures and the known-real gate shapes. The extra `secret.private-key` row in `tests/decision-lane-checks.mjs` is the same class.
+- `code.cors-wildcard` low on `convex/http.ts:120`. True shape. The MCP route answers `Access-Control-Allow-Origin: *` on a public read-only POST endpoint that takes no credentials and serves no private data. Accepted risk with that reason. Re-review if the route ever takes credentials or reads a private repo.
+- `code.sql-pattern` low on `convex/scans/analyze.ts`, `shared/reports/fixPlan.ts`, and `shared/review/buildReport.ts`. False positive. The lines are the checks describing that query shape.
+- `code.debug-leftover` low on `scripts/check-claims.mjs` and `tests/corpus-harness.ts`. False positive for an app leftover. Both are command-line tools and they print on purpose.
+- `code.child-process` and `code.weak-crypto` in `tests/local-review-checks.mjs`. Expected. The test plants the call shape.
+- `license.policy` on `LICENSE.txt`. True as stated. Proprietary review-only by owner decision, not changed into an open-source license.
+- `code.repeated-function` on `src/features/report/SignalPanels.tsx`. Info. Two files share a 12-line hash. Not merged.
+- `code.network-hint`, ten rows. The check names a host and does not contact it. That is the check, not a defect.
+- OSV and deps.dev left unqueried because this pass ran offline. That is the 2-line not-checked box above, not a clean bill on dependencies.
+
 ### Stage alpha harness
 
 Scanned local commit `9c485b7133056f6f6b82485d9aa393f73a37eab2`. This SHA is not pushed. The scan read a git archive of that commit, so ignored folders were not included. Status: partial. 169 files read, 0 files skipped by the walk.
