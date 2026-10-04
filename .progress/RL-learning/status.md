@@ -14,3 +14,5 @@ Coordinator reads queue.md, takes the top UNSTARTED item, commits, appends here.
 - 2026-10-05 wave-full 09 done (wave-full-09.md) - 10/10, no owner decisions, tracked-env FP cleared by reading every key in immich/.env
 - 2026-10-05 wave-full 10 done (wave-full-10.md) - 10/10, 144/145 H/M false positives, Kotlin view-binding credential gate is the biggest defect found in 100 repos (53 rows)
 - 2026-10-05 waves 06-10 committed together (b80e788); a second masker leak (Django SECRET_KEY) written to owner-queue.md as a shape, helper widened
+- 2026-10-05 M4 done (commit 5e0e731): decision-source internal query written, 0 rows to read (usageDiagnostics unreachable offline, reading says so rather than inventing a number); local walk now skips .progress by name and discloses the skip; OSV not-checked line now names the lockfile that was in hand; 8 new tests, 393/393 pass, tsc clean, claim guard clean
+- 2026-10-05 owner-queue renumbered: a concurrent coordinator and I both wrote it, so WQ-1..6 are its rows and WQ-7/8 are mine, no number reused, duplicate Django row folded into WQ-5

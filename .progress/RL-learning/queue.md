@@ -10,7 +10,7 @@
 7. DONE  wave-full 08 crypto/ML (wave-full-08.md, 10/10, WQ-3 real Django SECRET_KEY)
 8. DONE  wave-full 09 infra (wave-full-09.md, 10/10, quietest wave, 1 high and it is a FP)
 9. DONE  wave-full 10 mobile/other (wave-full-10.md, 10/10, 144 of 145 H/M are FPs from one credential-name defect, WQ-4)
-10. TODO M4 monitoring query + coverage remainder (.progress exclusion, OSV honesty)
+10. DONE M4 monitoring query + coverage remainder (monitoring-reading.md, convex/decisionMonitoring.ts, .progress walk exclusion, OSV honesty line, 8 new tests, 393/393 suite green, tsc clean)
 11. TODO M5 counts-only case drafts
 12. TODO morning-report.md
 
