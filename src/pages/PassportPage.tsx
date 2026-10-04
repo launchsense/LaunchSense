@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toShareCard } from "../../shared/reports/shareCard";
+import { SiteFrame } from "../features/site/SiteFrame";
 
 function shortSha(sha: string | undefined): string {
   return sha === undefined ? "unknown" : sha.slice(0, 7);
@@ -20,14 +21,20 @@ export default function PassportPage({ passportId }: { passportId: string }) {
           })),
         );
 
-  if (page === undefined) return <main><p>Loading the passport. Please wait.</p></main>;
+  if (page === undefined) {
+    return (
+      <SiteFrame>
+        <p>Loading the passport. Please wait.</p>
+      </SiteFrame>
+    );
+  }
   if (page === null || card === null) {
     return (
-      <main id="main-content" tabIndex={-1}>
+      <SiteFrame>
         <h1>Passport not found</h1>
         <p>This link is wrong or was never issued.</p>
         <p><a href="/">Scan your own repo</a></p>
-      </main>
+      </SiteFrame>
     );
   }
 
@@ -40,7 +47,7 @@ export default function PassportPage({ passportId }: { passportId: string }) {
         : "No high or medium findings in the files we read at this commit";
 
   return (
-    <main id="main-content" tabIndex={-1}>
+    <SiteFrame>
       <h1>
         {page.scan.owner}/{page.scan.repo}
       </h1>
@@ -82,6 +89,6 @@ export default function PassportPage({ passportId }: { passportId: string }) {
       <p>
         <a href="/">Scan your own repo</a>
       </p>
-    </main>
+    </SiteFrame>
   );
 }

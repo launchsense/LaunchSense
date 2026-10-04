@@ -112,7 +112,7 @@ describe("resume keeps the visitor's place", () => {
     const resume = guest.slice(guest.indexOf("async function onResume()"));
     const body = resume.slice(0, resume.indexOf("async function onShare"));
     assert.match(body, /setQueuedScan\(null\)/);
-    assert.match(body, /Press Run scan to start a new one/);
+    assert.match(body, /Press Run a sample check to start a new one/);
   });
 
   it("tells the visitor the difference between resuming and starting over", () => {

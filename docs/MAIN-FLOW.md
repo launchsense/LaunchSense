@@ -1,8 +1,6 @@
 # Main flow
 
-The live job is the paste on `https://harmless-chihuahua-667.convex.site`. A person opens that link, pastes one GitHub URL, and gets one report for that commit. A partial result is not a pass.
-
-The alpha review in this repository is a second path. It reads files already on a machine. It is not what the live link runs. `install.sh` is in the GitHub repo. The live site does not serve that file.
+The check people keep is the hosted MCP at `https://harmless-chihuahua-667.convex.site/mcp`. The website is the front door. A person sees who it is for, tastes one public read, and goes to Connect. A partial result is not a pass. You do not clone this repo to use the public check.
 
 This page is the code path of the live paste. A browser check of the deployed pages is recorded at the end.
 
@@ -10,14 +8,16 @@ This page is the code path of the live paste. A browser check of the deployed pa
 
 `https://harmless-chihuahua-667.convex.site`
 
-The home page says LaunchSense checks the codebase, not the business. The scan form is on that page. No account is required for a public repo.
+The home page says who it is for, then three lines: you built it, you do not know what to ask, LaunchSense already asks. The sample form is on that page. No account is required for a public repo. Sign in with GitHub is not on this page until a guest read hits its cap.
 
 Other pages on the same site:
 
-- `/why` explains the product and the alpha review.
+- `/why` says who it is for, what the check names, and what it will not say.
+- `/how` says taste it here, then keep it in the coding tool, then the caps.
+- `/connect` shows the MCP address, the Cursor block, the Claude line, and what that call does and does not do.
+- `/blog` lists two posts: `/blog/why-policy` and `/blog/what-the-research-says`.
 - `/case-studies` says none are published yet.
-- `/blog` and `/blog/why-policy` are the written notes.
-- `/s/<id>` is a share link. `/p/<id>` is a passport link. Both are created only after a scan.
+- `/s/<id>` is a share link. `/p/<id>` is a passport link. Both are created only after a scan. They use the same menu.
 
 ## 2. Paste one GitHub URL
 
@@ -85,18 +85,14 @@ A partial status stays partial. Skipped files do not become a pass.
 
 Sign-out deletes the GitHub token used for a signed-in read. The token is not kept on the user row.
 
-## Alpha review, not this link
+## Hosted MCP, same public read
 
-From a checkout of this repo:
+Connect shows `https://harmless-chihuahua-667.convex.site/mcp`. Home links there. Home does not repeat the address.
 
-`sh install.sh`
-
-Then the coding tool calls `launchsense_scan_repo`. That command reads the working tree. It does not download GitHub. Its caps, lockfile inventory, and registry lookups are described in `llms.txt`. They do not run when someone uses the live paste.
+The coding tool sends one JSON-RPC message to that address. `launchsense_scan_public` takes a public GitHub URL and runs the same read as the paste: pin the commit, respect the guest caps, then return the coverage line and the findings. `launchsense_get_report` reads a report by scan id. Two scans an hour from one caller, and eight an hour in total, then the route pauses. Alpha has no login. A private repo stays on the signed-in paste. This address does not read a repo that exists only on a laptop.
 
 ## Walk after deploy
 
-Checked `https://harmless-chihuahua-667.convex.site` after the production deploy of `22a5c2b`, then this note was added.
+Checked `https://harmless-chihuahua-667.convex.site` after the production deploy of `22a5c2b`. That build still had the long home page. The heading in that script was "LaunchSense checks the codebase, not the business."
 
-The live HTML is the app shell. The built script contains the home heading "LaunchSense checks the codebase, not the business." and the line "This page is the first look." The same script contains the case studies heading and "None are published yet." `/case-studies` is a route in that page, not a separate file on the server.
-
-A full guest paste was not run in this check, so this note does not claim a new scan result. The steps above are the code path that deploy published.
+The source after that walk is the short site in the sections above. The live site matches this document only after this commit is pushed and then deployed. A full guest paste was not run in the `22a5c2b` check, so this note does not claim a new scan result.

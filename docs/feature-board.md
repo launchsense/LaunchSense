@@ -63,7 +63,7 @@ What it does not do:
 
 GitHub sign-in is optional before a scan, and it is offered again when a guest limit is hit. A signed-in scan reads the pasted public repo further, and it can read one private repo the person can already read. The read uses their GitHub token for one archive download. The guest paste stays on the shared quota, 200 files, and about 2MB. Signed in, the cap is 1,000 files and about 8MB. The download stops at 20MB.
 
-The report card names Cursor, Codex, or Claude when the repo shows that tool. It does not offer an install. The local MCP review is a later row.
+The report card names Cursor, Codex, or Claude when the repo shows that tool. It does not offer a connection. The hosted MCP address is on the Connect page.
 
 What it does not do:
 
@@ -71,21 +71,22 @@ What it does not do:
 - It does not keep the GitHub token after sign-out.
 - It does not read past 1,000 files or about 8MB.
 
-### Local MCP review
+### Hosted MCP
 
 - Status: done
 - Named: 2026-10-04
 
-The coding tool loads the local review. That review reads the files already on disk and runs the shared checks. It does not call GitHub, and it does not send the repo to the server. Alpha has no login. `install.sh` installs the command and one skill.
+The Connect page shows `https://harmless-chihuahua-667.convex.site/mcp`. A coding tool adds that address. It does not clone this repo. `launchsense_scan_public` reads one public GitHub repo on our server, with the same caps as the paste. `launchsense_get_report` reads a report by scan id. Alpha has no login.
 
 What it does not do:
 
-- The live home page shows how to install it. The review itself still runs on your machine, not inside the paste.
-- The public HTTP route can still ask the server to scan GitHub. That route is rate limited. It is not the harness.
+- It does not read a repo that exists only on a laptop.
+- It does not ask deps.dev. OSV still stops at 50 packages.
+- Two scans an hour from one caller, and eight an hour in total, then the route pauses.
 - It does not store raw file contents or raw secret values.
 - A model does not add a finding. It may only reorder inside one severity band.
 
-The job to be done lives here: in the coding tool, on the files already open. The website is the basic public check, not that job.
+A checkout of this repository can still run a local review on files already on disk. That local review is not the public connection.
 
 ### Policy text on files we already read
 

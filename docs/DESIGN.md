@@ -32,12 +32,14 @@ alone, about to hit publish, cannot be misled.
    standards line is a line with a caveat, not a certificate.
 4. **Say what did not happen.** Empty, partial, failed, and unknown each get their
    own words. A check that did not run never looks like a check that passed.
-5. **Buttons say what they do.** `Run scan`, not `Get started`.
+5. **Buttons say what they do.** `Connect the check` and `Run a sample check`, not
+   `Get started`. One filled button per view. The other action is a text link.
 6. **Honest beats impressive.** No fake urgency, no trophy, no celebration when the
    result is clean.
-7. **The site is the front door.** The page can explain the harness. It does not
-   look like the harness already ran on the visitor's machine. Coverage stays in
-   the same box as the answer.
+7. **The site is the front door.** Home says who it is for, plays three lines once,
+   and offers one next step: Connect. The sample paste is a taste. Coverage stays
+   in the same box as the answer on the report. The page does not look like the
+   check already ran on the visitor's machine.
 
 ## Colours and sizes
 
@@ -57,17 +59,19 @@ text, and 3 to 1 for a line or border you have to see.
 
 | Name | Value | Where it is used | Ratio |
 |---|---|---|---|
-| `--paper` | `#f5f7f3` | Page background | 13.98:1 with ink |
-| `--surface` | `#ffffff` | Cards, panels, inputs | 15.07:1 with ink |
-| `--ink` | `#172a24` | Body text | 13.98:1 on paper |
-| `--ink-muted` | `#333344` | Captions, counts, footer | 11.47:1 on paper |
-| `--ink-faint` | `#666677` | Sign-in status text | 5.22:1 on paper |
-| `--action` | `#174e39` | Buttons, links, answer box border | 9.61:1 with white text |
-| `--action-text` | `#ffffff` | Button text | 9.61:1 on the button |
-| `--line` | `#cbd4ca` | Dividers between sections | decorative only |
-| `--line-strong` | `#6b7a71` | Input borders, ghost button borders | 4.52:1 on white |
-| `--focus` | `#2d7a52` | Focus outline | 4.85:1 on paper |
-| `--focus-light` | `#ffffff` | Focus inner edge | 9.61:1 on action |
+| `--paper` | `#eef1f4` | Page background | 14.51:1 with ink |
+| `--surface` | `#f7f9fb` | Cards, panels, inputs | 15.59:1 with ink |
+| `--ink` | `#17202a` | Body text | 14.51:1 on paper |
+| `--ink-muted` | `#3d4c5c` | Captions, counts, footer | 7.76:1 on paper |
+| `--ink-faint` | `#3a4a5a` | Sign-in status text | 8.03:1 on paper |
+| `--action` | `#0c4f4a` | The one filled button, and links | 9.40:1 with white text, 8.30:1 on paper |
+| `--action-text` | `#ffffff` | Button text | 9.40:1 on the button |
+| `--line` | `#c5ced6` | Dividers between sections | 1.41:1 on paper, decorative only |
+| `--line-strong` | `#4a5968` | Input borders | 6.34:1 on paper, 6.81:1 on a card |
+| `--focus` | `#0c4f4a` | Focus outline | 8.30:1 on paper |
+| `--focus-light` | `#ffffff` | Focus inner edge | 9.40:1 on action |
+
+Corners stay square. `--radius` is `0`. One action color is used for the single filled button on a page. A quiet action is a text link, not a second filled button. The teal is darker than `#0f5c56` so white text on the button stays above 4.5:1.
 
 ### Contrast, worked out not guessed
 
@@ -88,32 +92,17 @@ marking where a control is.
 One font. Size does the ranking, because weight and colour alone were not enough to
 separate the headings.
 
-**The font: Public Sans.** Not applied in `src/index.css` yet (it still says
-`system-ui, sans-serif`). This is the choice to apply in the next UI pass.
+**The font: Libre Franklin.** It is applied on `body` in `src/index.css`. Headlines
+and body use the same family. IBM Plex Mono is used only inside `.install-command`,
+which is the Connect address and the two setup blocks.
 
-Why this one:
+Weights loaded: Libre Franklin 400, 600, and 700. IBM Plex Mono 400 and 500.
 
-- It is the font the US government built for public information, so its whole job is
-  "readable by someone who is not an expert and is a little worried." That is exactly
-  our reader.
-- It is plain without being the default everyone reaches for. `Inter` is the most
-  common font in AI-made interfaces right now, and `system-ui` is what gets used when
-  nobody chose. Both were turned down on purpose.
-- It is free and open, so it ships inside the build.
-
-**Keep the font on our own server, never a CDN.** The package is
-`@fontsource/public-sans`, imported in `src/main.tsx`. This is not only about speed.
-A Google Fonts link, or any font loaded from someone else's server, sends every
-visitor's IP address to a third party on every page load. That would make the privacy
-section of `PRODUCT.md` false. Keeping the font local keeps that promise true.
-
-```css
---font-sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-body { font-family: var(--font-sans); }
-```
-
-Load three weights only: 400 regular, 600 semibold, 700 bold. Every extra weight is
-more to download and more chances to emphasise the wrong thing.
+The files come from Google Fonts, linked in `index.html`. That request sends the
+visitor's IP address to Google on every page load. `PRODUCT.md` states that. An
+earlier note said the font would stay on our server so that request would not
+happen. That note is out of date. The scan still does not send file contents to
+Google.
 
 | Size | Used for |
 |---|---|
@@ -176,12 +165,14 @@ buttons, which told the reader to share before they had fixed anything.
 
 ## What it checks, and why it is not a row of cards
 
-The home page check list used to be six identical cards. Every card looked the same,
-so "we check your secrets" had the same weight as "we check your README". That is
-false. Secrets matter more.
+The home page used to open with a check list, and before that with six identical
+cards. Every card looked the same, so "we check your secrets" had the same weight
+as "we check your README". That is false. Secrets matter more.
 
-It is now a plain list, each line naming one real check, with a thin rule between
-them. Secrets come first because that is what actually hurts someone.
+Home no longer carries that list. The first screen is who it is for, three lines,
+Connect, and a short sample. The named checks live on Why, as a plain list with a
+thin rule between lines. Secrets come first because that is what actually hurts
+someone.
 
 ## Getting around, and reading it
 
@@ -198,8 +189,15 @@ reader or on a real phone, and that gap is stated here instead of hidden.
   they were plain buttons with no keyboard movement.
 - **Tap targets.** Every button, toggle, and tab is at least 44px tall, which is the
   smallest a finger reliably hits.
-- **Reduced motion.** If the visitor has asked their system to reduce motion, the
-  animation and smooth scrolling are turned off.
+- **Menu.** One list on every page, including share and passport: LaunchSense, Why,
+  How, Connect, Blog. Below 720px the links sit behind one Menu button. The panel
+  is the same list and it closes after a choice. Sign in with GitHub is not in the
+  menu. A signed-in visitor sees Signed in, which opens Sign out.
+- **Motion.** Home plays three lines once: "You built it.", then "You do not know
+  what to ask.", then "LaunchSense already asks." If the visitor has asked the
+  system to reduce motion, only the last line shows. No fading cards, no hover lifts.
+- **Reduced motion.** Animation and smooth scrolling are turned off with that
+  setting.
 - **One `main` per page**, and status and error messages are announced to screen
   readers.
 - **Real buttons**, no clickable boxes, and every input has a label.
@@ -224,11 +222,13 @@ the site ships. Everything else needs a browser and a person.
 
 Three widths, plus the fluid base.
 
-- **420px and below.** Buttons go full width, panels stack, the top menu wraps.
+- **420px and below.** The sample button goes full width. The Menu button stays
+  the width of its label.
+- **720px and below.** The four links collapse behind Menu.
 - **721px to 1023px.** Content narrows so lines stay readable on a tablet rather
   than stretching across it.
-- **Base.** Body text is fluid. `--measure` caps line length, `--layout` caps the
-  report at 720px, `--layout-wide` the home page at 980px.
+- **Base.** Body text is fluid. `--measure` caps line length at 70 characters.
+  `--layout` caps a page at 720px. The menu row can use `--layout-wide`, 980px.
 
 ## How it talks
 
@@ -305,7 +305,7 @@ doing three things in order, not a team managing work.
 Applied: `The rest of the fix list` is an `<ol>` with a title, a why, and a
 checklist per step. The top-3 prompt is the same list, cut to the first three.
 
-### The check list on Home: take from a menu, ignore a pricing page
+### The named checks: take from a menu, ignore a pricing page
 
 Take: a plain menu where each line is a real thing, separated by a rule, and the
 reader can scan it in five seconds.
@@ -314,8 +314,8 @@ Ignore: the six-tile feature grid from every SaaS pricing page. That is the gene
 default, and it gives "we check your secrets" the same visual weight as "we check
 your README", which is false.
 
-Applied: `.check-list` is an ordered list, secrets first, each item a named thing
-with a rule between entries. Weight follows meaning.
+Applied: `.check-list` on Why is a list, secrets first, each item a named thing
+with a rule between entries. Home does not repeat that list. Weight follows meaning.
 
 ### Severity: take from a traffic light, ignore badges
 
