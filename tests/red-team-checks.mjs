@@ -983,6 +983,14 @@ function scanRepoCall(env, cwd) {
     child.stdin.write(
       frame({
         jsonrpc: "2.0",
+        id: 0,
+        method: "initialize",
+        params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "red-team", version: "1" } },
+      }),
+    );
+    child.stdin.write(
+      frame({
+        jsonrpc: "2.0",
         id: 1,
         method: "tools/call",
         params: { name: "launchsense_scan_repo", arguments: {} },

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,9 +32,13 @@ const maxReportBytes = 1 << 20
 // with it.
 const apiTimeout = 8 * time.Second
 
+// rpcRequest is the JSON-RPC envelope plus the request itself. jsonrpc and id are
+// kept as raw JSON on purpose: an envelope has to be inspected before any method
+// runs, and decoding "2.0" straight into a string loses the difference between a
+// correct envelope and one carrying a number.
 type rpcRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
+	JSONRPC json.RawMessage `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
 }
@@ -44,19 +49,44 @@ type toolCall struct {
 }
 
 type accountFunc func() (Account, error)
-type privateFunc func(owner, name string) (bool, error)
 
 type reviewFunc func(root string) (string, error)
+
+// supportedProtocolVersions is the set this server negotiates. It is the same
+// four the hosted surface serves (convex/mcpHttp.ts), so one client library
+// works against both.
+var supportedProtocolVersions = []string{"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
+
+// defaultProtocolVersion is answered when the client asks for nothing, or for
+// something this server does not implement. A client that asked for a version
+// this server does not have is answered with one it does, rather than refused:
+// the client's own choice is not the only way to find out what is on offer.
+const defaultProtocolVersion = "2025-03-26"
 
 type server struct {
 	apiURL  string
 	account accountFunc
-	private privateFunc
 	client  *http.Client
 	review  reviewFunc
 	// errOut carries one line per refused or unparsable message. stdout carries
 	// protocol only, so a client reading stdout never sees a log line.
 	errOut io.Writer
+
+	// mu guards the session state below. The state is read on the reader loop and
+	// written only there, so it is the reader's state; the mutex is what lets the
+	// handlers that answer concurrently read it safely.
+	mu          sync.Mutex
+	initialized bool
+	protocol    string
+
+	// outMu guards every write to stdout. Two answers must never interleave into
+	// one line, which is the whole framing contract of this transport.
+	outMu sync.Mutex
+	out   io.Writer
+
+	// wg counts the handlers this session started, so serve can report honestly
+	// about what was in flight when stdin closed.
+	wg sync.WaitGroup
 }
 
 func newServer() *server {
@@ -65,17 +95,21 @@ func newServer() *server {
 		apiURL = "https://harmless-chihuahua-667.convex.site"
 	}
 	return &server{
-		apiURL:  strings.TrimRight(apiURL, "/"),
-		account: localAccount,
-		private: lookupRepo,
-		client:  &http.Client{Timeout: apiTimeout},
-		errOut:  os.Stderr,
+		apiURL:   strings.TrimRight(apiURL, "/"),
+		account:  localAccount,
+		client:   &http.Client{Timeout: apiTimeout},
+		errOut:   os.Stderr,
+		protocol: defaultProtocolVersion,
 	}
 }
 
 // logf writes one line to stderr when a stderr writer is set. A nil writer is
-// the quiet case, used by tests that only read stdout.
+// the quiet case, used by tests that only read stdout. errMu is the same guard
+// writeResult uses, because a log line and an answer can be written at the same
+// moment once the loop is concurrent.
 func (s *server) logf(format string, args ...any) {
+	s.outMu.Lock()
+	defer s.outMu.Unlock()
 	if s.errOut == nil {
 		return
 	}
@@ -85,11 +119,36 @@ func (s *server) logf(format string, args ...any) {
 // serve reads one JSON message per line and writes one JSON message per line.
 // That is the MCP stdio transport: no length header, no embedded newline, a
 // blank line is not a message.
+//
+// Each message is handled in its own goroutine, so a slow tool call does not hold
+// up the messages behind it: a ping during a ten minute local review still
+// answers, and a client that uses ping as a liveness probe no longer concludes
+// the process is dead. Two things keep that honest. The lifecycle and envelope
+// checks run on this loop, in arrival order, so a client that wrote initialize
+// and then its next request in one write has both messages admitted in that
+// order, which is what the session rules depend on. And every write to stdout is
+// guarded for the whole of one message, so two answers cannot interleave into one
+// broken line.
+//
+// Answers are therefore not in request order, which is normal for a concurrent
+// server: MCP identifies every answer by its id, so a client matches the answer to
+// the request by id and not by position.
+//
+// When stdin closes the session is over, and serve waits for the answers already
+// in flight before it returns. A client that writes a request and closes its pipe
+// straight after still gets its answer, which is what every stdio client does when
+// it has nothing more to send. That wait is bounded by the tools themselves, so the
+// slowest one this server has is the ten minute local review budget.
 func (s *server) serve(in io.Reader, out io.Writer) error {
+	s.outMu.Lock()
+	s.out = out
+	s.outMu.Unlock()
+
 	reader := bufio.NewReaderSize(in, 64*1024)
 	for {
 		line, oversize, err := readMessage(reader)
 		if err == io.EOF {
+			s.wg.Wait()
 			return nil
 		}
 		if err != nil {
@@ -100,11 +159,10 @@ func (s *server) serve(in io.Reader, out io.Writer) error {
 		}
 		if oversize {
 			s.logf("message over the %d byte limit was refused", maxMessageBytes)
-			err = writeResult(out, nil, nil, &rpcError{
+			if err := s.answer(nil, nil, &rpcError{
 				Code:    -32600,
 				Message: fmt.Sprintf("Message too large. The limit is %d bytes (4 MiB) and nothing was run.", maxMessageBytes),
-			})
-			if err != nil {
+			}); err != nil {
 				return err
 			}
 			continue
@@ -112,24 +170,174 @@ func (s *server) serve(in io.Reader, out io.Writer) error {
 		var req rpcRequest
 		if err := json.Unmarshal(line, &req); err != nil {
 			s.logf("parse error: %v", err)
-			err = writeResult(out, nil, nil, &rpcError{
+			if err := s.answer(nil, nil, &rpcError{
 				Code:    -32700,
 				Message: "Parse error. The line was not one JSON message, so nothing was run.",
-			})
-			if err != nil {
+			}); err != nil {
 				return err
 			}
 			continue
 		}
-		if len(req.ID) == 0 || string(req.ID) == "null" {
-			// A notification carries no id, so it gets no answer.
+
+		// A message with no id member at all is a notification: it is run, and it
+		// is never answered. An id that is present and null is a request, and is
+		// answered with id null, which is what JSON-RPC 2.0 says about a null id.
+		// Treating the two the same left a client that sent id null waiting with
+		// nothing on stderr to say why.
+		notification := len(req.ID) == 0
+
+		if rpcErr := s.begin(req); rpcErr != nil {
+			if notification {
+				// A notification has no id, so there is nothing to answer with. One
+				// line on stderr is the only honest place for the refusal.
+				s.logf("%s was not run: %s", req.Method, rpcErr.Message)
+				continue
+			}
+			if err := s.answer(req.ID, nil, rpcErr); err != nil {
+				return err
+			}
 			continue
 		}
-		result, rpcErr := s.handle(req)
-		if err := writeResult(out, req.ID, result, rpcErr); err != nil {
-			return err
+
+		s.wg.Add(1)
+		go func(req rpcRequest, notification bool) {
+			defer s.wg.Done()
+			result, rpcErr := s.handle(req)
+			if notification {
+				return
+			}
+			if err := s.answer(req.ID, result, rpcErr); err != nil {
+				s.logf("answer not written: %v", err)
+			}
+		}(req, notification)
+	}
+}
+
+// begin runs the envelope and lifecycle checks on the reader loop, in arrival
+// order, and returns the error to answer with, or nil to run the message. It
+// changes the session state as a side effect: the one initialize a session gets
+// is accepted here, before its handler runs, so a client that wrote initialize
+// and its next request in one write has both admitted in that order and neither
+// is refused for arriving before the handshake.
+func (s *server) begin(req rpcRequest) *rpcError {
+	if rpcErr := validateEnvelope(req); rpcErr != nil {
+		return rpcErr
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch {
+	case req.Method == "initialize":
+		if s.initialized {
+			return &rpcError{
+				Code:    -32600,
+				Message: "Already initialized. This server answers one initialize per session, because the tools and capabilities after it are the same every time. Start a new session, that is a new process, to negotiate again.",
+			}
+		}
+		s.initialized = true
+		s.protocol = negotiateProtocol(req.Params)
+		return nil
+	case req.Method == "ping":
+		// ping is how a client asks whether the process is alive, so it answers
+		// before the handshake and after it.
+		return nil
+	case !s.initialized:
+		return &rpcError{
+			Code:    -32002,
+			Message: "Server not initialized. Send initialize first. ping is the only method that answers before it.",
+		}
+	default:
+		return nil
+	}
+}
+
+// validateEnvelope checks the two parts of a JSON-RPC 2.0 message that make it a
+// request at all: the version and the id. A message that fails either is
+// answered Invalid Request and no method runs, because a message that is not a
+// JSON-RPC 2.0 request cannot be answered as one.
+func validateEnvelope(req rpcRequest) *rpcError {
+	if len(req.JSONRPC) == 0 {
+		return &rpcError{
+			Code:    -32600,
+			Message: `Invalid Request. The jsonrpc member is missing. Every JSON-RPC 2.0 message must carry "jsonrpc":"2.0".`,
 		}
 	}
+	var version string
+	if err := json.Unmarshal(req.JSONRPC, &version); err != nil {
+		return &rpcError{
+			Code:    -32600,
+			Message: `Invalid Request. The jsonrpc member must be the string "2.0", not a number, an array or an object.`,
+		}
+	}
+	if version != "2.0" {
+		return &rpcError{
+			Code:    -32600,
+			Message: fmt.Sprintf(`Invalid Request. The jsonrpc member must be "2.0". This server speaks JSON-RPC %s.`, version),
+		}
+	}
+	if len(req.ID) == 0 {
+		return nil
+	}
+	if !validID(req.ID) {
+		got, err := jsonTypeOf(req.ID)
+		if err != nil {
+			got = "a value that is not valid JSON"
+		}
+		return &rpcError{
+			Code:    -32600,
+			Message: fmt.Sprintf("Invalid Request. The id member must be a string, a number or null. Got %s. The id is echoed back unchanged on every answer, so a wrong one is a mistake worth naming rather than passing along.", got),
+		}
+	}
+	return nil
+}
+
+// validID reports whether an id is one JSON-RPC 2.0 allows: a string, a number,
+// or null. An object or an array is refused, because echoing an object back as
+// the id of an answer is not something the spec describes.
+func validID(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return false
+	}
+	switch trimmed[0] {
+	case '"':
+		var text string
+		return json.Unmarshal(trimmed, &text) == nil
+	case 'n':
+		return string(trimmed) == "null"
+	case 't', 'f', '{', '[':
+		return false
+	default:
+		var number json.Number
+		return json.Unmarshal(trimmed, &number) == nil
+	}
+}
+
+// negotiateProtocol answers the version the client asked for when this server
+// serves it, and the default otherwise. It mirrors supportedVersion in
+// convex/mcpHttp.ts, so both surfaces accept the same clients.
+func negotiateProtocol(params json.RawMessage) string {
+	var asked struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	if len(params) == 0 {
+		return defaultProtocolVersion
+	}
+	if err := json.Unmarshal(params, &asked); err != nil {
+		return defaultProtocolVersion
+	}
+	for _, version := range supportedProtocolVersions {
+		if asked.ProtocolVersion == version {
+			return version
+		}
+	}
+	return defaultProtocolVersion
+}
+
+// answer writes one JSON-RPC message under the stdout guard.
+func (s *server) answer(id json.RawMessage, result any, rpcErr *rpcError) error {
+	s.outMu.Lock()
+	defer s.outMu.Unlock()
+	return writeResult(s.out, id, result, rpcErr)
 }
 
 // readMessage reads one newline-terminated line. It reports an oversize line
@@ -165,8 +373,11 @@ func readMessage(r *bufio.Reader) (line []byte, oversize bool, err error) {
 func (s *server) handle(req rpcRequest) (any, *rpcError) {
 	switch req.Method {
 	case "initialize":
+		s.mu.Lock()
+		version := s.protocol
+		s.mu.Unlock()
 		return map[string]any{
-			"protocolVersion": "2024-11-05",
+			"protocolVersion": version,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]string{"name": "launchsense", "version": "0.1.0"},
 		}, nil
@@ -595,10 +806,16 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-// writeResult writes one JSON-RPC message and a newline. A nil id writes null,
-// which is what a parse error has to answer with because no id could be read.
-// json.Marshal escapes every newline inside a string, so a message can never
-// break the line framing.
+// writeResult writes one JSON-RPC message and a newline, in one call to out.
+// A nil id writes null, which is what a parse error has to answer with because
+// no id could be read. json.Marshal escapes every newline inside a string, so a
+// message can never break the line framing.
+//
+// The message and its newline are one byte slice handed to one Write, and the
+// caller holds the stdout guard across it. That is what makes a line atomic:
+// two answers can be produced at the same moment by two goroutines, and if
+// either one wrote the body and the newline separately another answer could land
+// between them and turn two valid messages into one broken line.
 func writeResult(out io.Writer, id json.RawMessage, result any, rpcErr *rpcError) error {
 	msg := map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(id)}
 	if rpcErr != nil {
@@ -610,6 +827,9 @@ func writeResult(out io.Writer, id json.RawMessage, result any, rpcErr *rpcError
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "%s\n", body)
+	line := make([]byte, 0, len(body)+1)
+	line = append(line, body...)
+	line = append(line, '\n')
+	_, err = out.Write(line)
 	return err
 }

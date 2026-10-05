@@ -17,7 +17,6 @@ func TestLocalReviewDoesNotCallGitHub(t *testing.T) {
 	s := &server{
 		apiURL:  "https://example.test",
 		account: func() (Account, error) { return Account{}, nil },
-		private: func(string, string) (bool, error) { return true, nil },
 		review: func(string) (string, error) {
 			return "LaunchSense alpha review. The job runs on the files on this machine.", nil
 		},
@@ -40,8 +39,7 @@ func TestPrivateCheckoutStillReviewsLocalFiles(t *testing.T) {
 		account: func() (Account, error) {
 			return Account{LoggedIn: true, Login: "ada", Owner: "ada", Name: "secret", Private: true, Host: "github.com"}, nil
 		},
-		private: func(string, string) (bool, error) { return true, nil },
-		review:  func(string) (string, error) { return "local files", nil },
+		review: func(string) (string, error) { return "local files", nil },
 		client: &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
 			t.Fatal("a private checkout must not call GitHub")
 			return nil, nil
@@ -154,7 +152,7 @@ func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f
 func TestInitializeFrame(t *testing.T) {
 	s := newServer()
 	var in bytes.Buffer
-	in.WriteString(`{"jsonrpc":"2.0","id":1,"method":"initialize"}` + "\n")
+	in.WriteString(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}` + "\n")
 	var out bytes.Buffer
 	done := make(chan error, 1)
 	go func() {
@@ -174,8 +172,9 @@ func TestInitializeFrame(t *testing.T) {
 	}
 }
 
-// toolResult runs one tools/call through handle and returns what the client
-// would see, so an argument check can be read without starting a process.
+// toolResult runs one tools/call through the same lifecycle and argument checks
+// the loop runs, and returns what the client would see, so an argument check can
+// be read without starting a process.
 func toolResult(t *testing.T, s *server, name string, args string) map[string]any {
 	t.Helper()
 	params := fmt.Sprintf(`{"name":%q,"arguments":%s}`, name, args)
@@ -183,6 +182,25 @@ func toolResult(t *testing.T, s *server, name string, args string) map[string]an
 	var req rpcRequest
 	if err := json.Unmarshal([]byte(wire), &req); err != nil {
 		t.Fatal(err)
+	}
+	// handle is only reached after begin accepts the message, so the session has
+	// to exist first: the handshake runs here exactly as a client would send it,
+	// and only for the first call, because one session gets one initialize.
+	s.mu.Lock()
+	ready := s.initialized
+	s.mu.Unlock()
+	if !ready {
+		handshake := rpcRequest{
+			JSONRPC: json.RawMessage(`"2.0"`),
+			ID:      json.RawMessage(`1`),
+			Method:  "initialize",
+		}
+		if rpcErr := s.begin(handshake); rpcErr != nil {
+			t.Fatalf("initialize: %s", rpcErr.Message)
+		}
+	}
+	if rpcErr := s.begin(req); rpcErr != nil {
+		return map[string]any{"__error": rpcErr}
 	}
 	result, rpcErr := s.handle(req)
 	if rpcErr != nil {

@@ -197,6 +197,44 @@ describe("install.sh points the server at the checkout", () => {
     );
   });
 
+  // W41-MCP. The installer wrote LAUNCHSENSE_AUTH_REQUIRED=0 and no Go file read
+  // it: the server reads three variables and that was not one of them. A key in
+  // a shipped config that nothing reads is a promise the installer cannot keep,
+  // and the reader of the config cannot tell a real switch from a dead one.
+  it("writes only the environment variables the server actually reads", () => {
+    withHome((home) => {
+      const result = runInstaller(home);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert.equal(result.status, 0, `installer must succeed; output was:\n${output}`);
+      const env = readCursorConfig(home).mcpServers.launchsense.env ?? {};
+      const names = Object.keys(env).sort();
+      assert.deepEqual(
+        names,
+        ["LAUNCHSENSE_REVIEW", "LAUNCHSENSE_ROOT"],
+        `the env block must hold exactly what the server reads; it held ${JSON.stringify(names)}`,
+      );
+      assert.ok(
+        !("LAUNCHSENSE_AUTH_REQUIRED" in env),
+        "no Go file reads LAUNCHSENSE_AUTH_REQUIRED, so it must not be written",
+      );
+    });
+  });
+
+  it("every key the installer writes is read by the Go server", () => {
+    const go = readFileSync(join(ROOT, "mcp", "server.go"), "utf8") +
+      readFileSync(join(ROOT, "mcp", "review_local.go"), "utf8");
+    withHome((home) => {
+      runInstaller(home);
+      const env = readCursorConfig(home).mcpServers.launchsense.env ?? {};
+      for (const name of Object.keys(env)) {
+        assert.ok(
+          go.includes(name),
+          `install.sh writes ${name} but no Go file reads it: a dead key in a shipped config is a promise nothing keeps`,
+        );
+      }
+    });
+  });
+
   it("llms.txt says the server reviews LAUNCHSENSE_ROOT and that the installer sets it", () => {
     const text = readFileSync(LLMS, "utf8");
     assert.ok(

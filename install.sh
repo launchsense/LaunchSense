@@ -64,6 +64,10 @@ CONFIG="$HOME/.cursor/mcp.json"
 if [ ! -f "$CONFIG" ]; then
   # cwd is the module folder, so LAUNCHSENSE_ROOT names the checkout to review.
   # Without it the server would read the mcp folder instead of the checkout.
+  # These two keys are the whole contract with the server: it reads
+  # LAUNCHSENSE_ROOT, LAUNCHSENSE_REVIEW and LAUNCHSENSE_API_URL, and nothing
+  # else. A key written here that no Go file reads is a promise the installer
+  # cannot keep, so there are no others.
   cat > "$CONFIG" <<EOF
 {
   "mcpServers": {
@@ -73,8 +77,7 @@ if [ ! -f "$CONFIG" ]; then
       "cwd": "$ROOT/mcp",
       "env": {
         "LAUNCHSENSE_ROOT": "$ROOT",
-        "LAUNCHSENSE_REVIEW": "$ROOT/mcp/review-entry.ts",
-        "LAUNCHSENSE_AUTH_REQUIRED": "0"
+        "LAUNCHSENSE_REVIEW": "$ROOT/mcp/review-entry.ts"
       }
     }
   }
