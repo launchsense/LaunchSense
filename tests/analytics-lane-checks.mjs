@@ -239,7 +239,7 @@ describe("analytics schema", () => {
     return next === -1 ? rest : rest.slice(0, next + 1);
   };
 
-  it("declares usageEvents with the 14 fields and the two indexes", () => {
+  it("declares usageEvents with the 15 fields and the two indexes", () => {
     const text = tableBlock("usageEvents");
     for (const field of [
       "day:",
@@ -254,6 +254,9 @@ describe("analytics schema", () => {
       "errorType:",
       "rpcResponseStatusCode:",
       "durationMs:",
+      // Present by the design so a future reader can correlate an event to a
+      // scan. No writer sets it today; that is stated, not hidden.
+      "scanId:",
       "repoKey:",
       "createdAt:",
     ]) {
@@ -683,6 +686,27 @@ describe("the privacy denylist refuses properties before a write", () => {
         `${key} is marked Opt-In with a sensitive-data warning and must be refused`,
       );
       assert.deepEqual(mod.forbiddenPropertiesIn({ [key]: "https://github.com/acme/private" }), [key]);
+    }
+  });
+
+  it("refuses the Opt-In families, not only the names defined today", async () => {
+    // The list names leaves; the check must also refuse the family, so a future
+    // or near-miss child (gen_ai.prompt.variable.foo, mcp.resource.uri.template)
+    // cannot slip past the way a single-name list would allow.
+    const privacy = await loadWithStubs("convex/analytics/privacy.ts");
+    for (const key of [
+      "gen_ai.prompt.variable.foo",
+      "gen_ai.tool.call.arguments.extra",
+      "mcp.resource.uri.template",
+    ]) {
+      assert.deepEqual(
+        privacy.forbiddenPropertiesIn({ [key]: "x" }),
+        [key],
+        `${key} must be refused by prefix`,
+      );
+    }
+    for (const prefix of ["gen_ai.tool.call.", "gen_ai.prompt.variable.", "mcp.resource.uri"]) {
+      assert.ok(privacy.FORBIDDEN_PREFIXES.includes(prefix), `${prefix} must be a stated refused prefix`);
     }
   });
 

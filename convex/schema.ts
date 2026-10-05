@@ -295,7 +295,7 @@ export default defineSchema({
   }).index("by_day", ["day"]),
   // Analytics for the hosted MCP surface only. One row per protocol action, so
   // the question "which harness calls us, which tool, how often" has an answer.
-  // Twelve of the sixteen product events are derived from scans and
+  // Thirteen of the sixteen product events are derived from scans and
   // findingTransitions instead of written here; only the three MCP rows need a
   // write, and the nightly rollup deletes these after 30 days.
   //

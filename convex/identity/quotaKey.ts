@@ -100,7 +100,8 @@ export function hostedScanKeys(
   const callerBucket = hostedCallerBucket(callerId);
   return {
     hourly: `mcp-scan:${hour}:${callerBucket}`,
-    // A Convex row id is 32 characters; anything else did not come from a resolve.
+    // A Convex row id is 20 to 40 url-safe characters; anything else did not
+    // come from a resolve.
     daily: safeCallerId(callerId) === null ? null : `mcp-scan-day:${day}:${callerBucket}`,
     callerBucket,
   };

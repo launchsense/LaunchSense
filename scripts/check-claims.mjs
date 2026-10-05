@@ -185,6 +185,12 @@ function ttlMatchesCopy(copiedNumber, copiedUnit) {
 // other retention claim fail on whichever constant happened to come first in
 // file order. The claim is still only satisfied by a real purge bound to a
 // constant with the matching value; it just stops depending on source order.
+//
+// Subject-blind, and it is worth knowing that: this asks whether SOME purge
+// with the claimed window exists, not whether that purge is for the subject the
+// copy names. A retention claim about a table that nothing purges can still
+// pass on an unrelated table's window. Read a pass as "a purge with this window
+// exists somewhere in the code", not as "this sentence is backed".
 function retentionIsEnforced(copiedNumber, copiedUnit) {
   const source = readAllSource();
   const wanted = Number(copiedNumber) * (TTL_UNITS[copiedUnit.toLowerCase()] ?? 0);

@@ -4,6 +4,10 @@
 // ambient Node types. GITHUB_TOKEN stays server-only.
 declare const process: { env: Record<string, string | undefined> };
 
+// The pin used by every blob read. Imported from the pure snapshot module so a
+// blob read cannot silently become a read of whatever a branch points at now.
+import { blobRefQuery } from "../scans/snapshot";
+
 export const FETCH_TIMEOUT_MS = 25000;
 export const MAX_STORED_ENTRIES = 5000;
 export const MAX_BYTES_PER_FILE = 100000;
@@ -107,10 +111,17 @@ export async function fetchBlobContent(
   maxBytes = MAX_BYTES_PER_FILE,
   userToken?: string | null,
 ): Promise<BlobResult> {
+  // Every blob read is pinned to a full 40-character commit sha. An unpinned
+  // value is refused here rather than sent, so a blob read cannot become a read
+  // of whatever a branch points at now.
+  const ref = blobRefQuery(sha);
+  if (ref === null) {
+    return { status: "error", content: "", size: 0, contentSha: "", resetAtMs: null };
+  }
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path
     .split("/")
     .map(encodeURIComponent)
-    .join("/")}?ref=${sha}`;
+    .join("/")}${ref}`;
   let response: Response;
   try {
     response = await fetch(url, {

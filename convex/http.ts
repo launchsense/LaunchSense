@@ -123,8 +123,22 @@ async function authenticate(
   | { ok: true; identity: CallerIdentity }
   | { ok: false; response: Response }
 > {
-  const token = bearerTokenFromHeader(request.headers.get("authorization"));
+  const header = request.headers.get("authorization");
+  const token = bearerTokenFromHeader(header);
   if (token === null) {
+    // An absent header is anonymous. A header that is present but is not a
+    // Bearer token is a credential that was presented and refused, so it must
+    // not silently fall through to the anonymous path and keep working.
+    if (typeof header === "string" && header.trim().length > 0) {
+      const refused = unauthorizedResponse("invalid");
+      return {
+        ok: false,
+        response: Response.json(refused.body, {
+          status: refused.status,
+          headers: { ...refused.headers, ...mcpCors },
+        }),
+      };
+    }
     return { ok: true, identity: { resolved: false } };
   }
   const resolved = await ctx.runQuery(internal.identity.store.resolveToken, { token });

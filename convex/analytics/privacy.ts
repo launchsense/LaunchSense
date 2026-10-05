@@ -55,11 +55,30 @@ export const FORBIDDEN_PROPERTIES: readonly string[] = [
   "clientaddress",
 ];
 
+/**
+ * Prefixes refused as a family, not as single names.
+ *
+ * The OpenTelemetry spec names `gen_ai.prompt.variable.*` and
+ * `gen_ai.tool.call.*` as Opt-In families. Listing only the two leaf names it
+ * currently defines would let a future or near-miss child slip past, so the
+ * whole family is refused. `mcp.resource.uri` is refused with any suffix for
+ * the same reason.
+ */
+export const FORBIDDEN_PREFIXES: readonly string[] = [
+  "gen_ai.tool.call.",
+  "gen_ai.prompt.variable.",
+  "mcp.resource.uri",
+];
+
 /** Every forbidden name this bag carries. */
 export function forbiddenPropertiesIn(bag: Record<string, unknown>): string[] {
   return Object.keys(bag)
     .map((key) => key.toLowerCase())
-    .filter((key) => FORBIDDEN_PROPERTIES.includes(key));
+    .filter(
+      (key) =>
+        FORBIDDEN_PROPERTIES.includes(key) ||
+        FORBIDDEN_PREFIXES.some((prefix) => key.startsWith(prefix)),
+    );
 }
 
 /** True when the bag can be written as an analytics row. */
