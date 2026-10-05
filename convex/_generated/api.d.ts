@@ -29,6 +29,10 @@ import type * as github_readToken from "../github/readToken.js";
 import type * as github_sessionToken from "../github/sessionToken.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as identity_attribution from "../identity/attribution.js";
+import type * as identity_credential from "../identity/credential.js";
+import type * as identity_quotaKey from "../identity/quotaKey.js";
+import type * as identity_store from "../identity/store.js";
 import type * as mcpHttp from "../mcpHttp.js";
 import type * as mcpLimit from "../mcpLimit.js";
 import type * as projects from "../projects.js";
@@ -43,6 +47,7 @@ import type * as scans_quota from "../scans/quota.js";
 import type * as scans_rankScan from "../scans/rankScan.js";
 import type * as scans_rescan from "../scans/rescan.js";
 import type * as scans_sharing from "../scans/sharing.js";
+import type * as scans_snapshot from "../scans/snapshot.js";
 import type * as scans_store from "../scans/store.js";
 
 import type {
@@ -73,6 +78,10 @@ declare const fullApi: ApiFromModules<{
   "github/sessionToken": typeof github_sessionToken;
   health: typeof health;
   http: typeof http;
+  "identity/attribution": typeof identity_attribution;
+  "identity/credential": typeof identity_credential;
+  "identity/quotaKey": typeof identity_quotaKey;
+  "identity/store": typeof identity_store;
   mcpHttp: typeof mcpHttp;
   mcpLimit: typeof mcpLimit;
   projects: typeof projects;
@@ -87,6 +96,7 @@ declare const fullApi: ApiFromModules<{
   "scans/rankScan": typeof scans_rankScan;
   "scans/rescan": typeof scans_rescan;
   "scans/sharing": typeof scans_sharing;
+  "scans/snapshot": typeof scans_snapshot;
   "scans/store": typeof scans_store;
 }>;
 

@@ -31,7 +31,9 @@ const severity = v.union(
 // Stage 3: bounded file contents, OSV cache, evidence ledger, findings.
 // Stage 4: live checks, share/passport artifacts, first-party analytics.
 // Rescan: compare pairs, transitions, guest decisions.
-// Wave 6: hosted MCP usage events and the daily rollup, no scan surface split yet.
+// Wave 6: hosted MCP usage events and the daily rollup, then identity and
+// attribution. A credential row is a server-minted bearer token, and a scan row
+// says which credential made it and which surface it arrived on.
 export default defineSchema({
   ...authTables,
   scans: defineTable({
@@ -66,6 +68,22 @@ export default defineSchema({
     /** Which surface accepted the repo. Optional: nothing wrote it before the
      * analytics lane existed, and a scan is a scan either way. */
     surface: v.optional(v.union(v.literal("web"), v.literal("mcp_hosted"))),
+    /** Which door the request came through. Distinct from surface: two doors
+     * share the hosted MCP read, and the ratio the headline metric needs is
+     * attributed / total, not per-surface. */
+    channel: v.optional(v.union(v.literal("web"), v.literal("mcp"), v.literal("api"))),
+    /** Which credential made this scan. Absent when none resolved. */
+    attributedCallerId: v.optional(v.id("credentials")),
+    /** True when a credential resolved. Written false, not omitted, on every
+     * scan with no or invalid credential, so attributed / total is a real ratio
+     * and dropping an unscanned row cannot inflate the headline. */
+    attributed: v.optional(v.boolean()),
+    /** The commit the scan describes. Same value as `sha`, named for the report. */
+    commitSha: v.optional(v.string()),
+    /** The tree object sha, which is NOT the commit sha. Recorded separately
+     * because a naive equality check between the two would fail and a check
+     * that ignores the difference proves nothing. */
+    treeSha: v.optional(v.string()),
     /** True when this scan used the signed-in GitHub token and the higher file cap. */
     signedIn: v.optional(v.boolean()),
     /** Owner of a signed-in scan. Absent on guest scans of public repos. */
@@ -77,11 +95,58 @@ export default defineSchema({
     // from by_repo_sha, so prefix-only queries need their own index.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_repo", ["owner", "repo"])
-    .index("by_repo_sha", ["owner", "repo", "sha"]),
+    .index("by_repo_sha", ["owner", "repo", "sha"])
+    // "this person's scans for this repo, newest first". Convex forbids optional
+    // fields in an index, so userId is not one; the index is on the credential,
+    // which is always present on an attributed scan.
+    .index("by_caller_created", ["attributedCallerId", "createdAt"]),
+  // One server-minted bearer token. The raw token is NEVER written here.
+  //
+  // Two stored values and no others:
+  //   publicId  the lookup prefix, in plaintext, so resolution is one indexed read
+  //   tokenHash SHA-256 of the FULL token, so a database read cannot replay it
+  //
+  // SHA-256 and not Argon2id: the secret is 256 bits of server-generated
+  // randomness, so there is no brute-force surface to slow down. OWASP's
+  // Argon2id floor is for low-entropy user-chosen passwords.
+  //
+  // Three identity layers, kept apart on purpose:
+  //   callerId         this row. Server-minted. Quota, attribution, ownership.
+  //   declaredHarness  a label the operator recorded at issuance. A claim.
+  //   verifiedBinding  a server-observed fact about who this is. Absent today:
+  //                    there is no GitHub App path on a scan, so there is
+  //                    nothing to observe. See convex/identity/credentials.ts.
+  credentials: defineTable({
+    /** The plaintext lookup prefix, ls_live_<publicId>_<secret> minus the secret. */
+    publicId: v.string(),
+    /** SHA-256 of the full token, 64 hex characters. Never the token. */
+    tokenHash: v.string(),
+    /** The person, when the credential was bound to one. Optional today:
+     * issuance is a server step with no UI, so there may be no account yet. */
+    userId: v.optional(v.id("users")),
+    /** Operator label from issuance. A claim about a harness, never a policy input. */
+    declaredHarness: v.optional(v.string()),
+    /** Server-observed binding to a person or installation. Null today, and the
+     * field exists so the honest gap is visible rather than assumed away. */
+    verifiedBinding: v.optional(v.string()),
+    /** The audience this credential was minted for: the canonical MCP server URI. */
+    audience: v.string(),
+    /** Read on every resolve, so revocation is immediate rather than eventual. */
+    revoked: v.boolean(),
+    revokedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+  })
+    .index("by_publicId", ["publicId"])
+    .index("by_user", ["userId"]),
   repoTrees: defineTable({
     owner: v.string(),
     repo: v.string(),
     sha: v.string(),
+    /** The tree OBJECT sha the response carried. Not the commit sha: the two are
+     * different values, and a scan built from this cache has to record the same
+     * pair a scan built from a fresh fetch records. */
+    treeSha: v.optional(v.string()),
     fetchedAt: v.number(),
     fileCount: v.number(),
     truncated: v.boolean(),
