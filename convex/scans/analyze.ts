@@ -890,8 +890,17 @@ export const analyzeScan = action({
       // ordered the findings; nothing here can fail the scan.
     }
 
-    // Release the slot before returning so a queued scan can start.
-    await ctx.runMutation(internal.scans.quota.releaseSlot, { scanId: args.scanId });
+    // Release the slot before returning so a queued scan can start. A failure
+    // here cannot un-save the scan: the row above is already written as
+    // completed or partial, and convex/scans/queue.ts releases the same slot on
+    // its own path, so a stuck slot is recoverable by the sweep. Letting this
+    // throw would reject an action whose work is done, and the visitor would see
+    // a failed scan with a finished report behind it.
+    try {
+      await ctx.runMutation(internal.scans.quota.releaseSlot, { scanId: args.scanId });
+    } catch {
+      // Nothing to do. The saved result stands and the slot is reclaimed later.
+    }
 
     return {
       scanId: args.scanId,
