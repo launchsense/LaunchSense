@@ -67,6 +67,10 @@ export default function ScanReport(props: {
   fileCount: number | undefined;
   treeTruncated: boolean;
   liveProvided: boolean;
+  // True only when the explanations on screen were written by an AI provider.
+  // It is the structural boolean explainScan returns, never a test over a note
+  // string: the provider picks the model name in that note, so a string test
+  // would let a provider add or remove the disclosure below.
   aiConfigured: boolean;
   /** Whether the scan read with the signed-in caps. Defaults to the guest caps. */
   signedIn?: boolean;
