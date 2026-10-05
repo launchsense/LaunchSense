@@ -123,6 +123,18 @@ export function isHardcodedCredential(line: string): boolean {
     const nameMatch = /([A-Za-z0-9_]+)$/.exec(before);
     if (nameMatch === null) continue;
     if (!nameLooksLikeCredential(nameMatch[1])) continue;
+    // A member or attribute access is not a variable assignment. `viewBinding.tvSendCode`
+    // reduces to a credential word on the LAST identifier only when the receiver is
+    // dropped; here the receiver is `viewBinding.tvSendCode`, and the token before the
+    // dot is the receiver. A credential word used as a field or attribute of another
+    // object (a UI binding, a config member, a framework field) is not a hardcoded
+    // secret. Reject when the matched name is preceded by a dot or is a known member.
+    const receiver = before.slice(0, before.length - nameMatch[1].length);
+    if (/[.]$/.test(receiver)) continue;
+    if (/\b(?:viewBinding|databinding|binding|Binding)$/.test(receiver)) continue;
+    // XML/HTML/IDE attributes: `key="..."` where the value is a path or a numeric
+    // zoom. A framework attribute named `key` is not a credential assignment.
+    if (/[<>]/.test(line) || /\s(?:key|value|name)\s*=\s*["']/.test(line)) continue;
     if (valueAtIsCredential(line, assign.index, assign[0].length)) return true;
   }
   return false;
@@ -140,8 +152,26 @@ export function containsProviderKey(line: string): boolean {
   for (const shape of PROVIDER_SHAPES) {
     if (shape.test(line)) return true;
   }
-  // A JWT anywhere on the line.
-  if (/[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/.test(line)) return true;
+  // A JWT anywhere on the line. Anchored to real JWT structure: three base64url
+  // segments, at least one of which must NOT be a plain dotted identifier. A bare
+  // chain like `django.middleware.clickjacking.XFrameOptionsMiddleware` is not a
+  // JWT; a real token has a `-` or `_` in a segment, or starts with the base64url
+  // header `eyJ`. Without this, every 3-segment dotted import and member chain fired.
+  const jwt = /[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/g;
+  let m: RegExpExecArray | null;
+  while ((m = jwt.exec(line)) !== null) {
+    const token = m[0];
+    const segs = token.split(".");
+    const hasUrlChar = segs.some((s) => /[-_]/.test(s));
+    const looksBase64 = /^ey[A-Za-z0-9_-]/.test(token);
+    const mixedCase = /[a-z]/.test(token) && /[A-Z]/.test(token);
+    // A dotted Java/Kotlin/Go package path is all lowercase with no url chars.
+    const allLowerDotted = segs.every((s) => /^[a-z][a-z0-9]*$/.test(s));
+    if (looksBase64) return true;
+    if (hasUrlChar && mixedCase) return true;
+    if (allLowerDotted) continue; // a package path, not a token
+    if (hasUrlChar) return true;
+  }
   return false;
 }
 
@@ -182,8 +212,12 @@ function valueAtIsCredential(line: string, at: number, opLen: number): boolean {
 function pushCapped(
   out: RawSecretMatch[],
   match: RawSecretMatch,
+  fileCount: { used: number },
 ): void {
-  if (out.length < MAX_MATCHES_PER_FILE) out.push(match);
+  if (fileCount.used < MAX_MATCHES_PER_FILE) {
+    out.push(match);
+    fileCount.used++;
+  }
 }
 
 // Noisy rules report once per file. Forty console calls in one file is one
@@ -191,10 +225,11 @@ function pushCapped(
 function pushOncePerFile(
   out: RawSecretMatch[],
   match: RawSecretMatch,
+  fileCount: { used: number },
 ): void {
   const already = out.some((m) => m.ruleId === match.ruleId && m.path === match.path);
   if (already) return;
-  pushCapped(out, match);
+  pushCapped(out, match, fileCount);
 }
 
 /**
@@ -251,14 +286,14 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
       if (line.length === 0 || line.length > 2000) continue;
       const lineNo = i + 1;
       const client = isClientPath(file.path);
-
+      const fileCount = { used: out.filter((m) => m.path === file.path).length };
       if (/AKIA[0-9A-Z]{16}/.test(line)) {
         pushCapped(out, {
           ruleId: client ? "secret.client-exposure" : "secret.aws-key",
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        });
+        }, fileCount);
         continue;
       }
       if (/((ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/.test(line)) {
@@ -267,7 +302,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        });
+        }, fileCount);
         continue;
       }
       if (/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(line)) {
@@ -276,7 +311,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        });
+        }, fileCount);
         continue;
       }
       if (isHardcodedCredential(line)) {
@@ -285,7 +320,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        });
+        }, fileCount);
         continue;
       }
       const code = matchCodePattern(line);
@@ -296,7 +331,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        });
+        }, fileCount);
       }
     }
   }
