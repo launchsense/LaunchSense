@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -194,7 +195,7 @@ func accountText(account Account) string {
 }
 
 func (s *server) scanRepo(string) (string, error) {
-	root, err := os.Getwd()
+	root, err := reviewRoot()
 	if err != nil {
 		return "", err
 	}
@@ -202,7 +203,116 @@ func (s *server) scanRepo(string) (string, error) {
 	if run == nil {
 		run = runNodeReview
 	}
-	return run(root)
+	// A root that is not a checkout is announced before the report, and the same
+	// line goes on an error, so a review of the wrong folder is never a quiet
+	// confident answer.
+	note := reviewRootNote(root)
+	text, err := run(root)
+	if err != nil {
+		if note == "" {
+			return "", err
+		}
+		return "", fmt.Errorf("%s\n%w", note, err)
+	}
+	if note == "" {
+		return text, nil
+	}
+	return note + "\n" + text, nil
+}
+
+// reviewRoot is the checkout the local server reads. The installer starts this
+// server with cwd = <checkout>/mcp, so the process folder is the mcp module and
+// reviewing it would read a handful of Go files instead of the checkout.
+// LAUNCHSENSE_ROOT names the checkout and the installer sets it. It must be an
+// absolute path: resolving a relative one against the process folder is how the
+// mcp module folder passes as a checkout, so it is refused instead. Without the
+// variable: a process folder that is this repository's Go module means the
+// checkout is its parent, then the same test on the executable folder (a built
+// binary that sits in mcp/), then the process folder as it was before.
+func reviewRoot() (string, error) {
+	if named := strings.TrimSpace(os.Getenv("LAUNCHSENSE_ROOT")); named != "" {
+		if !filepath.IsAbs(named) {
+			return "", fmt.Errorf(
+				"LAUNCHSENSE_ROOT must be an absolute path, got %q. A relative path is resolved against the folder the server was started in, which is this server's own mcp module, so the review would read that folder instead of the checkout. Set LAUNCHSENSE_ROOT to the absolute checkout root, for example /home/you/launchsense",
+				named,
+			)
+		}
+		root, err := filepath.Abs(named)
+		if err != nil {
+			return "", fmt.Errorf("LAUNCHSENSE_ROOT cannot be resolved: %w", err)
+		}
+		info, err := os.Stat(root)
+		if err != nil {
+			return "", fmt.Errorf("LAUNCHSENSE_ROOT is not readable: %w", err)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("LAUNCHSENSE_ROOT is not a folder")
+		}
+		return root, nil
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if checkout := checkoutAbove(cwd); checkout != "" {
+			return checkout, nil
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		folder := filepath.Dir(exe)
+		if checkout := checkoutAbove(folder); checkout != "" {
+			return checkout, nil
+		}
+		return folder, nil
+	}
+	return os.Getwd()
+}
+
+// looksLikeCheckout reports whether root holds a LaunchSense checkout. The Go
+// module lives in mcp/, so a checkout has mcp/review-entry.ts and mcp/go.mod.
+// The markers are a shape check, not a proof: they exist so an honest checkout
+// is quiet and an unfamiliar folder is named.
+func looksLikeCheckout(root string) bool {
+	for _, marker := range []string{
+		filepath.Join(root, "mcp", "review-entry.ts"),
+		filepath.Join(root, "mcp", "go.mod"),
+		filepath.Join(root, "go.mod"),
+	} {
+		if _, err := os.Stat(marker); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// reviewRootNote names the folder the review read when that folder is not a
+// checkout. A wrong root is otherwise invisible: the report is a confident
+// review of whatever that folder held, and the reader never learns which folder
+// it was. A checkout gets no line, so the normal case stays quiet.
+func reviewRootNote(root string) string {
+	if looksLikeCheckout(root) {
+		return ""
+	}
+	return fmt.Sprintf(
+		"Reviewed folder: %s\nThat folder is what the review read. It has no mcp/review-entry.ts and no go.mod, so it is not a LaunchSense checkout. If this is the wrong folder, set LAUNCHSENSE_ROOT to the absolute checkout root and ask again.",
+		root,
+	)
+}
+
+// checkoutAbove returns the checkout that owns folder, or "" when folder is not
+// this repository's Go module. The go.mod is what marks the module folder, so a
+// folder that only shares its name does not count, and a checkout at the file
+// system root has no parent to name.
+func checkoutAbove(folder string) string {
+	manifest, err := os.ReadFile(filepath.Join(folder, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	if !strings.Contains(string(manifest), "module launchsense/mcp") {
+		return ""
+	}
+	parent := filepath.Dir(folder)
+	if parent == folder {
+		return ""
+	}
+	return parent
 }
 
 func resolveRepo(repoURL string, account Account) (string, string, error) {

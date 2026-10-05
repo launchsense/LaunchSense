@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyzeLicenses } from "../shared/analyzers/licenses.ts";
+import { analyzeLicenses, licenseUsage } from "../shared/analyzers/licenses.ts";
 
 const F = (path, content) => ({ path, content });
 
@@ -151,4 +151,12 @@ test("a root proprietary licence is not washed out by a nested MIT file", () => 
   assert.match(r.note, /root/i, "the note must name the root licence");
   assert.match(r.note, /unrecognised/, "the note must say the root licence is unrecognised");
   assert.match(r.note, /MIT/, "the nested MIT stays a separate fact in the note");
+});
+
+test("licenseUsage mirrors a permissive licence and references the rest", () => {
+  assert.equal(licenseUsage("Allowed"), "mirror");
+  assert.equal(licenseUsage("Review required"), "reference-only");
+  assert.equal(licenseUsage("Not recommended"), "reference-only");
+  assert.equal(licenseUsage("Unknown"), "reference-only");
+  assert.equal(licenseUsage("Not checked"), "unknown");
 });
