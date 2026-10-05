@@ -16,6 +16,10 @@ import type * as adapters_live from "../adapters/live.js";
 import type * as adapters_osv from "../adapters/osv.js";
 import type * as adapters_share from "../adapters/share.js";
 import type * as adapters_tarball from "../adapters/tarball.js";
+import type * as analytics_ingest from "../analytics/ingest.js";
+import type * as analytics_privacy from "../analytics/privacy.js";
+import type * as analytics_retention from "../analytics/retention.js";
+import type * as analytics_rollup from "../analytics/rollup.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as decisionMonitoring from "../decisionMonitoring.js";
@@ -25,6 +29,10 @@ import type * as github_readToken from "../github/readToken.js";
 import type * as github_sessionToken from "../github/sessionToken.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as identity_attribution from "../identity/attribution.js";
+import type * as identity_credential from "../identity/credential.js";
+import type * as identity_quotaKey from "../identity/quotaKey.js";
+import type * as identity_store from "../identity/store.js";
 import type * as mcpHttp from "../mcpHttp.js";
 import type * as mcpLimit from "../mcpLimit.js";
 import type * as projects from "../projects.js";
@@ -39,6 +47,7 @@ import type * as scans_quota from "../scans/quota.js";
 import type * as scans_rankScan from "../scans/rankScan.js";
 import type * as scans_rescan from "../scans/rescan.js";
 import type * as scans_sharing from "../scans/sharing.js";
+import type * as scans_snapshot from "../scans/snapshot.js";
 import type * as scans_store from "../scans/store.js";
 
 import type {
@@ -56,6 +65,10 @@ declare const fullApi: ApiFromModules<{
   "adapters/osv": typeof adapters_osv;
   "adapters/share": typeof adapters_share;
   "adapters/tarball": typeof adapters_tarball;
+  "analytics/ingest": typeof analytics_ingest;
+  "analytics/privacy": typeof analytics_privacy;
+  "analytics/retention": typeof analytics_retention;
+  "analytics/rollup": typeof analytics_rollup;
   auth: typeof auth;
   crons: typeof crons;
   decisionMonitoring: typeof decisionMonitoring;
@@ -65,6 +78,10 @@ declare const fullApi: ApiFromModules<{
   "github/sessionToken": typeof github_sessionToken;
   health: typeof health;
   http: typeof http;
+  "identity/attribution": typeof identity_attribution;
+  "identity/credential": typeof identity_credential;
+  "identity/quotaKey": typeof identity_quotaKey;
+  "identity/store": typeof identity_store;
   mcpHttp: typeof mcpHttp;
   mcpLimit: typeof mcpLimit;
   projects: typeof projects;
@@ -79,6 +96,7 @@ declare const fullApi: ApiFromModules<{
   "scans/rankScan": typeof scans_rankScan;
   "scans/rescan": typeof scans_rescan;
   "scans/sharing": typeof scans_sharing;
+  "scans/snapshot": typeof scans_snapshot;
   "scans/store": typeof scans_store;
 }>;
 

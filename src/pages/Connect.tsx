@@ -60,6 +60,12 @@ export default function Connect() {
           part of your network address.
         </p>
         <p>
+          You can send an optional LaunchSense credential in an Authorization header. If you
+          do, we store a hash of it and never the credential itself, and the rate limit
+          counter holds that credential&apos;s own id so one tool cannot spend another
+          tool&apos;s budget. A credential you send that we refuse gets no scan at all.
+        </p>
+        <p>
           <a href="/privacy">Read the privacy notice</a>
         </p>
         <fieldset>
