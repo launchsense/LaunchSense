@@ -203,30 +203,32 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       "quotaState.remaining",
       "quotaState.resetAt",
       "rateLimits.key",
-      "rateLimits.day",
-      "rateLimits.count",
-      "osvCache.name",
-      "osvCache.version",
-      "osvCache.vulns",
-      "findingTransitions.state",
-      "findingTransitions.cause",
-      "shareArtifacts.shareId",
-      "passportArtifacts.passportId",
-    ],
-    storage: [
-      ...tables(
-        "scans",
-        "repoTrees",
-        "fileContents",
-        "evidenceItems",
-        "findings",
-        "liveChecks",
-        "scanQueue",
-        "quotaState",
-        "rateLimits",
-        "osvCache",
-        "findingTransitions",
-      ),
+        "rateLimits.day",
+        "rateLimits.count",
+        "osvCache.name",
+        "osvCache.version",
+        "osvCache.vulns",
+        "findingTransitions.state",
+        "findingTransitions.cause",
+        "shareArtifacts.shareId",
+        "passportArtifacts.passportId",
+      ],
+      storage: [
+        ...tables(
+          "scans",
+          "repoTrees",
+          "fileContents",
+          "evidenceItems",
+          "findings",
+          "liveChecks",
+          "scanQueue",
+          "quotaState",
+          "rateLimits",
+          "osvCache",
+          "findingTransitions",
+          "shareArtifacts",
+          "passportArtifacts",
+        ),
       outside(
         "Convex platform logs",
         "Every request address lands in the host's logs. They are not a table in this schema and this product cannot read or delete them.",
@@ -317,6 +319,11 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       "usageMeters.day",
       "featureEntitlements.featureKey",
       "featureEntitlements.enabled",
+      "connectedInstallations.userId",
+      "connectedInstallations.installationId",
+      "connectedInstallations.account",
+      "connectedInstallations.repoSelection",
+      "connectedInstallations.installationTargetId",
     ],
     storage: [
       ...tables("githubScanTokens", "projects", "usageMeters", "featureEntitlements", "connectedInstallations"),
@@ -799,8 +806,8 @@ export function renderProcessingRegister(): string {
   lines.push(
     "This is the record GDPR Article 30(1) asks a controller to keep, in writing and in electronic form. " +
       "It is generated from the schema, the retention constants, and the purge calls in this repository, so a " +
-      "change to the data model changes this document. Every claim in it has a file and a function behind it, and " +
-      "a claim with neither is not in it.",
+      "change to the data model changes this document. Every table and column it names is checked against " +
+      "convex/schema.ts, and every retention line either names the purge that enforces it or says that nothing does.",
   );
   lines.push("");
   lines.push("It is not legal advice, and no lawyer has reviewed it.");

@@ -367,11 +367,23 @@ export async function buildConsentRecord(
     throw new Error(`purpose ${purposeId} has no decision on record, so it has no record`);
   }
   const record = baseRecord(purpose, decision);
-  record.privacy_notice.wording_sha256 = await sha256Prefixed(DIAGNOSTICS_NOTICE_WORDING.join("\n"));
+  // The hash is taken only over the text this build actually carries, and only
+  // when the ledger line names that same version. Hashing the current text under
+  // an older version would tell a reader they agreed to words they never saw.
+  const wordingMatchesVersion = decision.noticeVersion === DIAGNOSTICS_NOTICE_VERSION;
+  if (wordingMatchesVersion) {
+    record.privacy_notice.wording_sha256 = await sha256Prefixed(DIAGNOSTICS_NOTICE_WORDING.join("\n"));
+  }
   record.integrity.record_hash = await sha256Prefixed(decision.line);
   record.record_id = await derivedUuid(purpose.id, decision.noticeVersion, decision.decidedAt);
   record.integrity.prev_hash = decision.prevHash;
   record.not_filled = [...globalGaps(), ...purposeGaps(purpose, decision)];
+  if (!wordingMatchesVersion) {
+    record.not_filled.push({
+      field: "privacy_notice.wording_sha256",
+      why: `The ledger line records wording version ${decision.noticeVersion}, and this build carries the text of ${DIAGNOSTICS_NOTICE_VERSION} only. The hash is left empty rather than taken over words the person did not read.`,
+    });
+  }
   if (!decision.latest) {
     record.not_filled.push({
       field: "supersedes",

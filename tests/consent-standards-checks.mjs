@@ -628,7 +628,7 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
     assert.match(AI_DISCLOSURE_CITATION, /C2PA Technical Specification 2\.4/);
   });
 
-  it("is on every surface that already talks about the AI roles", () => {
+  it("carries the C2PA term on the surfaces that talk about the AI roles", () => {
     const surfaces = [
       ["docs/PRIVACY.md", privacyDoc],
       ["Connect", connectPage],
@@ -637,6 +637,8 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
       ["docs/READ-YOUR-REPORT.md", readYourReport],
       ["skills/launchsense/SKILL.md", skill],
       ["llms.txt", llms],
+      ["README.md", read("README.md")],
+      ["docs/PRODUCT.md", read("docs", "PRODUCT.md")],
     ];
     for (const [name, source] of surfaces) {
       assert.match(
@@ -766,5 +768,30 @@ describe("no document in this lane claims more than the code does", () => {
     assert.match(analyze, /purgeStaleContents/);
     assert.match(retention, /USAGE_EVENT_TTL_MS\s*=\s*30 \* 24 \* 60 \* 60 \* 1000/);
     assert.match(retention, /db\.delete\("usageEvents"/);
+  });
+});
+// The red/blue pass found the wording hash was always taken over the compiled-in
+// text while the version came from the ledger line, so a stale-version decision
+// asserted, under "The wording you were shown", that the person read today's
+// words. The hash is now taken only when the two agree.
+describe("the wording hash is only taken over words the person read", () => {
+  it("leaves the hash empty and names the gap when the ledger names another version", async () => {
+    const stale = { ...granted, noticeVersion: "2026-06-01", latest: true };
+    const record = await buildConsentRecord(stale, "usage");
+    assert.equal(record.privacy_notice.version, "2026-06-01");
+    assert.equal(
+      record.privacy_notice.wording_sha256,
+      null,
+      "the current text must not be hashed under an older version",
+    );
+    assert.ok(
+      record.not_filled.some((gap) => gap.field === "privacy_notice.wording_sha256"),
+      "the gap must be named rather than guessed",
+    );
+  });
+
+  it("still hashes when the ledger names the version this build carries", async () => {
+    const record = await buildConsentRecord(granted, "usage");
+    assert.match(record.privacy_notice.wording_sha256, /^sha256:[0-9a-f]{64}$/);
   });
 });
