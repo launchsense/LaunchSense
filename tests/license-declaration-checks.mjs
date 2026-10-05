@@ -14,6 +14,7 @@ import {
   DEPENDENCY_FINDING_CAP,
 } from "../shared/licensing/report.ts";
 import { UNKNOWN_LICENSE } from "../shared/licensing/spdx.ts";
+import { promptIsWhitelisted } from "../shared/licensing/lookup.ts";
 import { severityFor, reviewRequired } from "../shared/policies/severity.ts";
 
 // Wave 7: the declaration lane. Before this, a licence scan read one story per
@@ -431,5 +432,100 @@ describe("an unknown licence never becomes a finding and never gets a severity",
     const rows = licenseEvidenceRows(noLockfileInventory(), "(repo)");
     assert.ok(rows.every((row) => row.severity === "info"));
     assert.ok(rows.some((row) => row.snippet.includes("No npm lockfile was read")));
+  });
+});
+// The red/blue pass found that an OR choice attached obligations from both
+// options, so a copyleft option gave a choice a severity, and that an AND set
+// with an unreadable id fabricated "X AND Unknown" while reading as complete.
+describe("an Unknown or a choice never becomes a row, even beside a copyleft option", () => {
+  const withLicense = (license) =>
+    read(
+      JSON.stringify({
+        lockfileVersion: 3,
+        packages: { "": {}, "node_modules/x": { version: "1.0.0", license } },
+      }),
+    );
+
+  it("gives an OR choice no obligation and no severity, answering a copyleft option too", () => {
+    const inventory = withLicense("MIT OR GPL-3.0");
+    const component = byName(inventory, "x");
+    assert.equal(component.operator, "or");
+    assert.deepEqual(componentObligations(component), [], "a choice attaches nothing from either id");
+    assert.equal(componentSeverity(component), null, "a choice gets no severity");
+    const rows = licenseFindingRows(inventory, "(repo)").filter((row) => row.title.includes("x@1.0.0"));
+    assert.deepEqual(rows, [], "a choice is not a licence fact, so it gets no per-component row");
+  });
+
+  it("reads an AND set with an unreadable id as Unknown, not as a fabricated id", () => {
+    const inventory = withLicense("AGPL-3.0 AND Bogus-1.0");
+    const component = byName(inventory, "x");
+    assert.equal(component.spdx, UNKNOWN_LICENSE, "one unreadable id makes the set not fully known");
+    assert.ok(inventory.unknown >= 1, "an unreadable id must count as unknown, not as a complete read");
+    assert.deepEqual(componentObligations(component), [], "Unknown attaches no obligation");
+    assert.equal(componentSeverity(component), null);
+    const rows = licenseFindingRows(inventory, "(repo)").filter((row) => row.title.includes("x@1.0.0"));
+    assert.deepEqual(rows, [], "an Unknown gets no per-component row");
+  });
+});
+
+describe("the notice does not contradict itself about NOTICE files", () => {
+  it("counts a component whose AND set needs a NOTICE file", () => {
+    const inventory = read(
+      JSON.stringify({
+        lockfileVersion: 3,
+        packages: { "": {}, "node_modules/both": { version: "1.0.0", license: "MIT AND Apache-2.0" } },
+      }),
+    );
+    const artifact = buildNoticeArtifact(inventory, {});
+    assert.ok(
+      !artifact.markdown.includes("No licence in this list asks for a NOTICE file"),
+      "an Apache-2.0 component needs a NOTICE file, so the summary must not deny one",
+    );
+    assert.match(artifact.markdown, /Apache-2\.0/, "the summary must name the family that asks for it");
+  });
+});
+
+describe("a workspace lockfile names what it did not read", () => {
+  it("counts a link entry and says so, instead of vanishing behind a complete read", () => {
+    const inventory = read(
+      JSON.stringify({
+        lockfileVersion: 3,
+        packages: {
+          "": {},
+          "node_modules/local": { link: true },
+          "node_modules/dep": { version: "1.0.0", license: "MIT" },
+        },
+      }),
+    );
+    assert.ok(
+      inventory.notCovered.some((line) => /workspace link/i.test(line)),
+      "a skipped workspace link must be named in notCovered, not dropped",
+    );
+  });
+});
+
+describe("the licence prompt whitelist verifies its result, not itself", () => {
+  const TEMPLATE =
+    "Name the SPDX licence id for the npm package NAME at version VERSION. " +
+    "The lockfile did not read a licence for it. " +
+    "Answer with one SPDX id or the word Unknown. " +
+    "Do not add words. Do not explain.";
+
+  it("refuses a prompt that still carries a placeholder", () => {
+    assert.equal(
+      promptIsWhitelisted(TEMPLATE, { name: "x", version: "1.0.0" }),
+      false,
+      "an unsubstituted placeholder must be refused",
+    );
+  });
+
+  it("refuses a name that swaps the two placeholders", () => {
+    // A package named VERSIONfoo used to make the rebuilt template match itself.
+    const swapped = TEMPLATE.replace("NAME", "VERSIONfoo").replace("VERSION", "1.0.0");
+    assert.equal(
+      promptIsWhitelisted(swapped, { name: "VERSIONfoo", version: "1.0.0" }),
+      false,
+      "the request's own name must be present, or the guard is tautological",
+    );
   });
 });
