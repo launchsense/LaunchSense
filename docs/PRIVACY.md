@@ -88,6 +88,42 @@ This address needs no account and signs you in to nothing. We keep a rate limit 
 so the service stays available. It is not linked to an account, and the counter holds no
 part of your network address. Those rows are not deleted automatically today.
 
+You can send an optional LaunchSense credential in an Authorization header. We keep its
+lookup id in the clear and a SHA-256 hash of the credential, never the credential itself, so
+a copy of our database cannot be replayed against the server. The rate limit counter then
+holds that credential's own id, which is why one tool cannot spend another tool's budget.
+The per-tool caps are a policy choice we have not measured against real traffic. Revoking a
+credential takes effect on the next request, because the revoked flag is read on every
+request rather than at an expiry. A credential that is presented and refused gets no scan,
+rather than being quietly treated as anonymous.
+
+A credential records the operator's label for a harness, such as "claude-code". That label is
+their claim, not something we verified. We cannot currently verify which harness sent a
+request: the scan reads the public repository with our own GitHub credential, so nothing
+about the call identifies a person. Treat every harness-level number as a caller claim.
+
+### What the coding tool connection records about its own use
+
+We record one row per protocol action on this address, so we can tell which agent is
+calling, which tool, how often, and whether it worked. Each row holds the tool name, the
+outcome, how long it took, the protocol version, and which of eight known harnesses made
+the call. We do not record the arguments or the result of a tool call. In particular we do
+not record the repository URL, even though the OpenTelemetry specification would allow it
+as an opt-in attribute: that attribute carries a warning about sensitive content, and here
+it would be a list of whose code you asked about. We do not record your network address,
+the file contents, file paths, finding titles, or error text. If the call read a
+repository, the row holds a one-way hash of the name and the date rather than the name.
+
+Those rows are deleted after 30 days by a nightly job. The rolled-up daily counts that
+come from them are kept, and they hold no repository name either: they are counts and a
+small set of labels.
+
+The daily counts answer "which harness calls us, which tool, how often, and does it
+work". They do not say who you are, and they do not name a repository.
+
+Which tool you are calling and whether it worked is not attributed to your account. It is
+an aggregate over every caller of the public address.
+
 ## 7. Fonts and what the browser sends without asking
 
 The site loads two font families from Google Fonts, so your browser contacts Google
@@ -105,7 +141,10 @@ stays in the server logs.
 - Findings and evidence: kept so a re-scan can tell you what you fixed. There is no
   automatic deletion today.
 - Quota counters: a single row, overwritten.
-- Rate limit counters: no automatic deletion today, and no network address in them.
+- Rate limit counters: no automatic deletion today, and no network address in them. When a
+  credential resolved, the key holds that credential's own id.
+- Coding tool usage rows: deleted after 30 days by a later nightly job. The daily counts
+  folded from them are kept, and hold no repository name.
 - Your GitHub token: kept until you sign out from the menu. It is not deleted when the
   session expires.
 

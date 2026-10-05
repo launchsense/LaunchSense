@@ -4,6 +4,20 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 
 ## [Unreleased]
 
+### Added
+
+- Optional server-minted LaunchSense credentials for the hosted MCP read. A token is `ls_live_<publicId>_<secret>`; the server stores the `publicId` in the clear and a SHA-256 hash of the whole token, never the token. Resolution is one indexed read then a constant-time compare, and `revoked` is read on every resolve so a revoke is immediate.
+- Three identity layers kept apart. `attributedCallerId` is the server-minted credential id, written on `scans`, and the only one with authority; `declaredHarness` is an operator label carried on the resolved credential as a claim and never used for a rate limit key, an ownership check, or an access decision; `verifiedBinding` is a server-observed binding to a person or installation and is null on every row, because a scan reads the public repository with our own GitHub credential and nothing about the call identifies a person. Only `attributedCallerId` reaches a scan row; the other two live on the credential.
+- Audience binding. A credential is minted for the canonical MCP server URI and the server checks it, so a credential minted elsewhere is refused. A 401 carries `WWW-Authenticate` pointing at the RFC 9728 protected resource metadata path.
+- `Authorization` added to `Access-Control-Allow-Headers`, so a browser-based MCP client can send a credential at all. Nothing authenticates on `Mcp-Session-Id` and no session id is issued.
+- Hosted scan quota keyed on the resolved `callerId` rather than one shared bucket, with a per-caller daily cap in addition to the hourly one. No credential resolves means the one shared bucket, unchanged. A caller-supplied string never reaches a key.
+- `scans.channel` (`web`, `mcp`, `api`) alongside `scans.surface`, both written on every path, and `attributed` written `false` on a scan with no or refused credential so attributed over total is a real ratio.
+
+### Fixed
+
+- An in-flight scan of the same public repository could cross callers. `findInFlight` matched on (owner, repo) with no sha and no identity, and `runScan` handed that row back once a sha was pinned, so the second caller received a scan row owned by the first. A row is now only reused when it belongs to the caller; anything else is skipped, a new row is minted for the caller, and the sha-keyed tree cache copies the tree into it so the work is not repeated.
+- `commitSha` and `treeSha` are recorded as separate scan fields. The tree response carries the tree object sha, not the commit sha, so a naive equality check would have failed on every repository. The tree response is now compared against the tree sha the commit response already promised, and a disagreement fails the scan instead of recording a snapshot neither response supports. The tree request and every blob ref are built through functions that refuse anything that is not a full 40-character commit sha.
+
 ### Changed
 
 - Home, readme, and docs now say LaunchSense checks the codebase, not whether the app will sell. Repeated functions are named as the next rule, not as a check that runs today.

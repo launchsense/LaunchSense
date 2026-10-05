@@ -1,6 +1,7 @@
 import { internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { CALLER_DAILY_LIMIT, hostedHourlyLimit, hostedScanKeys } from "./identity/quotaKey";
 
 // Hosted scan caps, set for the pilot: a group of about ten builders testing
 // the hosted MCP for the next two months, then a wider group.
@@ -12,12 +13,14 @@ import { v } from "convex/values";
 // policy choice, not as a measured limit, and say so in any document that
 // repeats them.
 //
-// CALLER_LIMIT is the shared hosted bucket. The hosted lane has no caller
-// identity yet, so one number bounds the whole group for an hour. 200 an hour
-// is ten builders at twenty scans an hour each.
-// GLOBAL_LIMIT is the lane total and sits above the shared bucket, so the
-// shared bucket is what binds first and the total is the backstop that keeps
-// one bad hour from spending the GitHub quota.
+// CALLER_LIMIT is the shared hosted bucket every identity-less caller spends
+// from. 200 an hour is about ten builders at twenty scans an hour each. It is
+// the cap for the whole group, so one noisy anonymous caller can spend everyone's
+// budget; that is the honest cost while hosted identity is new, and it is why
+// the per-caller caps below are what a resolved credential actually gets.
+// GLOBAL_LIMIT is the lane total and sits above every other cap, so a bucket
+// binds first and the total is the backstop that keeps one bad hour from
+// spending the GitHub quota.
 export const CALLER_LIMIT = 200;
 export const GLOBAL_LIMIT = 600;
 // The usage route is credentialed, so its bucket is keyed on the route, not on
@@ -28,24 +31,42 @@ export const GLOBAL_LIMIT = 600;
 export const USAGE_LANE_LIMIT = 20;
 
 /**
- * The bucket every hosted caller spends from. Deliberately not derived from
- * the caller's network address.
+ * The hosted scan quota now keys on identity, not on a network address.
  *
  * The routes used to put the raw `x-forwarded-for` value into these keys, which
  * wrote a personal identifier into `rateLimits` and nothing in the repo ever
- * deleted those rows. Removing it closes two failures that share one input.
+ * deleted those rows. Removing it closed two failures that shared one input.
  * Privacy: no stored key holds any part of a caller's address, so there is
  * nothing to retain and nothing to purge. Abuse: the header is client
  * controlled, so keying on it let a caller mint a fresh budget by rotating one
  * header value, while every builder behind one office egress shared a bucket.
  *
- * The honest cost is one shared bucket. Until the hosted lane has a real caller
- * identity, one noisy builder can spend the group's budget, which is why
- * CALLER_LIMIT is set for a group rather than for one person. Per-caller
- * fairness returns when a credential resolves to a caller id, and that value
- * is the only thing this constant gives up.
+ * What replaces it is a server-minted callerId resolved from a bearer token.
+ * The key rules live in ./identity/quotaKey so they can be tested directly:
+ *
+ *   resolved credential  its own bucket, hourly and per day
+ *   no credential        the one shared bucket, hourly only
+ *
+ * An unrecognised callerId falls to the shared bucket rather than minting a
+ * bucket of its own, so a malformed value cannot become a fresh budget. And a
+ * declared harness label never reaches a key: it is a claim, and one caller
+ * sending a fresh label per request would otherwise get a fresh budget per
+ * request.
+ *
+ * HOSTED_CALLER_BUCKET is re-exported from that module so the existing callers
+ * and the tests that name it keep working.
  */
-export const HOSTED_CALLER_BUCKET = "hosted-shared";
+export {
+  HOSTED_CALLER_BUCKET,
+  CALLER_HOURLY_LIMIT,
+  CALLER_DAILY_LIMIT,
+  SHARED_HOURLY_LIMIT,
+  hostedCallerBucket,
+  hostedHourlyLimit,
+  hostedScanKeys,
+  safeCallerId,
+} from "./identity/quotaKey";
+
 /** The usage lane's single bucket, for the same reason. */
 export const USAGE_LANE_BUCKET = "lane-shared";
 
@@ -78,20 +99,51 @@ async function bump(ctx: MutationCtx, key: string, day: string, limit: number, n
   return true;
 }
 
+/**
+ * Claim one hosted scan slot.
+ *
+ * Takes a callerId and nothing else. No address header, no scan id, and no
+ * client-declared string, so there is no argument through which a caller can
+ * reach a key with something of their own choosing.
+ *
+ * Three caps, and all three must pass:
+ *   the lane total     unconditional, so a caller holding many ids cannot escape it
+ *   the caller's hour  its own bucket when a credential resolved, else the shared one
+ *   the caller's day   only when a credential resolved, because a shared bucket
+ *                      has no per-caller day to count
+ *
+ * Order matters. The lane total goes first so the ceiling stops a caller before
+ * it walks the per-caller rows, and the hourly cap goes before the daily one so
+ * a burst is refused by the tighter bound rather than spending the whole day.
+ *
+ * Each bump happens only after the previous one passed, so a refused call does
+ * not spend a later cap's budget. It does spend the lane total, which is
+ * deliberate: that counter exists to measure load, and a refused call was still
+ * load.
+ */
 export const consumeMcpScan = internalMutation({
-  // No caller argument on purpose. A caller value here is the only way a
-  // network address could reach a key, so the gate takes none. See
-  // HOSTED_CALLER_BUCKET.
-  args: {},
-  returns: v.object({ allowed: v.boolean() }),
-  handler: async (ctx) => {
+  args: { callerId: v.optional(v.string()) },
+  returns: v.object({ allowed: v.boolean(), reason: v.string() }),
+  handler: async (ctx, args) => {
     const now = Date.now();
     const hour = new Date(now).toISOString().slice(0, 13);
     const day = hour.slice(0, 10);
+    const keys = hostedScanKeys(args.callerId ?? null, now);
+
+    // The lane total, keyed on nothing but the hour. It is written first so the
+    // ceiling stops a caller before it walks the per-caller rows, and so no
+    // caller identity can escape it.
     const globalOk = await bump(ctx, `mcp-scan-global:${hour}`, day, GLOBAL_LIMIT, now);
-    if (!globalOk) return { allowed: false };
-    const callerOk = await bump(ctx, `mcp-scan:${hour}:${HOSTED_CALLER_BUCKET}`, day, CALLER_LIMIT, now);
-    return { allowed: callerOk };
+    if (!globalOk) return { allowed: false, reason: "global_limit" };
+
+    const hourlyOk = await bump(ctx, keys.hourly, day, hostedHourlyLimit(args.callerId ?? null), now);
+    if (!hourlyOk) return { allowed: false, reason: "caller_hourly_limit" };
+
+    if (keys.daily !== null) {
+      const dailyOk = await bump(ctx, keys.daily, day, CALLER_DAILY_LIMIT, now);
+      if (!dailyOk) return { allowed: false, reason: "caller_daily_limit" };
+    }
+    return { allowed: true, reason: "allowed" };
   },
 });
 
