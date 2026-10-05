@@ -309,6 +309,67 @@ describe("the Connect page discloses what the connection does", () => {
   });
 });
 
+// Heading parity alone let a body drift through. On 2026-10-05 a validator
+// changed the file's read cap to "900MB" while the page still said "2MB", and
+// every rule above passed. These rules pin the load-bearing facts to the
+// constants the code actually uses, so a change in shared/ or convex/ fails here
+// and the copy has to change with it, on both sides at once.
+describe("the load-bearing facts match on both copies and match the code", () => {
+  function constant(source, name) {
+    const match = source.match(new RegExp(`${name}\\s*=\\s*([0-9_]+)`));
+    assert.ok(match, `${name} must exist in the source under test`);
+    return Number(match[1].replace(/_/g, ""));
+  }
+
+  const scanCaps = read("shared", "scanCaps.ts");
+  const redaction = read("shared", "redaction.ts");
+  const live = read("convex", "adapters", "live.ts");
+
+  function bothSides(sentence, why) {
+    for (const [name, text] of [
+      ["docs/PRIVACY.md", privacyDocText],
+      ["/privacy", privacyPageText],
+    ]) {
+      assert.ok(text.includes(sentence), `${name} must ${why}: "${sentence}"`);
+    }
+  }
+
+  it("states the guest read cap the code sets", () => {
+    const files = constant(scanCaps, "GUEST_MAX_FILES");
+    const mb = Math.round(constant(scanCaps, "GUEST_MAX_BYTES") / 1_000_000);
+    bothSides(`stops at ${files} files and about ${mb}MB`, "state the guest cap");
+  });
+
+  it("states the signed-in read cap the code sets", () => {
+    const files = constant(scanCaps, "SIGNED_MAX_FILES");
+    const mb = Math.round(constant(scanCaps, "SIGNED_MAX_BYTES") / 1_000_000);
+    bothSides(
+      `up to ${files.toLocaleString("en-US")} files and about ${mb}MB`,
+      "state the signed-in cap",
+    );
+  });
+
+  it("states the snippet cap the code sets", () => {
+    const chars = constant(redaction, "MAX_SNIPPET_CHARS");
+    bothSides(`capped at ${chars} characters`, "state the snippet cap");
+  });
+
+  it("states the redirect cap the code sets", () => {
+    const hops = constant(live, "LIVE_MAX_HOPS");
+    const words = { 1: "one", 2: "two", 3: "three", 4: "four", 5: "five" }[hops] ?? String(hops);
+    bothSides(`follows up to ${words} redirects`, "state the redirect cap");
+  });
+
+  it("names the same guest file cap on both sides", () => {
+    const files = constant(scanCaps, "GUEST_MAX_FILES");
+    assert.ok(
+      privacyDocText.includes(`stops at ${files} files`) &&
+        privacyPageText.includes(`stops at ${files} files`),
+      "both copies must name the same guest file cap, so one number cannot move alone",
+    );
+  });
+});
+
 // The disclosure in section 6 and on the Connect page says the rate limit
 // counter holds no part of the caller's network address. That is a claim about
 // convex/, so it is checked against convex/ here. If the routes ever read the

@@ -2,7 +2,11 @@
 
 Version 2026-10-05. This is the first version published at the address
 <https://harmless-chihuahua-667.convex.site/privacy>. The same text is rendered at
-`/privacy` in the app, and both copies change together.
+`/privacy` in the app. Tests compare the two, so the headings and the load-bearing
+facts cannot drift apart: the read caps, the snippet cap, the redirect cap, the
+retention lines, and the counter claim are on both sides, and those numbers are
+checked against the constants the code uses. Sentences with no such check are prose
+a person must review when the code around them changes.
 
 ## 1. Who we are
 
