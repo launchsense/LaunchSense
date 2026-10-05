@@ -18,17 +18,17 @@ export interface LicenseResult {
 }
 
 const LICENSE_MARKERS: Array<{ id: string; pattern: RegExp }> = [
-  { id: "MIT", pattern: /mit license/i },
-  { id: "Apache-2.0", pattern: /apache license[^]*version 2\.0/i },
+  { id: "MIT", pattern: /\bmit license\b|permission is hereby granted, free of charge/i },
+  { id: "Apache-2.0", pattern: /apache license[^]*version 2\.0|licensed under the apache license/i },
   { id: "GPL-3.0", pattern: /gnu general public license[^]*version 3/i },
   { id: "GPL-2.0", pattern: /gnu general public license[^]*version 2/i },
   { id: "AGPL-3.0", pattern: /affero general public license/i },
   { id: "LGPL", pattern: /lesser general public license/i },
-  { id: "MPL-2.0", pattern: /mozilla public license 2\.0/i },
-  { id: "BSD-3-Clause", pattern: /bsd 3-clause/i },
-  { id: "BSD-2-Clause", pattern: /bsd 2-clause/i },
-  { id: "ISC", pattern: /isc license/i },
-  { id: "Unlicense", pattern: /the unlicense/i },
+  { id: "MPL-2.0", pattern: /mozilla public license,? (?:v(?:ersion)? )?2\.0/i },
+  { id: "BSD-3-Clause", pattern: /bsd 3-clause|redistribution and use in source and binary forms[^]*neither the name/i },
+  { id: "BSD-2-Clause", pattern: /bsd 2-clause|redistribution and use in source and binary forms/i },
+  { id: "ISC", pattern: /isc license|permission to use, copy, modify, and\/or distribute this software/i },
+  { id: "Unlicense", pattern: /the unlicense|this is free and unencumbered software released into the public domain/i },
   { id: "CC0-1.0", pattern: /cc0 1\.0|creative commons zero/i },
   { id: "BUSL-1.1", pattern: /business source license/i },
   { id: "SSPL-1.0", pattern: /server side public license/i },
@@ -38,6 +38,17 @@ const LICENSE_MARKERS: Array<{ id: string; pattern: RegExp }> = [
 ];
 
 const SIGNAL = "Signal, not legal advice.";
+
+/** Map a manifest license string to detected ids, preserving SPDX suffixes and OR. */
+function addPackageLicense(detected: Set<string>, lic: string): void {
+  if (/^UNLICENSED$/i.test(lic)) { detected.add("UNLICENSED"); return; }
+  if (/\bOR\b/.test(lic)) { detected.add(lic); return; }
+  // A single SPDX id, kept verbatim so `GPL-3.0-or-later` stays or-later.
+  const known = /^(MIT|Apache-2\.0|ISC|BSD-2-Clause|BSD-3-Clause|MPL-2\.0|Unlicense|CC0-1\.0)$/i;
+  if (known.test(lic)) { detected.add(lic === "Apache-2.0" ? "Apache-2.0" : lic); return; }
+  if (/GPL|AGPL|LGPL/i.test(lic)) { detected.add(lic); return; }
+  detected.add(lic);
+}
 
 function noticeSentence(found: string[], files: Array<{ path: string }>): string {
   if (!found.includes("Apache-2.0")) return "";
@@ -91,6 +102,13 @@ export function analyzeLicenses(
     }
   }
 
+  // BSD-2 is a subset of BSD-3 text. When the endorsement clause is present, drop
+  // the weaker BSD-2 so one BSD licence is reported, not two.
+  if (fileDetected.has("BSD-3-Clause")) {
+    detected.delete("BSD-2-Clause");
+    fileDetected.delete("BSD-2-Clause");
+  }
+
   let packageLicense: string | null = null;
   const pkg = files.find((f) => (f.path.split("/").pop() ?? "") === "package.json");
   if (pkg !== undefined) {
@@ -98,21 +116,33 @@ export function analyzeLicenses(
       const data = JSON.parse(pkg.content) as unknown;
       if (typeof data === "object" && data !== null) {
         const lic = (data as Record<string, unknown>)["license"];
-        if (typeof lic === "string" && lic.length > 0) {
-          packageLicense = lic;
-          if (/^UNLICENSED$/i.test(lic)) detected.add("UNLICENSED");
-          else if (/\bOR\b/.test(lic)) detected.add(lic);
-          else if (/^MIT$/i.test(lic)) detected.add("MIT");
-          else if (/^Apache-2\.0$/i.test(lic)) detected.add("Apache-2.0");
-          else if (/^ISC$/i.test(lic)) detected.add("ISC");
-          else if (/^BSD-/i.test(lic)) detected.add(lic.toUpperCase());
-          else if (/GPL|AGPL|LGPL/i.test(lic)) detected.add(lic);
-          else detected.add(lic);
-        }
+        if (typeof lic === "string" && lic.length > 0) packageLicense = lic;
       }
     } catch {
       // Unparseable manifest: no license signal from it.
     }
+  }
+
+  // Non-npm manifests. A Rust crate declares its licence in Cargo.toml, a Python
+  // project in pyproject.toml. Ignoring these is why every Rust crate read as
+  // unlicensed. Read them as equal sources to the licence file.
+  if (packageLicense === null) {
+    const cargo = files.find((f) => (f.path.split("/").pop() ?? "") === "Cargo.toml");
+    if (cargo !== undefined) {
+      const m = /^license\s*=\s*"([^"]+)"/m.exec(cargo.content);
+      if (m !== null && m[1] !== undefined) packageLicense = m[1];
+    }
+  }
+  if (packageLicense === null) {
+    const py = files.find((f) => (f.path.split("/").pop() ?? "") === "pyproject.toml");
+    if (py !== undefined) {
+      const m = /license\s*=\s*["']([^"']+)["']/.exec(py.content);
+      if (m !== null && m[1] !== undefined) packageLicense = m[1];
+    }
+  }
+
+  if (packageLicense !== null) {
+    addPackageLicense(detected, packageLicense);
   }
 
   const found = [...detected];
@@ -156,12 +186,16 @@ export function analyzeLicenses(
     };
   }
   if (found.some((d) => /GPL|LGPL|MPL/.test(d))) {
+    const orLater = found.some((d) => /-or-later/i.test(d));
+    const widen = orLater
+      ? " The license grants or-later, so a later version may be chosen."
+      : " It is not stated as or-later.";
     return {
       detected: found,
       files: licenseFiles,
       packageLicense,
       policy: "Review required",
-      note: `Copyleft wording was found. The exact id is listed. It was not widened to or-later.${suffix} ${SIGNAL}`,
+      note: `Copyleft wording was found. The exact id is listed.${widen}${suffix} ${SIGNAL}`,
     };
   }
   if (orChoice) {
