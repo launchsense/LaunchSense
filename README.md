@@ -1,5 +1,11 @@
 # LaunchSense
 
+[![Live](https://img.shields.io/badge/live-harmless--chihuahua--667.convex.site-blue)](https://harmless-chihuahua-667.convex.site)
+[![CI](https://github.com/launchsense/LaunchSense/actions/workflows/check.yml/badge.svg)](https://github.com/launchsense/LaunchSense/actions/workflows/check.yml)
+[![Release](https://img.shields.io/github/v/release/launchsense/LaunchSense)](https://github.com/launchsense/LaunchSense/releases)
+[![License: Proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)](LICENSE.txt)
+[![Security policy](https://img.shields.io/badge/security-policy-green)](SECURITY.md)
+
 LaunchSense checks the codebase, not the business. It does not say if the app will sell.
 
 You built the app with an AI coding tool. It works, and you are about to share the repo. You do not know what to ask Codex, so the check never starts. LaunchSense already knows what to ask. It says what is wrong, in plain words, and gives a prompt you can paste. It never changes your code.
