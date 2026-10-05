@@ -515,10 +515,15 @@ const transitionState = v.union(
   v.literal("unknown"),
 );
 
+// `license_change` was added with the licence declaration lane, so a
+// re-licensed dependency is reported as a licence change rather than as a code
+// change. The state machine is unchanged; this is one more reason on a row the
+// same machinery already writes.
 const changeCause = v.union(
   v.literal("code_change"),
   v.literal("advisory_update"),
   v.literal("analyzer_update"),
+  v.literal("license_change"),
 );
 
 /**

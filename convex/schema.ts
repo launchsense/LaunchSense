@@ -370,6 +370,10 @@ export default defineSchema({
         v.literal("code_change"),
         v.literal("advisory_update"),
         v.literal("analyzer_update"),
+        // A dependency's declared licence changed between the two scans. Added
+        // with the licence declaration lane, so a re-licensed package is
+        // reported as a licence change instead of a code change.
+        v.literal("license_change"),
       ),
     ),
     createdAt: v.number(),

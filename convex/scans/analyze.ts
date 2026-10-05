@@ -9,6 +9,11 @@ import { scanSecrets } from "../../shared/analyzers/secrets";
 import { analyzeHygiene } from "../../shared/analyzers/hygiene";
 import { parseManifests } from "../../shared/analyzers/deps";
 import { analyzeLicenses } from "../../shared/analyzers/licenses";
+import {
+  noLockfileInventory,
+  readNpmDependencyLicenses,
+} from "../../shared/licensing/dependencies";
+import { licenseEvidenceRows, licenseFindingRows } from "../../shared/licensing/report";
 import { severityForFinding } from "../../shared/policies/severity";
 import type { Severity } from "../../shared/policies/severity";
 import {
@@ -782,6 +787,42 @@ export const analyzeScan = action({
       }
     }
 
+    // The npm lockfile is already in memory, and it already declares a licence
+    // for every entry it lists. Reading it costs no extra request and adds no
+    // new egress, which is the whole reason the declaration lane is small.
+    // The fallback to an installed package.json is not wired here: the hosted
+    // scan never fetches node_modules, so it has none to read. The lockfile is
+    // what the repository committed, which is the declaration being read.
+    const npmLock = files.find((file) => file.path.split("/").pop() === "package-lock.json");
+    const directNames = new Set(deps.deps.filter((d) => d.ecosystem === "npm").map((d) => d.name));
+    const depLicenses =
+      npmLock === undefined
+        ? noLockfileInventory()
+        : readNpmDependencyLicenses(npmLock.content, { directNames });
+    const licensePath = npmLock?.path ?? "(repo)";
+    for (const row of licenseEvidenceRows(depLicenses, licensePath)) {
+      evidence.push({
+        ruleId: row.ruleId,
+        path: row.path,
+        line: row.line,
+        contentHash: fnv1aHex(row.snippet),
+        redactedSnippet: redactedSnippet(row.snippet),
+        severity: row.severity,
+      });
+    }
+    for (const row of licenseFindingRows(depLicenses, licensePath)) {
+      pushEvidence(evidence, findings, {
+        ruleId: row.ruleId,
+        path: row.path,
+        line: row.line,
+        severity: row.severity,
+        title: row.title,
+        why: row.why,
+        bucket: row.bucket,
+        rawSnippet: row.snippet,
+      });
+    }
+
     const licenses = analyzeLicenses(blobs, files, files.length > 0);
     evidence.push({
       ruleId: "license.signal",
@@ -821,6 +862,8 @@ export const analyzeScan = action({
     const coverageNote =
       `Analyzed ${fetched} files at this commit; skipped ${skippedCount} (${treeNote}` +
       `OSV checked ${osvWindow.length} packages, ${osvUnknown} unknown; ` +
+      `dependency licence terms read for ${depLicenses.counted} installed npm packages, ${depLicenses.unknown} unknown; ` +
+      `yarn.lock, pnpm-lock.yaml, Cargo, PyPI and Go dependency licences not read, no vendored tree read, ` +
       `registry freshness and deps.dev metadata not checked).`;
 
     let status: "completed" | "partial" | "failed" = "completed";

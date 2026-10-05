@@ -35,6 +35,13 @@ const MEDIUM_RULES = new Set([
   "deps.deprecated",
   "license.policy",
   "license.clash",
+  // One row per dependency whose declared terms a person must read. Medium
+  // because the terms are known and the answer to "does this apply to how we
+  // ship" is not. The band is chosen per row: file-level copyleft is low,
+  // library and strong copyleft, source-available and proprietary are medium.
+  // An Unknown licence never reaches this rule at all, so no severity is ever
+  // attached to a licence nobody read.
+  "license.dependency",
 ]);
 
 const LOW_RULES = new Set([
@@ -61,6 +68,14 @@ const INFO_RULES = new Set([
   "hygiene.no-tests",
   "license.signal",
   "license.model-card",
+  // The declaration record itself: how many dependencies, which ids, how many
+  // read as Unknown, and what was not read. It is the count and the coverage,
+  // never a verdict, so it is informational by design.
+  "license.inventory",
+  // The declaration row: the licence mix of the committed lockfile, as counts.
+  // It is info because a count is not a verdict, and it exists so a change
+  // between two permissive licences still moves a fingerprint on the rescan.
+  "license.declaration",
   "code.dead-copy",
   "code.network-hint",
   "code.repeated-function",

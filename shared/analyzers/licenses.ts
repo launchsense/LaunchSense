@@ -44,9 +44,9 @@ const LICENSE_MARKERS: Array<{ id: string; pattern: RegExp }> = [
 
 const SIGNAL = "Signal, not legal advice.";
 
-type ExpressionOperator = "single" | "and" | "or";
+export type ExpressionOperator = "single" | "and" | "or";
 
-interface LicenseExpression {
+export interface LicenseExpression {
   /** The declaration exactly as written, so the exact id is never lost. */
   verbatim: string;
   /** Base ids, with any `WITH <exception>` tail removed. Obligations use these. */
@@ -62,8 +62,12 @@ interface LicenseExpression {
  * `Apache-2.0 WITH LLVM-exception` is one licence with changed terms. Reading
  * the literal string as one opaque id made the first read as Allowed and lost
  * the Apache obligations entirely.
+ *
+ * Exported because a dependency's declared licence is parsed by exactly the same
+ * grammar. A second parser here would drift from this one, and the two would
+ * disagree about what `MIT OR Apache-2.0` means.
  */
-function parseExpression(declared: string): LicenseExpression {
+export function parseExpression(declared: string): LicenseExpression {
   const verbatim = declared.trim();
   const body = verbatim.replace(/^\(+/, "").replace(/\)+$/, "").trim();
   const sawAnd = /\sAND\s/.test(` ${body} `);
