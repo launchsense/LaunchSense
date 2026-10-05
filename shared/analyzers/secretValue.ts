@@ -16,6 +16,14 @@
 //
 // Provider formats are checked FIRST and bypass entropy, so tightening the generic
 // rule cannot turn a real key into a miss.
+//
+// One rule is scoped by the NAME the value sits under, the `name` argument below. Every
+// other rule judges the value on its own. Measured on this repo on 2026-10-05: the
+// value gate took any string of 20 characters with 10 distinct ones, so the HTTP
+// header LABEL at convex/mcpLimit.ts:13, `x-launchsense-usage-key`, fired
+// `secret.credential-pattern` high under the constant-style name `USAGE_KEY_HEADER`.
+// A lowercase hyphenated slug under a constant-style name is a label. The same shape
+// under `password` is a passphrase, so the name is part of that one question.
 
 /** Provider and format shapes. A match here is strong evidence, so entropy is skipped. */
 export const PROVIDER_SHAPES: RegExp[] = [
@@ -93,12 +101,43 @@ function isReferenceOrExpression(value: string): boolean {
 }
 
 /**
+ * Does the name the value sits under declare a constant rather than a credential?
+ *
+ * `USAGE_KEY_HEADER` is SCREAMING_SNAKE_CASE, and any name ending in HEADER, NAME, or
+ * LABEL declares the label of something rather than the secret itself. A slug belongs
+ * under such a name.
+ *
+ * Deliberately about the NAME only. A value under a constant-style name is still judged
+ * on its own shape, so a base64 run, a hex digest, a JWT, or a provider key assigned to
+ * `SOME_KEY` still fires. Only a clean lowercase hyphenated slug is exempt, and only
+ * under a name shaped like this one.
+ */
+function isConstantStyleName(name: string): boolean {
+  if (name.length === 0) return false;
+  if (/^[A-Z][A-Z0-9_]*$/.test(name)) return true;
+  const tail = name.split(/[_\-]/).pop() ?? name;
+  return /^(?:header|name|label)$/i.test(tail);
+}
+
+/**
+ * A lowercase hyphenated slug made of plain words: `x-launchsense-usage-key`,
+ * `rendered-phone-check`. No digit is allowed, on purpose. A label is spelled out in
+ * words; a value carrying digits looks generated. That is what keeps
+ * `API_KEY = "sk-abcd1234efgh5678"` firing, which a looser slug rule silently lost.
+ */
+const LOWERCASE_SLUG = /^[a-z]+(?:-[a-z]+)+$/;
+
+/**
  * True when the value itself looks like a credential.
  *
  * `wasQuoted` matters: a quoted literal is the only place a short secret can live,
  * while a bare token shorter than 12 characters is almost always an identifier.
+ *
+ * `name` is the variable the value is assigned to, when the caller knows it. It is
+ * optional and defaults to empty, which means no exemption at all, so every existing
+ * caller keeps judging the value on its own.
  */
-export function looksLikeSecretValue(value: string, wasQuoted = true): boolean {
+export function looksLikeSecretValue(value: string, wasQuoted = true, name = ""): boolean {
   const t = value.trim();
   if (t.length === 0) return false;
 
@@ -131,6 +170,16 @@ export function looksLikeSecretValue(value: string, wasQuoted = true): boolean {
   // as a value is the feature it names, the same way `token_address` is. A real
   // credential is a hash, a base64 run, or a prefixed key, never a clean snake name.
   if (/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(t)) return false;
+
+  // The kebab-case sibling of that rule, and the only shape here judged together with
+  // the NAME it sits under. `USAGE_KEY_HEADER = "x-launchsense-usage-key"` is the name
+  // of an HTTP header, and the real secret is read from the environment behind it. The
+  // same shape under `password` is a passphrase, so the exemption needs a
+  // constant-style name.
+  //
+  // Placed after the provider shapes above on purpose. `sk-or-v1-...` is itself slug
+  // shaped, so this rule must never run first or it swallows a real OpenRouter key.
+  if (name.length > 0 && isConstantStyleName(name) && LOWERCASE_SLUG.test(t)) return false;
 
   // A relative path is a file location, not a secret. `dist/bin.cjs` in a lockfile
   // is a build output path. But the base64 alphabet includes `/`, so a base64
