@@ -10,6 +10,7 @@ declare const process: { env: Record<string, string | undefined> };
 // 203 GitHub requests to about 4.
 
 import { extractTar } from "../../shared/tar";
+import { isPinnedCommitSha } from "../scans/snapshot";
 import type { TarEntry } from "../../shared/tar";
 import { FETCH_TIMEOUT_MS, MAX_BYTES_PER_FILE } from "./github";
 import {
@@ -79,6 +80,13 @@ export async function fetchRepoTarball(
   if (token !== undefined && token.length > 0) headers.Authorization = `Bearer ${token}`;
   const maxFiles = options?.maxFiles ?? MAX_FILES;
   const maxTotalBytes = options?.maxTotalBytes ?? MAX_TOTAL_BYTES;
+
+  // Pin the read to a full commit sha. scan.sha is only written after this same
+  // check passes, but a reader that trusts its caller is the shape that left the
+  // blob path unpinned. Refuse here too, so a branch name cannot become a fetch.
+  if (!isPinnedCommitSha(sha)) {
+    return { status: "error", entries: [], truncated: false, rawBytes: 0, quota: null, resetAtMs: null };
+  }
 
   let response: Response;
   try {
