@@ -173,8 +173,8 @@ const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[
     title: "Confirm the license situation",
     why: "Reviewers and users check whether they may reuse the code.",
     checklist: [
-      "Add a LICENSE file or confirm the intended terms with a human.",
-      "Make the package license field match the file. This is not legal advice.",
+      "If no license file was found, add a LICENSE file or confirm the intended terms with a human.",
+      "If a license file was found, check that the package field matches it. This is not legal advice.",
     ],
   },
 };
