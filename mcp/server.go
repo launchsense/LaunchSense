@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -194,7 +195,7 @@ func accountText(account Account) string {
 }
 
 func (s *server) scanRepo(string) (string, error) {
-	root, err := os.Getwd()
+	root, err := reviewRoot()
 	if err != nil {
 		return "", err
 	}
@@ -203,6 +204,62 @@ func (s *server) scanRepo(string) (string, error) {
 		run = runNodeReview
 	}
 	return run(root)
+}
+
+// reviewRoot is the checkout the local server reads. The installer starts this
+// server with cwd = <checkout>/mcp, so the process folder is the mcp module and
+// reviewing it would read a handful of Go files instead of the checkout.
+// LAUNCHSENSE_ROOT names the checkout and the installer sets it. Without it: a
+// process folder that is this repository's Go module means the checkout is its
+// parent, then the same test on the executable folder (a built binary that sits
+// in mcp/), then the process folder as it was before.
+func reviewRoot() (string, error) {
+	if named := strings.TrimSpace(os.Getenv("LAUNCHSENSE_ROOT")); named != "" {
+		root, err := filepath.Abs(named)
+		if err != nil {
+			return "", fmt.Errorf("LAUNCHSENSE_ROOT cannot be resolved: %w", err)
+		}
+		info, err := os.Stat(root)
+		if err != nil {
+			return "", fmt.Errorf("LAUNCHSENSE_ROOT is not readable: %w", err)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("LAUNCHSENSE_ROOT is not a folder")
+		}
+		return root, nil
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if checkout := checkoutAbove(cwd); checkout != "" {
+			return checkout, nil
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		folder := filepath.Dir(exe)
+		if checkout := checkoutAbove(folder); checkout != "" {
+			return checkout, nil
+		}
+		return folder, nil
+	}
+	return os.Getwd()
+}
+
+// checkoutAbove returns the checkout that owns folder, or "" when folder is not
+// this repository's Go module. The go.mod is what marks the module folder, so a
+// folder that only shares its name does not count, and a checkout at the file
+// system root has no parent to name.
+func checkoutAbove(folder string) string {
+	manifest, err := os.ReadFile(filepath.Join(folder, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	if !strings.Contains(string(manifest), "module launchsense/mcp") {
+		return ""
+	}
+	parent := filepath.Dir(folder)
+	if parent == folder {
+		return ""
+	}
+	return parent
 }
 
 func resolveRepo(repoURL string, account Account) (string, string, error) {

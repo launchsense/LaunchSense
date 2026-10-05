@@ -115,7 +115,7 @@ function isReferenceOrExpression(value: string): boolean {
 function isConstantStyleName(name: string): boolean {
   if (name.length === 0) return false;
   if (/^[A-Z][A-Z0-9_]*$/.test(name)) return true;
-  const tail = name.split(/[_\-]/).pop() ?? name;
+  const tail = name.split(/[_-]/).pop() ?? name;
   return /^(?:header|name|label)$/i.test(tail);
 }
 
