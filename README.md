@@ -19,6 +19,8 @@ AI is already in the product, in two places. Both are still evolving.
 - Plain words. When an AI provider is configured, it rewrites a finding the checks already produced. If it fails, fixed wording is used. When no provider answers, fixed wording is shown.
 - Order. A decision model may reorder findings inside one severity band. If it does not answer, a fixed table sets the order. The table is always the floor.
 
+A model never decides a finding, a severity, a licence fact, consent, who a caller is, or whether a request is allowed. The C2PA `humanOversightLevel` for every AI path here is `prompt_guided`: a person asked for the output and nobody approved it afterwards.
+
 The next step is a reinforcement learning loop, and it is not a trained model yet. A later scan shows what was fixed, what is still broken, and what is unknown. A person can use that record to change a check. The model does not add the check, and it does not train on the code.
 
 ## Three ways in

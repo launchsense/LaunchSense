@@ -50,6 +50,26 @@ Not checked on any surface: yarn.lock, pnpm-lock.yaml, Cargo, Go and PyPI depend
 
 License lines are signals, not legal advice. Unknown stays unknown. A model may quote one next look. That quote is not a finding. The priority table always orders the report. The decision API may reorder inside one severity band. The model does not choose which findings exist. Plain-word rewriting and that reorder are in the product and still evolving. No writing provider is configured in this release, so fixed wording is what ships. A reinforcement learning loop, based on what a later scan shows as fixed or still broken, is the next step. It is not a trained model, and it does not train on the code.
 
+### What the AI does and does not decide
+
+Three paths reach a model, and all three need a configured key, so the fixed paths are what run by default.
+
+- `explain` rewrites a finding in plainer language. `convex/adapters/ai.ts`, `convex/scans/aiExplain.ts`, `shared/ai/deterministic.ts`.
+- `ordering` reorders findings that already exist, inside one severity band. `convex/adapters/decision.ts`, `shared/reports/priority.ts`, `convex/scans/rankScan.ts`.
+- `licence_lookup` suggests an id for an Unknown licence, refused unless a lane is supplied, never a licence fact. `shared/licensing/lookup.ts`.
+
+The `humanOversightLevel` is `prompt_guided` in every case, which in C2PA Technical Specification 2.4 means a person provided the request and nobody approved the output. No path here is `fully_autonomous` and none is `human_validated`. The vocabulary is borrowed from C2PA 2.4 and this is not a conformance claim: we are not a claim generator and hold no certificate chain.
+
+The AI never decides a finding, a severity, a licence fact, consent, who a caller is, or whether a request is allowed. `shared/copy/aiDisclosure.ts` is the single source of that list, with the file behind each item.
+
+## Standards records
+
+Three generated documents, all from facts in this repository, none of them claiming more than the code does.
+
+- `npm run consent-record` reads `~/.config/launchsense/consent.jsonl` and prints an ISO/IEC TS 27560:2023 shaped record per decision, plus a receipt a person can keep. One purpose per record. `record_id` is derived from the content, so the same ledger gives the same bytes. The vocabulary lists six fields the product cannot honestly fill, and each record carries the ones that apply to it: no registered legal entity, no identified principal, no confirmed region for any host or provider, no withdrawal event type, no data protection officer, and no hash written by the installer. Only one of the four sign-in purposes has a decision on record at all; the other three are asked in the panel and recorded nowhere, and the record says so.
+- `npm run register` writes `docs/PROCESSING-REGISTER.md`, the GDPR Art 30(1) register: eight activities, one per purpose, each naming the data, the tables, the columns, the recipients, the retention, and whether a purge enforces the window. The controller has no registered name and none is invented.
+- `npm run sbom` writes a CycloneDX 1.7 SBOM from the same inventory the notice file reads, with SPDX ids and package URLs. Same lockfile in, byte-identical document out, so it carries no timestamp unless you pass `--generated-at`. No hashes, because no tarball was downloaded, and no dependency graph, because the inventory carries no edges. An Unknown licence is written as the name `Unknown` with its reason, never as an id.
+
 ## Surfaces
 
 Three notes on surfaces. The first two are not the hosted address:

@@ -44,6 +44,8 @@ Read this before the rest. The checks are fixed. A model does not invent a findi
 
 AI is already in two places, and both are evolving. A writing model may turn a finding into plain words. A decision model may reorder findings inside one severity band. If either one fails, fixed wording and a fixed table are used. This release has no writing provider configured, so the table and the fixed wording are what ship.
 
+A model never decides a finding, a severity, a licence fact, consent, who a caller is, or whether a request is allowed. The C2PA `humanOversightLevel` for every AI path here is `prompt_guided`: a person asked for the output and nobody approved it afterwards.
+
 The start of reinforcement learning is the rescan, not a trained model. Fixed, still broken, new, back again, and unknown are the record. A person may later change a check from that record. The model does not add the check, and it does not train on the code.
 
 ## The problem
