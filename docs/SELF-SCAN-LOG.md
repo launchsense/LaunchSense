@@ -26,9 +26,65 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
-> Stale at HEAD: the newest entry below is commit `31a37aa`; HEAD is
-> `1a0e40e`. No scan has run on the commits between, so this log does not
-> cover them. The loop is behind, not clean.
+### Wave 2: hardening, and the corpus fixes
+
+Scanned pushed commit `695d0798d8abe736b0a3dec1e0c8fe1a2a93fe79` through the hosted
+product, the same path a user hits (`launchsense_scan_public` on
+`https://github.com/launchsense/LaunchSense`). Status: completed. 193 files analyzed,
+0 skipped, 58 findings. This is the first entry that covers HEAD; it supersedes the
+staleness note that stood here.
+
+Coverage line, as printed:
+
+> Analyzed 193 files at this commit; skipped 0 (OSV checked 38 packages, 0 unknown;
+> registry freshness and deps.dev metadata not checked).
+
+The report ends with the standing line:
+
+> A partial result is not a pass.
+
+Raw counts on `695d079`:
+
+| Severity | Count | In `tests/` | Elsewhere |
+| --- | ---: | ---: | ---: |
+| high | 26 | 25 | 1 |
+| medium | 2 | 0 | 2 |
+| low | 2 | 0 | 2 |
+| info | 28 | 11 | 17 |
+| total | 58 | 36 | 22 |
+
+Triage, every finding:
+
+- 36 of the 58 sit under `tests/`. They are false positives: the suite deliberately
+  holds synthetic credential-shaped strings and code shapes, assembled at runtime,
+  never live. No value was opened or printed. They stay in the report rather than being
+  suppressed.
+- `convex/mcpLimit.ts:13`, high, `secret.credential-pattern`. False positive: the line
+  is the header-name constant the usage route compares, not a credential. Deferred to a
+  later name-gate change.
+- `convex/scans/analyze.ts:187`, medium, `code.weak-crypto`. Accepted: SHA-1 is the git
+  blob hash by specification, not a password hash.
+- `convex/http.ts:139`, low, `code.cors-wildcard`. Accepted: the MCP endpoint is public,
+  so the wildcard is intended.
+- `scripts/check-claims.mjs:359`, low, `code.debug-leftover`. Accepted: a command-line
+  tool printing its result.
+- `LICENSE.txt:0`, medium, `license.policy` (Review required). True signal: this
+  repository uses a custom proprietary licence, correctly raised for a human read.
+- `mcp/go.mod:18` and `:20`, info, `deps.vulnerability`. True and informational: two
+  advisories on indirect Go dependencies.
+- 20 findings, info, `hygiene.env-usage`. True and informational: files that read
+  environment variables. 15 of the 20 are outside `tests/`.
+
+Fixed in this stage: the corpus found two regressions in the audit fixes, and both are
+fixed in `695d079` (a base64 secret with a slash was missed, and a quoted SQL table name
+was missed). Wave 2 also hardened the dot-receiver gate, licence filenames, the review
+honesty lines, and the finding identity. `npm run check` is green on this commit:
+556 tests, 105 suites, 0 failures.
+
+Deferred with a reason: the `convex/mcpLimit.ts` header-name false positive; and the
+`tests/` noise, which would need a fixture-path rule, a product decision. Counts are not
+rounded; nothing was deleted.
+
 
 ### Stage full-review guardrails
 
