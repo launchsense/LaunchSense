@@ -68,15 +68,3 @@ func localAccount() (Account, error) {
 	account.Private = meta.Private
 	return account, nil
 }
-
-func lookupRepo(owner, name string) (private bool, err error) {
-	client, err := api.DefaultRESTClient()
-	if err != nil {
-		return false, err
-	}
-	var meta struct {
-		Private bool `json:"private"`
-	}
-	err = client.Get(fmt.Sprintf("repos/%s/%s", owner, name), &meta)
-	return meta.Private, err
-}
