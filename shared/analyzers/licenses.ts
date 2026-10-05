@@ -9,11 +9,16 @@ export type LicensePolicy =
   | "Unknown"
   | "Not checked";
 
+/** What a licence policy allows us to do with the code it covers. */
+export type LicenseUsage = "mirror" | "reference-only" | "unknown";
+
 export interface LicenseResult {
   detected: string[];
   files: string[];
   packageLicense: string | null;
   policy: LicensePolicy;
+  /** What this policy allows us to do with code we bring into our own tree. */
+  usage: LicenseUsage;
   note: string;
 }
 
@@ -39,15 +44,114 @@ const LICENSE_MARKERS: Array<{ id: string; pattern: RegExp }> = [
 
 const SIGNAL = "Signal, not legal advice.";
 
-/** Map a manifest license string to detected ids, preserving SPDX suffixes and OR. */
-function addPackageLicense(detected: Set<string>, lic: string): void {
-  if (/^UNLICENSED$/i.test(lic)) { detected.add("UNLICENSED"); return; }
-  if (/\bOR\b/.test(lic)) { detected.add(lic); return; }
-  // A single SPDX id, kept verbatim so `GPL-3.0-or-later` stays or-later.
-  const known = /^(MIT|Apache-2\.0|ISC|BSD-2-Clause|BSD-3-Clause|MPL-2\.0|Unlicense|CC0-1\.0)$/i;
-  if (known.test(lic)) { detected.add(lic === "Apache-2.0" ? "Apache-2.0" : lic); return; }
-  if (/GPL|AGPL|LGPL/i.test(lic)) { detected.add(lic); return; }
-  detected.add(lic);
+type ExpressionOperator = "single" | "and" | "or";
+
+interface LicenseExpression {
+  /** The declaration exactly as written, so the exact id is never lost. */
+  verbatim: string;
+  /** Base ids, with any `WITH <exception>` tail removed. Obligations use these. */
+  licenses: string[];
+  /** Exception ids named after WITH. An exception changes the terms. */
+  exceptions: string[];
+  operator: ExpressionOperator;
+}
+
+/**
+ * Read one declared string as an SPDX expression. `MIT AND Apache-2.0` is two
+ * licences that both apply, `MIT OR Apache-2.0` is a choice, and
+ * `Apache-2.0 WITH LLVM-exception` is one licence with changed terms. Reading
+ * the literal string as one opaque id made the first read as Allowed and lost
+ * the Apache obligations entirely.
+ */
+function parseExpression(declared: string): LicenseExpression {
+  const verbatim = declared.trim();
+  const body = verbatim.replace(/^\(+/, "").replace(/\)+$/, "").trim();
+  const sawAnd = /\sAND\s/.test(` ${body} `);
+  const sawOr = /\sOR\s/.test(` ${body} `);
+  const licenses: string[] = [];
+  const exceptions: string[] = [];
+  for (const token of body.split(/\s+(?:AND|OR)\s+/)) {
+    const parts = token.replace(/^\(+/, "").replace(/\)+$/, "").trim().split(/\s+WITH\s+/);
+    const base = (parts[0] ?? "").trim();
+    if (base.length > 0 && !licenses.includes(base)) licenses.push(base);
+    for (const tail of parts.slice(1)) {
+      const name = tail.trim();
+      if (name.length > 0 && !exceptions.includes(name)) exceptions.push(name);
+    }
+  }
+  const operator: ExpressionOperator = sawAnd ? "and" : sawOr ? "or" : "single";
+  return { verbatim, licenses, exceptions, operator };
+}
+
+/**
+ * Record a declared expression. The verbatim string always goes in, so the exact
+ * id survives for the reader. Base ids go in as well for a single licence, an AND
+ * set, or a WITH expression, because those are the ids the obligations are written
+ * against: `MIT AND Apache-2.0` still owes the Apache NOTICE, and the base id is
+ * what makes that obligation visible. An OR set keeps only the verbatim expression,
+ * because OR is a choice and the licence picked decides the obligation. Reporting
+ * an obligation the reader may not owe is its own kind of wrong signal.
+ */
+function addDeclaration(detected: Set<string>, expression: LicenseExpression): void {
+  detected.add(expression.verbatim);
+  if (expression.operator === "or") return;
+  for (const id of expression.licenses) detected.add(id);
+}
+
+/** One manifest's declaration, kept with the file it was read from. */
+interface ManifestDeclaration {
+  source: string;
+  license: string;
+  expression: LicenseExpression;
+}
+
+function npmDeclaredLicense(content: string): string | null {
+  try {
+    const data = JSON.parse(content) as unknown;
+    if (typeof data === "object" && data !== null) {
+      const lic = (data as Record<string, unknown>)["license"];
+      if (typeof lic === "string" && lic.trim().length > 0) return lic.trim();
+    }
+  } catch {
+    // Unparseable manifest: no license signal from it.
+  }
+  return null;
+}
+
+/** A Rust crate declares its licence in Cargo.toml. */
+function cargoDeclaredLicense(content: string): string | null {
+  const m = /^license\s*=\s*"([^"]+)"/m.exec(content);
+  return m !== null && m[1] !== undefined ? m[1].trim() : null;
+}
+
+/** A Python project declares its licence in pyproject.toml. */
+function pythonDeclaredLicense(content: string): string | null {
+  const m = /license\s*=\s*["']([^"']+)["']/.exec(content);
+  return m !== null && m[1] !== undefined ? m[1].trim() : null;
+}
+
+/**
+ * Every manifest in the read, not the first one the array happened to carry.
+ * `files.find` read one manifest per family, so the licence verdict of a whole
+ * repository depended on the caller's array order: a monorepo read as licensed
+ * or unlicensed depending on which file the host listed first. Sorted by path,
+ * so the facts and the verdict come out the same either way.
+ *
+ * Rust and Python manifests are read as equal sources to package.json, not as
+ * fallbacks. Ignoring them is why every Rust crate read as unlicensed.
+ */
+function manifestDeclarations(files: Array<{ path: string; content: string }>): ManifestDeclaration[] {
+  const out: ManifestDeclaration[] = [];
+  for (const file of files) {
+    const base = file.path.split("/").pop() ?? file.path;
+    let declared: string | null = null;
+    if (base === "package.json") declared = npmDeclaredLicense(file.content);
+    else if (base === "Cargo.toml") declared = cargoDeclaredLicense(file.content);
+    else if (base === "pyproject.toml") declared = pythonDeclaredLicense(file.content);
+    if (declared === null) continue;
+    out.push({ source: file.path, license: declared, expression: parseExpression(declared) });
+  }
+  return out.sort((a, b) => (a.source < b.source ? -1 : a.source > b.source ? 1 : 0));
 }
 
 function noticeSentence(found: string[], files: Array<{ path: string }>): string {
@@ -59,6 +163,27 @@ function noticeSentence(found: string[], files: Array<{ path: string }>): string
   return hasNotice
     ? " Apache-2.0 was found, and a NOTICE file was in this read."
     : " Apache-2.0 was found. No NOTICE file was in this read.";
+}
+
+/**
+ * State what the manifests said, as facts. A repository with more than one
+ * manifest has no single declared licence to state, so every declaration is
+ * named instead of the first one read being taken as the answer.
+ */
+function declarationSentence(
+  declarations: ManifestDeclaration[],
+  distinct: string[],
+): string {
+  if (declarations.length === 0) return "";
+  const listed = declarations.map((d) => `${d.source} says ${d.license}`).join(", ");
+  if (distinct.length > 1) {
+    return ` The manifests read do not agree on one licence, so each is its own fact: ${listed}.`;
+  }
+  if (declarations.length > 1) {
+    const where = declarations.map((d) => d.source).join(", ");
+    return ` ${distinct[0]} is declared in ${declarations.length} manifests read: ${where}.`;
+  }
+  return "";
 }
 
 /**
@@ -106,6 +231,105 @@ function isRootLicenseFile(path: string): boolean {
   return isLicenseFile(path);
 }
 
+interface PolicyContext {
+  found: string[];
+  filesFetched: boolean;
+  rootLicenseRead: boolean;
+  rootLicenseMatched: boolean;
+  suffix: string;
+  declarations: ManifestDeclaration[];
+  conflicting: boolean;
+}
+
+/** The policy ladder, in evaluation order. Each branch states one reason. */
+function decidePolicy(ctx: PolicyContext): { policy: LicensePolicy; note: string } {
+  const found = ctx.found;
+  const suffix = ctx.suffix;
+  if (!ctx.filesFetched) {
+    return {
+      policy: "Not checked",
+      note: "No file contents were fetched, so licenses could not be examined.",
+    };
+  }
+  const sourceAvailable = found.some((id) => /BUSL|SSPL|Commons-Clause|Prosperity|Elastic/.test(id));
+  if (sourceAvailable) {
+    return {
+      policy: "Review required",
+      note: `Source-available terms were read. They are not ordinary open source.${suffix}`,
+    };
+  }
+  if (found.includes("UNLICENSED")) {
+    return {
+      policy: "Review required",
+      note: `UNLICENSED is not the Unlicense dedication.${suffix}`,
+    };
+  }
+  if (found.includes("AGPL-3.0")) {
+    return {
+      policy: "Not recommended",
+      note: `AGPL text was found in the files read. A network use question needs a person.${suffix}`,
+    };
+  }
+  if (found.some((d) => /GPL|LGPL|MPL/.test(d))) {
+    const orLater = found.some((d) => /-or-later/i.test(d));
+    const widen = orLater
+      ? " The license grants or-later, so a later version may be chosen."
+      : " It is not stated as or-later.";
+    return {
+      policy: "Review required",
+      note: `Copyleft wording was found. The exact id is listed.${widen}${suffix}`,
+    };
+  }
+  const andSet = ctx.declarations.filter((d) => d.expression.operator === "and");
+  const orChoice = ctx.declarations.filter((d) => d.expression.operator === "or");
+  const withException = ctx.declarations.filter((d) => d.expression.exceptions.length > 0);
+  if (andSet.length > 0 || orChoice.length > 0 || withException.length > 0) {
+    const clauses: string[] = [];
+    if (andSet.length > 0) {
+      clauses.push("An AND expression is every licence in it at once, so every obligation in it applies.");
+    }
+    if (orChoice.length > 0) {
+      clauses.push("An OR expression is a choice, not both licenses at once.");
+    }
+    for (const item of withException) {
+      clauses.push(
+        `A WITH expression is that licence plus its exception (${item.expression.exceptions.join(", ")}), so it is not the plain licence on its own.`,
+      );
+    }
+    return { policy: "Review required", note: `${clauses.join(" ")}${suffix}` };
+  }
+  // More than one licence is declared across the manifests read, so no single
+  // licence can be stated for this repository. Unknown, not the first one read.
+  if (ctx.conflicting) {
+    return {
+      policy: "Unknown",
+      note: `The manifests read declare more than one licence, so the terms of this repository are not stated here.${suffix}`,
+    };
+  }
+  // The root licence file is this repository's own terms. When it was read and no
+  // marker matched it, the root licence is unrecognised, so a nested permissive
+  // file or a manifest field must not set Allowed. Stricter verdicts above (source
+  // available, copyleft, AGPL) still stand, and the other ids are listed as their
+  // own facts in the note.
+  if (ctx.rootLicenseRead && !ctx.rootLicenseMatched) {
+    const otherIds =
+      found.length > 0
+        ? ` Other licence ids in this read, each its own fact: ${found.join(", ")}.`
+        : " No other licence id was in this read.";
+    return {
+      policy: "Unknown",
+      note: `The root licence file was read and no licence marker matched it, so the root licence is unrecognised.${otherIds}${suffix}`,
+    };
+  }
+  if (found.length > 0) {
+    return { policy: "Allowed", note: `Permissive license signals found.${suffix}` };
+  }
+  return {
+    policy: "Unknown",
+    note: `No license signals in the license files and manifest field that were read.${suffix}`,
+  };
+}
+
 export function analyzeLicenses(
   treeBlobs: string[],
   files: Array<{ path: string; content: string }>,
@@ -138,152 +362,50 @@ export function analyzeLicenses(
     fileDetected.delete("BSD-2-Clause");
   }
 
-  let packageLicense: string | null = null;
-  let manifestSource: string | null = null;
-  const pkg = files.find((f) => (f.path.split("/").pop() ?? "") === "package.json");
-  if (pkg !== undefined) {
-    try {
-      const data = JSON.parse(pkg.content) as unknown;
-      if (typeof data === "object" && data !== null) {
-        const lic = (data as Record<string, unknown>)["license"];
-        if (typeof lic === "string" && lic.length > 0) {
-          packageLicense = lic;
-          manifestSource = "package.json";
-        }
-      }
-    } catch {
-      // Unparseable manifest: no license signal from it.
-    }
+  const declarations = manifestDeclarations(files);
+  for (const declaration of declarations) {
+    addDeclaration(detected, declaration.expression);
   }
 
-  // Non-npm manifests. A Rust crate declares its licence in Cargo.toml, a Python
-  // project in pyproject.toml. Ignoring these is why every Rust crate read as
-  // unlicensed. Read them as equal sources to the licence file.
-  if (packageLicense === null) {
-    const cargo = files.find((f) => (f.path.split("/").pop() ?? "") === "Cargo.toml");
-    if (cargo !== undefined) {
-      const m = /^license\s*=\s*"([^"]+)"/m.exec(cargo.content);
-      if (m !== null && m[1] !== undefined) {
-        packageLicense = m[1];
-        manifestSource = "Cargo.toml";
-      }
-    }
-  }
-  if (packageLicense === null) {
-    const py = files.find((f) => (f.path.split("/").pop() ?? "") === "pyproject.toml");
-    if (py !== undefined) {
-      const m = /license\s*=\s*["']([^"']+)["']/.exec(py.content);
-      if (m !== null && m[1] !== undefined) {
-        packageLicense = m[1];
-        manifestSource = "pyproject.toml";
-      }
-    }
-  }
-
-  if (packageLicense !== null) {
-    addPackageLicense(detected, packageLicense);
-  }
+  // One declared licence, or none to state. Two manifests that declare different
+  // licences leave no single licence to state, so the field stays null and the
+  // facts go in the note rather than one file being taken as the answer.
+  const distinct = [...new Set(declarations.map((d) => d.license))];
+  const conflicting = distinct.length > 1;
+  const packageLicense = conflicting ? null : distinct[0] ?? null;
+  const manifestSource = conflicting ? null : declarations[0]?.source ?? null;
 
   const found = [...detected];
-  const suffix = `${noticeSentence(found, files)}${mismatchSentence(manifestSource, packageLicense, fileDetected)}`;
-  if (!filesFetched) {
-    return {
-      detected: found,
-      files: licenseFiles,
-      packageLicense,
-      policy: "Not checked",
-      note: "No file contents were fetched, so licenses could not be examined.",
-    };
-  }
-  const orChoice = found.some((id) => /\bOR\b/.test(id));
-  const sourceAvailable = found.some((id) => /BUSL|SSPL|Commons-Clause|Prosperity|Elastic/.test(id));
-  if (sourceAvailable) {
-    return {
-      detected: found,
-      files: licenseFiles,
-      packageLicense,
-      policy: "Review required",
-      note: `Source-available terms were read. They are not ordinary open source.${suffix} ${SIGNAL}`,
-    };
-  }
-  if (found.includes("UNLICENSED")) {
-    return {
-      detected: found,
-      files: licenseFiles,
-      packageLicense,
-      policy: "Review required",
-      note: `UNLICENSED is not the Unlicense dedication.${suffix} ${SIGNAL}`,
-    };
-  }
-  if (found.includes("AGPL-3.0")) {
-    return {
-      detected: found,
-      files: licenseFiles,
-      packageLicense,
-      policy: "Not recommended",
-      note: `AGPL text was found in the files read. A network use question needs a person.${suffix} ${SIGNAL}`,
-    };
-  }
-  if (found.some((d) => /GPL|LGPL|MPL/.test(d))) {
-    const orLater = found.some((d) => /-or-later/i.test(d));
-    const widen = orLater
-      ? " The license grants or-later, so a later version may be chosen."
-      : " It is not stated as or-later.";
-    return {
-      detected: found,
-      files: licenseFiles,
-      packageLicense,
-      policy: "Review required",
-      note: `Copyleft wording was found. The exact id is listed.${widen}${suffix} ${SIGNAL}`,
-    };
-  }
-  if (orChoice) {
-    return {
-      detected: found,
-      files: licenseFiles,
-      packageLicense,
-      policy: "Review required",
-      note: `An OR expression is a choice, not both licenses at once.${suffix} ${SIGNAL}`,
-    };
-  }
-  // The root licence file is this repository's own terms. When it was read and no
-  // marker matched it, the root licence is unrecognised, so a nested permissive
-  // file or a manifest field must not set Allowed. Stricter verdicts above (source
-  // available, copyleft, AGPL) still stand, and the other ids are listed as their
-  // own facts in the note.
-  if (rootLicenseRead && !rootLicenseMatched) {
-    const otherIds =
-      found.length > 0
-        ? ` Other licence ids in this read, each its own fact: ${found.join(", ")}.`
-        : " No other licence id was in this read.";
-    return {
-      detected: found,
-      files: licenseFiles,
-      packageLicense,
-      policy: "Unknown",
-      note: `The root licence file was read and no licence marker matched it, so the root licence is unrecognised.${otherIds}${suffix} ${SIGNAL}`,
-    };
-  }
-  if (found.length > 0) {
-    return {
-      detected: found,
-      files: licenseFiles,
-      packageLicense,
-      policy: "Allowed",
-      note: `Permissive license signals found.${suffix} ${SIGNAL}`,
-    };
-  }
+  const suffix = `${noticeSentence(found, files)}${declarationSentence(declarations, distinct)}${mismatchSentence(manifestSource, packageLicense, fileDetected)}`;
+  const decision = decidePolicy({
+    found,
+    filesFetched,
+    rootLicenseRead,
+    rootLicenseMatched,
+    suffix,
+    declarations,
+    conflicting,
+  });
+
+  const usage = licenseUsage(decision.policy);
   return {
     detected: found,
     files: licenseFiles,
     packageLicense,
-    policy: "Unknown",
-    note: `No license signals in the license files and manifest field that were read. ${SIGNAL}`,
+    policy: decision.policy,
+    usage,
+    // The gate is stated in the note, so the licence decision that reaches a
+    // report carries what it allows. A gate nothing reads is a claim the
+    // product does not make.
+    note: `${decision.note} ${USAGE_NOTE[usage]} ${SIGNAL}`,
   };
 }
 
-/** What a licence policy allows us to do with the code it covers. */
-export type LicenseUsage = "mirror" | "reference-only" | "unknown";
+const USAGE_NOTE: Record<LicenseUsage, string> = {
+  mirror: "For code we bring into our own tree, mirror is allowed.",
+  "reference-only": "For code we bring into our own tree, reference only: read it, do not copy it.",
+  unknown: "This licence was not checked, so what it allows is unknown. An unchecked licence is not a licence to copy.",
+};
 
 // A build-time gate for code we bring into our own tree. Mirror only what a
 // permissive licence allows. Everything that needs a human, or has no licence at

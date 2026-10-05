@@ -66,8 +66,9 @@ http.route({
     const record = (body ?? {}) as Record<string, unknown>;
     const repoUrl = typeof record["repoUrl"] === "string" ? record["repoUrl"] : "";
     if (!repoUrl) return json({ error: "repoUrl is required." }, 400);
-    const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, { caller: forwarded });
+    // No caller address is read here, and none is sent. The gate has a shared
+    // hosted bucket, so there is nothing to key on and nothing to store.
+    const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, {});
     if (!gate.allowed) {
       return json({ error: "This route is paused until the shared quota window resets." }, 429);
     }
@@ -100,8 +101,7 @@ http.route({
     if (!usageAuthorized(request)) {
       return json({ error: "This route needs the usage key." }, 401);
     }
-    const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    const usageGate = await ctx.runMutation(internal.mcpLimit.consumeUsageWrite, { caller: forwarded });
+    const usageGate = await ctx.runMutation(internal.mcpLimit.consumeUsageWrite, {});
     if (!usageGate.allowed) {
       return json({ error: "This route is paused until the quota window resets." }, 429);
     }
@@ -169,8 +169,9 @@ http.route({
         { status: 400, headers: { ...mcpCors, "Content-Type": "application/json" } },
       );
     }
-    const caller = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    const result = await handleMcpMessage(body, (name, args) => callHostedTool(ctx, caller, name, args));
+    // The caller's network address is not read on this route. The scan gate has a
+    // shared hosted bucket, so no caller value is needed and none is stored.
+    const result = await handleMcpMessage(body, (name, args) => callHostedTool(ctx, name, args));
     if (result.status === 202 || result.body === null) {
       return new Response(null, { status: 202, headers: mcpCors });
     }
@@ -191,13 +192,12 @@ http.route({
 
 async function callHostedTool(
   ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
-  caller: string,
   name: ToolName,
   args: Record<string, unknown>,
 ): Promise<{ text: string; isError: boolean }> {
   switch (name) {
     case "launchsense_scan_public":
-      return scanPublicTool(ctx, caller, typeof args.repoUrl === "string" ? args.repoUrl : "");
+      return scanPublicTool(ctx, typeof args.repoUrl === "string" ? args.repoUrl : "");
     case "launchsense_get_report":
       return reportTool(ctx, typeof args.scanId === "string" ? args.scanId : "");
     default: {
@@ -209,11 +209,10 @@ async function callHostedTool(
 
 async function scanPublicTool(
   ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
-  caller: string,
   repoUrl: string,
 ): Promise<{ text: string; isError: boolean }> {
   if (!repoUrl) return { text: "repoUrl is required.", isError: true };
-  const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, { caller });
+  const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, {});
   if (!gate.allowed) {
     return { text: "This route is paused until the shared quota window resets.", isError: true };
   }

@@ -2,9 +2,52 @@ import { internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 
-const CALLER_LIMIT = 2;
-const GLOBAL_LIMIT = 8;
-const USAGE_CALLER_LIMIT = 20;
+// Hosted scan caps, set for the pilot: a group of about ten builders testing
+// the hosted MCP for the next two months, then a wider group.
+//
+// Both numbers are a pilot policy with no traffic measurement behind them
+// (unknown). Nothing counts hosted traffic today. The load handler that would
+// read the rateLimits table by hour, and turn these into a measured ceiling,
+// is a later unit and is not built. Until it is, treat the numbers as a
+// policy choice, not as a measured limit, and say so in any document that
+// repeats them.
+//
+// CALLER_LIMIT is the shared hosted bucket. The hosted lane has no caller
+// identity yet, so one number bounds the whole group for an hour. 200 an hour
+// is ten builders at twenty scans an hour each.
+// GLOBAL_LIMIT is the lane total and sits above the shared bucket, so the
+// shared bucket is what binds first and the total is the backstop that keeps
+// one bad hour from spending the GitHub quota.
+export const CALLER_LIMIT = 200;
+export const GLOBAL_LIMIT = 600;
+// The usage route is credentialed, so its bucket is keyed on the route, not on
+// the caller address. The number is unchanged from the old per-caller value:
+// one shared bucket of 20 an hour is a tighter ceiling for a single install
+// and a looser one for a group, and 20 an hour across every install is still
+// well above what a local review produces.
+export const USAGE_LANE_LIMIT = 20;
+
+/**
+ * The bucket every hosted caller spends from. Deliberately not derived from
+ * the caller's network address.
+ *
+ * The routes used to put the raw `x-forwarded-for` value into these keys, which
+ * wrote a personal identifier into `rateLimits` and nothing in the repo ever
+ * deleted those rows. Removing it closes two failures that share one input.
+ * Privacy: no stored key holds any part of a caller's address, so there is
+ * nothing to retain and nothing to purge. Abuse: the header is client
+ * controlled, so keying on it let a caller mint a fresh budget by rotating one
+ * header value, while every builder behind one office egress shared a bucket.
+ *
+ * The honest cost is one shared bucket. Until the hosted lane has a real caller
+ * identity, one noisy builder can spend the group's budget, which is why
+ * CALLER_LIMIT is set for a group rather than for one person. Per-caller
+ * fairness returns when a credential resolves to a caller id, and that value
+ * is the only thing this constant gives up.
+ */
+export const HOSTED_CALLER_BUCKET = "hosted-shared";
+/** The usage lane's single bucket, for the same reason. */
+export const USAGE_LANE_BUCKET = "lane-shared";
 
 // The usage route writes into the diagnostics table, so it needs a credential.
 // The expected value is a deployment secret read from the environment; it is
@@ -36,32 +79,33 @@ async function bump(ctx: MutationCtx, key: string, day: string, limit: number, n
 }
 
 export const consumeMcpScan = internalMutation({
-  args: { caller: v.string() },
+  // No caller argument on purpose. A caller value here is the only way a
+  // network address could reach a key, so the gate takes none. See
+  // HOSTED_CALLER_BUCKET.
+  args: {},
   returns: v.object({ allowed: v.boolean() }),
-  handler: async (ctx, args) => {
+  handler: async (ctx) => {
     const now = Date.now();
     const hour = new Date(now).toISOString().slice(0, 13);
     const day = hour.slice(0, 10);
-    const caller = args.caller.slice(0, 80) || "unknown";
     const globalOk = await bump(ctx, `mcp-scan-global:${hour}`, day, GLOBAL_LIMIT, now);
     if (!globalOk) return { allowed: false };
-    const callerOk = await bump(ctx, `mcp-scan:${hour}:${caller}`, day, CALLER_LIMIT, now);
+    const callerOk = await bump(ctx, `mcp-scan:${hour}:${HOSTED_CALLER_BUCKET}`, day, CALLER_LIMIT, now);
     return { allowed: callerOk };
   },
 });
 
-// Per-caller write cap for the usage route. Separate from the scan limits so a
-// noisy usage reporter cannot spend the scan quota, and so the cap can be read
-// on its own.
+// Write cap for the usage route. Separate from the scan limits so a noisy usage
+// reporter cannot spend the scan quota, and so the cap can be read on its own.
+// The route already needs a credential, so the bucket needs no caller value.
 export const consumeUsageWrite = internalMutation({
-  args: { caller: v.string() },
+  args: {},
   returns: v.object({ allowed: v.boolean() }),
-  handler: async (ctx, args) => {
+  handler: async (ctx) => {
     const now = Date.now();
     const hour = new Date(now).toISOString().slice(0, 13);
     const day = hour.slice(0, 10);
-    const caller = args.caller.slice(0, 80) || "unknown";
-    const allowed = await bump(ctx, `mcp-usage:${hour}:${caller}`, day, USAGE_CALLER_LIMIT, now);
+    const allowed = await bump(ctx, `mcp-usage:${hour}:${USAGE_LANE_BUCKET}`, day, USAGE_LANE_LIMIT, now);
     return { allowed };
   },
 });
