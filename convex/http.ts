@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server";
 import { registerStaticRoutes } from "@convex-dev/static-hosting";
 import { components, api, internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { auth } from "./auth";
 import {
   formatPublicScan,
@@ -14,6 +15,12 @@ import {
 import { USAGE_KEY_HEADER, usageKeyMatches } from "./mcpLimit";
 import { repoKeyFor } from "./analytics/privacy";
 import { parseGitHubRepoUrl } from "../shared/githubUrl";
+import {
+  MCP_ALLOWED_HEADERS_VALUE,
+  bearerTokenFromHeader,
+  unauthorizedResponse,
+} from "./identity/credential";
+import type { CallerIdentity } from "./identity/attribution";
 
 // The Convex runtime exposes environment variables here; Convex TypeScript does
 // not declare it. Same declaration as the server adapters use.
@@ -73,6 +80,73 @@ http.route({
 const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 
+/**
+ * The CORS headers every MCP-shaped route answers with.
+ *
+ * Authorization is in the allowed list because without it a browser-based MCP
+ * client cannot send a credential at all: the preflight fails, no header goes
+ * out, and every request silently looks anonymous. That was a real limitation,
+ * not a footnote.
+ *
+ * Mcp-Session-Id stays in the list because clients send it, but nothing on this
+ * server issues one and nothing authenticates on it. The MCP security guidance is
+ * explicit that a session is not a credential.
+ */
+const mcpCors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": MCP_ALLOWED_HEADERS_VALUE,
+  "Cache-Control": "no-store",
+};
+
+/**
+ * Resolve the caller's credential, or explain why it did not.
+ *
+ * The order matters and it is the whole point of this function:
+ *
+ *   no Authorization header   anonymous. The call proceeds and the scan records
+ *                             attributed: false, so it still counts in the
+ *                             denominator rather than disappearing.
+ *   header present, refused   401 with WWW-Authenticate. A caller who presented
+ *                             something and got it wrong is told so and gets no
+ *                             scan. Failing closed here is what makes revocation
+ *                             real: a revoked token cannot fall through to the
+ *                             anonymous path and keep working.
+ *
+ * `Mcp-Session-Id` is never read. MCP servers must not use a session as a
+ * credential.
+ */
+async function authenticate(
+  ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
+  request: Request,
+): Promise<
+  | { ok: true; identity: CallerIdentity }
+  | { ok: false; response: Response }
+> {
+  const token = bearerTokenFromHeader(request.headers.get("authorization"));
+  if (token === null) {
+    return { ok: true, identity: { resolved: false } };
+  }
+  const resolved = await ctx.runQuery(internal.identity.store.resolveToken, { token });
+  if (resolved.resolved !== true) {
+    const failure = resolved.failure === "missing" ? "missing" : "invalid";
+    const { status, headers, body } = unauthorizedResponse(failure);
+    return { ok: false, response: Response.json(body, { status, headers: { ...headers, ...mcpCors } }) };
+  }
+  return {
+    ok: true,
+    identity: {
+      resolved: true,
+      callerId: resolved.callerId,
+      userId: resolved.userId,
+      // Recorded as a claim and labelled as one. Nothing below reads it: not the
+      // quota key, not the ownership check, not the access decision.
+      declaredHarness: resolved.declaredHarness,
+      verifiedBinding: resolved.verifiedBinding,
+    },
+  };
+}
+
 const tools = [
   {
     name: "launchsense_scan_public",
@@ -102,6 +176,9 @@ http.route({
   path: "/api/mcp/scan",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    // Credential before body, same as the protocol route.
+    const credential = await authenticate(ctx, request);
+    if (!credential.ok) return credential.response;
     let body: unknown;
     try {
       body = await request.json();
@@ -111,13 +188,21 @@ http.route({
     const record = (body ?? {}) as Record<string, unknown>;
     const repoUrl = typeof record["repoUrl"] === "string" ? record["repoUrl"] : "";
     if (!repoUrl) return json({ error: "repoUrl is required." }, 400);
-    // No caller address is read here, and none is sent. The gate has a shared
-    // hosted bucket, so there is nothing to key on and nothing to store.
-    const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, {});
+    // No caller address is read here, and none is sent. The gate keys on the
+    // resolved callerId, or on the one shared bucket when none resolved.
+    const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, {
+      callerId: credential.identity.callerId,
+    });
     if (!gate.allowed) {
-      return json({ error: "This route is paused until the shared quota window resets." }, 429);
+      return json({ error: "This route is paused until the quota window resets." }, 429);
     }
-    const scan = await ctx.runAction(api.scans.actions.runScan, { repoUrl });
+    // Same action the protocol route calls, so the surface rules, the sha
+    // resolution, and the ownership rule cannot drift between the two doors.
+    const scan = await ctx.runAction(internal.scans.actions.runHostedScan, {
+      repoUrl,
+      callerId: credential.identity.callerId,
+      channel: "api",
+    });
     if (scan.status === "failed") return json({ error: "Scan could not start.", scanId: scan.scanId }, 422);
     const analyzed = await ctx.runAction(api.scans.analyze.analyzeScan, { scanId: scan.scanId });
     const report = await ctx.runQuery(api.scans.queries.getResults, { scanId: scan.scanId });
@@ -180,13 +265,6 @@ http.route({
   }),
 });
 
-const mcpCors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id",
-  "Cache-Control": "no-store",
-};
-
 http.route({
   path: "/mcp",
   method: "OPTIONS",
@@ -205,6 +283,11 @@ http.route({
   path: "/mcp",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    // Credential before body. An unauthorised caller learns nothing about the
+    // payload shape and never reaches the protocol handler.
+    const credential = await authenticate(ctx, request);
+    if (!credential.ok) return credential.response;
+
     let body: unknown;
     try {
       body = await request.json();
@@ -214,15 +297,16 @@ http.route({
         { status: 400, headers: { ...mcpCors, "Content-Type": "application/json" } },
       );
     }
-    // The caller's network address is not read on this route. The scan gate has a
-    // shared hosted bucket, so no caller value is needed and none is stored.
+    // The caller's network address is not read on this route. The scan gate keys
+    // on the resolved callerId, or on the one shared bucket when none resolved,
+    // so no caller value of the caller's own choosing is needed or stored.
     //
     // The reporter is where clientInfo is read and allowlisted. The protocol layer
     // hands over one event per action and this route decides whether that becomes
     // a row, so the protocol code holds no database call.
     const result = await handleMcpMessage(
       body,
-      (name, args) => callHostedTool(ctx, name, args),
+      (name, args) => callHostedTool(ctx, name, args, credential.identity),
       // Awaited, so the row is written before the caller gets its answer. A write
       // that raced the response would be lost silently, and a lost row reads as a
       // drop in traffic.
@@ -250,10 +334,11 @@ async function callHostedTool(
   ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
   name: ToolName,
   args: Record<string, unknown>,
+  identity: CallerIdentity,
 ): Promise<{ text: string; isError: boolean }> {
   switch (name) {
     case "launchsense_scan_public":
-      return scanPublicTool(ctx, typeof args.repoUrl === "string" ? args.repoUrl : "");
+      return scanPublicTool(ctx, typeof args.repoUrl === "string" ? args.repoUrl : "", identity);
     case "launchsense_get_report":
       return reportTool(ctx, typeof args.scanId === "string" ? args.scanId : "");
     default: {
@@ -266,15 +351,21 @@ async function callHostedTool(
 async function scanPublicTool(
   ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
   repoUrl: string,
+  identity: CallerIdentity,
 ): Promise<{ text: string; isError: boolean; outcome?: "quota_denied"; repoKey?: string }> {
   if (!repoUrl) return { text: "repoUrl is required.", isError: true };
-  const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, {});
+  // The quota keys on the server-minted callerId when one resolved, and on the one
+  // shared bucket when none did. It never keys on anything the caller chose: the
+  // declared harness label travels with the identity and is not passed here.
+  const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, {
+    callerId: identity.callerId,
+  });
   if (!gate.allowed) {
     // The refusal is counted as its own outcome rather than as a tool error,
     // because "the shared quota window closed" and "the repo would not open" are
     // two different facts about the lane.
     return {
-      text: "This route is paused until the shared quota window resets.",
+      text: "This route is paused until the quota window resets.",
       isError: true,
       outcome: "quota_denied",
     };
@@ -291,9 +382,24 @@ async function scanPublicTool(
           parsed.value.repo,
         )) ?? undefined)
       : undefined;
-  const scan = await ctx.runAction(api.scans.actions.runScan, { repoUrl });
+  const scan = await ctx.runAction(internal.scans.actions.runHostedScan, {
+    repoUrl,
+    callerId: identity.callerId,
+    channel: "mcp",
+  });
   if (scan.status === "failed") {
     return { text: `Scan could not start. Scan ${scan.scanId}`, isError: true, repoKey };
+  }
+  if (identity.resolved && identity.callerId) {
+    // Best effort. Which credentials are still in use is the question that decides
+    // whether a revoke disconnects one harness or one person, so the stamp is
+    // worth having. It is a mutation the scan does not wait on, and a failure of it
+    // changes nothing the caller sees.
+    void ctx
+      .runMutation(internal.identity.store.markCredentialUsed, {
+        callerId: identity.callerId as Id<"credentials">,
+      })
+      .catch(() => undefined);
   }
   const analyzed = await ctx.runAction(api.scans.analyze.analyzeScan, { scanId: scan.scanId });
   const report = await ctx.runQuery(api.scans.queries.getResults, { scanId: scan.scanId });
@@ -346,6 +452,11 @@ http.route({
   path: "/api/mcp/report",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    // Same credential rule as the other hosted routes. This one reads a scan
+    // rather than making one, so the only thing identity changes here is that a
+    // refused credential is refused rather than silently treated as anonymous.
+    const credential = await authenticate(ctx, request);
+    if (!credential.ok) return credential.response;
     let body: unknown;
     try {
       body = await request.json();

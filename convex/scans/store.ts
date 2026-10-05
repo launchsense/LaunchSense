@@ -521,6 +521,14 @@ const changeCause = v.union(
   v.literal("analyzer_update"),
 );
 
+/**
+ * Mint the row a rescan writes into.
+ *
+ * `attributed` is written on every row for the same reason as createScan: an
+ * unattributed rescan still happened and still belongs in the denominator.
+ * `channel` and `surface` are recorded too, because a rescan is a scan and the
+ * funnel would otherwise undercount every one of them.
+ */
 export const createRescan = internalMutation({
   args: {
     owner: v.string(),
@@ -529,6 +537,10 @@ export const createRescan = internalMutation({
     rescanOf: v.id("scans"),
     signedIn: v.boolean(),
     userId: v.optional(v.id("users")),
+    attributedCallerId: v.optional(v.id("credentials")),
+    attributed: v.boolean(),
+    channel: v.union(v.literal("web"), v.literal("mcp"), v.literal("api")),
+    surface: v.union(v.literal("web"), v.literal("mcp_hosted")),
     now: v.number(),
   },
   returns: v.id("scans"),
@@ -541,6 +553,10 @@ export const createRescan = internalMutation({
       rescanOf: args.rescanOf,
       signedIn: args.signedIn,
       userId: args.userId,
+      attributedCallerId: args.attributedCallerId,
+      attributed: args.attributed,
+      channel: args.channel,
+      surface: args.surface,
       createdAt: args.now,
       updatedAt: args.now,
     });
