@@ -691,6 +691,18 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
       for (const level of claims) {
         assert.equal(level, "prompt_guided", `${name} says ${level}, and no path in the product reaches it`);
       }
+      // The scan above is anchored to humanOversightLevel and binds to the first
+      // level word, so a false level in ordinary prose further along would slip
+      // past. A level the product never reaches may be named only in a sentence
+      // that negates it, so "None is X" or "No path is X" passes and an
+      // assertion like "the level is X" fails even if "no" appears elsewhere.
+      for (const sentence of source.split(/(?<=[.\n])/)) {
+        if (!/\b(fully_autonomous|human_validated)\b/.test(sentence)) continue;
+        assert.ok(
+          /\b(no path|none is|none of|is not|are not|never|neither|not a path|no model)\b/i.test(sentence),
+          `${name} names a level the product does not reach without negating it: ${sentence.trim().slice(0, 120)}`,
+        );
+      }
     }
   });
 
