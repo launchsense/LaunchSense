@@ -1,0 +1,7 @@
+#!/bin/sh
+# The same gate CI runs, before anything leaves the machine.
+# A red commit stops at push instead of at the pull request.
+# Bypass with:  git push --no-verify
+set -e
+echo "pre-push: running npm run check"
+npm run check
