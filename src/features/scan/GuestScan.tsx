@@ -129,7 +129,11 @@ export default function GuestScan() {
       setRescanRan(false);
       setComparePair(null);
       setExplainNote("");
+      // Same reason as the rescan: the report on screen is about to be a
+      // different one, so the previous scan's provider answer and text go.
       setProviderAnswered(false);
+      setExplanations([]);
+      setNotActionable([]);
       void logEvent({ kind: "scan_started", scanId: result.scanId, refShareId: refShare ?? undefined });
       if (refShare !== null) {
         void logEvent({ kind: "referred_scan_started", scanId: result.scanId, refShareId: refShare });
@@ -218,6 +222,12 @@ export default function GuestScan() {
       setWasCached(false);
       setRescanRan(false);
       setComparePair(null);
+      // The resumed scan is a different report from the one on screen, so the
+      // provider answer and the plain-word text of the old one are dropped.
+      setProviderAnswered(false);
+      setExplanations([]);
+      setNotActionable([]);
+      setExplainNote("");
       void logEvent({
         kind: result.status === "completed" ? "scan_completed" : "scan_partial",
         scanId: queuedScan.scanId,
@@ -261,6 +271,15 @@ export default function GuestScan() {
       await analyzeScan({ scanId: rescan.scanId });
       await compareScans({ fromScanId: base, toScanId: rescan.scanId });
       setScanId(rescan.scanId);
+      // The screen is about to show a different report, so everything a
+      // provider wrote for the old one goes with it. Without this the new report
+      // keeps the old scan's answer, which hides the "No AI provider answered
+      // this scan" line for a scan no provider saw, and the plain-word text on
+      // screen describes findings that are not the ones listed.
+      setProviderAnswered(false);
+      setExplanations([]);
+      setNotActionable([]);
+      setExplainNote("");
       setComparePair({ from: base, to: rescan.scanId });
       setRescanRan(true);
       setPhase("idle");

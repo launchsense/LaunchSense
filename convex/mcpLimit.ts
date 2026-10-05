@@ -68,20 +68,36 @@ export const consumeUsageWrite = internalMutation({
 
 // The explain lane spends a provider call per press, so a scan id alone must not
 // be able to ask for one over and over. Same table, same bump helper, same hourly
-// window as the limits above: one cap per scan, one cap per caller. A guest has
-// no account to key a caller bucket on, so its caller bucket is its own scan, and
-// the per-scan cap is then the whole cap for that visitor.
+// window as the limits above: a cap per scan, a cap per caller, and a cap on the
+// lane as a whole. A caller with no account shares one guest bucket, so holding
+// many scan ids buys nothing: the per-scan cap cannot be escaped by changing id.
+// The three numbers are a policy choice with no traffic measurement behind them
+// (unknown), set high enough that ordinary use never reaches them.
 export const EXPLAIN_SCAN_LIMIT = 2;
 export const EXPLAIN_CALLER_LIMIT = 12;
+// Shared by every visitor with no account, so it is well above one person's cap.
+export const EXPLAIN_GUEST_CALLER_LIMIT = 60;
+// The whole lane, every scan and every caller together.
+export const EXPLAIN_GLOBAL_LIMIT = 200;
 
-/** The bucket a caller spends from. An account id, or the scan when there is none. */
-export function explainCallerKey(caller: string | null, scanId: string): string {
-  const who = caller === null || caller.length === 0 ? `scan:${scanId}` : `user:${caller}`;
+/**
+ * The bucket a caller spends from. An account id, or the one shared guest bucket.
+ * There is no scan id in here on purpose: a key derived from the scan gives a new
+ * budget to every new scan id, which is what left a caller with no identity
+ * uncapped.
+ */
+export function explainCallerKey(caller: string | null): string {
+  const who = caller === null || caller.length === 0 ? "guest" : `user:${caller}`;
   return who.slice(0, 80);
 }
 
+/** The cap that applies to this caller. An identity-less caller shares the guest one. */
+export function explainCallerLimit(caller: string | null): number {
+  return caller === null || caller.length === 0 ? EXPLAIN_GUEST_CALLER_LIMIT : EXPLAIN_CALLER_LIMIT;
+}
+
 /**
- * Claim one explain slot. Both caps must pass, and neither is taken from the
+ * Claim one explain slot. All three caps must pass, and none is taken from the
  * caller's word for it: a scan id and an account id are all this reads.
  */
 export const consumeExplain = internalMutation({
@@ -91,12 +107,34 @@ export const consumeExplain = internalMutation({
     const now = Date.now();
     const hour = new Date(now).toISOString().slice(0, 13);
     const day = hour.slice(0, 10);
-    // Per scan first. A scan id is the only credential a guest holds, so this is
+    // The lane total first, so the ceiling stops a caller that holds many ids
+    // before it walks the buckets below.
+    const globalOk = await bump(
+      ctx,
+      `explain-scan-global:${hour}`,
+      day,
+      EXPLAIN_GLOBAL_LIMIT,
+      now,
+    );
+    if (!globalOk) return { allowed: false, reason: "global_limit" };
+    // Per scan next. A scan id is the only credential a guest holds, so this is
     // the cap that has to hold when nothing else is known about the caller.
-    const scanOk = await bump(ctx, `explain:${hour}:scan:${args.scanId}`, day, EXPLAIN_SCAN_LIMIT, now);
+    const scanOk = await bump(
+      ctx,
+      `explain:${hour}:scan:${args.scanId}`,
+      day,
+      EXPLAIN_SCAN_LIMIT,
+      now,
+    );
     if (!scanOk) return { allowed: false, reason: "scan_limit" };
-    const caller = explainCallerKey(args.caller ?? null, args.scanId);
-    const callerOk = await bump(ctx, `explain:${hour}:caller:${caller}`, day, EXPLAIN_CALLER_LIMIT, now);
+    const caller = args.caller ?? null;
+    const callerOk = await bump(
+      ctx,
+      `explain:${hour}:caller:${explainCallerKey(caller)}`,
+      day,
+      explainCallerLimit(caller),
+      now,
+    );
     if (!callerOk) return { allowed: false, reason: "caller_limit" };
     return { allowed: true, reason: "allowed" };
   },
