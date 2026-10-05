@@ -35,19 +35,29 @@ esac
 # run must not overwrite the time the person answered, or the record moves every
 # time the installer is run. Only the answer for the wording in force now counts,
 # so a record for old text cannot supply the timestamp for new text, and the last
-# such line wins. Parameter expansion only, no sed and no awk, so the installer
-# still runs with an almost empty PATH.
+# such line wins. $1 is the granted value. $2, when given, is the decision source
+# that must match too, so one forced switch cannot lend its time to another; an
+# empty $2 matches any source, which is what a remembered answer needs, because
+# its time belongs to the earlier decision under a different source label.
+# Parameter expansion only, no sed and no awk, so the installer still runs with an
+# almost empty PATH.
 decision_time_from_log() {
   [ -f "$CONSENT_LOG" ] || return 0
-  NEEDLE="\"noticeVersion\":\"$NOTICE_VERSION\",\"granted\":$1"
   FOUND=""
   while IFS= read -r LINE; do
-    case "$LINE" in
-      *"$NEEDLE"*)
-        REST="${LINE#*\"decidedAt\":\"}"
-        FOUND="${REST%%\"*}"
-        ;;
-    esac
+    if [ -n "$2" ]; then
+      case "$LINE" in
+        *"\"noticeVersion\":\"$NOTICE_VERSION\""*"\"granted\":$1"*"\"source\":\"$2\""*) ;;
+        *) continue ;;
+      esac
+    else
+      case "$LINE" in
+        *"\"noticeVersion\":\"$NOTICE_VERSION\""*"\"granted\":$1"*) ;;
+        *) continue ;;
+      esac
+    fi
+    REST="${LINE#*\"decidedAt\":\"}"
+    FOUND="${REST%%\"*}"
   done < "$CONSENT_LOG"
   if [ -n "$FOUND" ]; then printf '%s' "$FOUND"; fi
   return 0
@@ -99,20 +109,20 @@ SOURCE=""
 
 if [ "$FORCED_OFF" -eq 1 ]; then
   SOURCE="$FORCED_OFF_WHY"
-  SAVED="$(decision_time_from_log false)"
+  SAVED="$(decision_time_from_log false "$FORCED_OFF_WHY")"
   if [ -n "$SAVED" ]; then DECIDED_AT="$SAVED"; fi
   REFUSED_AT="\"$DECIDED_AT\""
   echo "Usage counts stay on this machine. The $FORCED_OFF_WHY switch decided that, so no question was asked."
 elif [ "$REMEMBERED" = "true" ]; then
   GRANTED=true
   SOURCE="remembered yes"
-  SAVED="$(decision_time_from_log true)"
+  SAVED="$(decision_time_from_log true "")"
   if [ -n "$SAVED" ]; then DECIDED_AT="$SAVED"; fi
   GRANTED_AT="\"$DECIDED_AT\""
   echo "You already said yes to this question. Usage counts stay on."
 elif [ "$REMEMBERED" = "false" ]; then
   SOURCE="remembered no"
-  SAVED="$(decision_time_from_log false)"
+  SAVED="$(decision_time_from_log false "")"
   if [ -n "$SAVED" ]; then DECIDED_AT="$SAVED"; fi
   REFUSED_AT="\"$DECIDED_AT\""
   echo "You already said no to this question. Usage counts stay on this machine."
