@@ -95,6 +95,20 @@ A checkout of this repository can still run a local review on files already on d
 
 License family names and source-available names are read from text the review already has. An OR expression stays a choice. Unknown stays unknown. A model may quote a next look. That quote is not a finding. This is not a full SPDX grammar.
 
+### The licence declaration
+
+- Status: done for npm. Named: 2026-10-06.
+
+For a project that commits an npm `package-lock.json`, every installed package, direct and transitive, is read for the licence it declares. The lockfile is the declaration being read, so the hosted path adds no request and no egress. The installed `package.json` is the fallback where the lockfile is silent, and a disagreement between the two reads as Unknown.
+
+A small cited table turns each SPDX family into what its licence text asks for: licence text, copyright notice, a NOTICE file where the licence has one, state of changes, source disclosure for copyleft, and the distribution clash for strong copyleft. It is not a legal engine and says so in the artifact it writes.
+
+`npm run notices` generates the third-party notice file from the committed lockfile. The same lockfile produces byte-identical output. The local review carries the same text.
+
+One row per dependency whose terms need a person, capped at 25 with the remainder stated, plus one informational row whose fingerprint is the licence mix, so a change between two permissive licences is still visible. An Unknown licence produces no row and no severity. On a rescan a changed dependency licence is reported as a licence change, not a code change.
+
+Not built: other ecosystems, vendored trees as an obligation source, per-file SPDX headers, registry freshness, and the AI lookup lane. The lookup hook exists and is refused unless a lane is supplied.
+
 ### Lockfile inventory and transitive advisories
 
 - Status: done

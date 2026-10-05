@@ -23,6 +23,10 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 
 - The website paste and the hosted MCP do not ask deps.dev. An empty answer stays unknown.
 - Vulnerability lookup covers npm, PyPI, and Go. Timeouts show as unknown, never as safe. For npm, exact installed versions are used from `package-lock.json` when that file is present.
+- Dependency license terms are read for npm only, and only from a committed `package-lock.json`. A lockfile with no `packages` map reads as incomplete, not as zero licences. yarn.lock, pnpm-lock.yaml, Cargo, Go and PyPI dependency licences, vendored trees, per-file SPDX headers and REUSE.toml are not read, and a vendored tree stays a skip rather than becoming an obligation source.
+- The lockfile says what the repository declared. What a registry says today is a different fact and is not read, so a re-published or re-licensed package is caught on the next scan or not at all.
+- The license obligation table is a small cited table of what a licence text asks for. It is not a legal engine, it does not model linking or aggregation, and it does not decide whether an obligation applies to how you ship. A person decides that.
+- A package whose license could not be read stays Unknown and is never given a severity or a finding. A guarded AI lookup for those exists, with a strict noun whitelist, and no lane is wired in this release, so it is refused.
 - License notes are signals, not legal advice.
 - Authentication and runtime behaviour are not tested.
 - Rendered layout on a real phone is not checked. The live check only reads served HTML, and the report says so.

@@ -17,6 +17,10 @@ import type { PromptFinding } from "../reports/topPrompt.ts";
 import { clashSignal } from "./clash.ts";
 import { countNamedHosts, deadCopies, generatedMarkers, modelCards, networkHints, repeatedFunctions, NETWORK_HINT_CAP } from "./extraChecks.ts";
 import { inventoryNpmLock } from "./lockfile.ts";
+import { noLockfileInventory, readNpmDependencyLicenses } from "../licensing/dependencies.ts";
+import { buildNoticeArtifact } from "../licensing/notice.ts";
+import type { LicenseSuggestion } from "../licensing/lookup.ts";
+import { licenseLookupRefusal } from "../licensing/lookup.ts";
 
 export interface ReviewFile {
   path: string;
@@ -81,6 +85,29 @@ export interface ReviewReport {
   orderNote: string;
   lockNote: string;
   sbom: { tool: string; components: number; omissions: string[] } | null;
+  /**
+   * The declaration record, read from the npm lockfile the repo committed. Null
+   * only when there is no inventory to describe. It carries the artifact text,
+   * so a person can commit it without running anything else.
+   */
+  licenseDeclaration: LicenseDeclaration | null;
+}
+
+/** What the licence lane measured, and the file it can hand the builder. */
+export interface LicenseDeclaration {
+  components: number;
+  unknown: number;
+  complete: boolean;
+  note: string;
+  notice: string;
+  noticeFilename: string;
+  notCovered: string[];
+  /**
+   * Always empty on this path. The guarded lookup is not configured here, so it
+   * is never called, and there is nothing to record. Present so the report can
+   * say the lane was refused rather than saying nothing about it.
+   */
+  suggestions: LicenseSuggestion[];
 }
 
 const TEXT: Record<string, { title: string; why: string }> = {
@@ -255,6 +282,41 @@ export function buildLocalReport(
 
   const notChecked = [...skipped];
   if (!inventory.complete) notChecked.push({ scope: "npm lockfile", reason: inventory.note });
+
+  // The declaration lane reads the lockfile the repo committed, which is already
+  // in hand. The node_modules fallback is deliberately not passed here: the
+  // local walk skips node_modules, so this review has no installed manifest to
+  // read and asking for one would name a gap it cannot fill.
+  const declarationInventory =
+    lockFile === undefined
+      ? noLockfileInventory()
+      : readNpmDependencyLicenses(lockFile.content, { directNames: direct });
+  const artifact = buildNoticeArtifact(declarationInventory);
+  // The guarded lookup has no lane on this path, so it is never called. The
+  // refusal is recorded rather than omitted, because "we did not ask" and "we
+  // asked and got nothing" are different facts.
+  const lookup = licenseLookupRefusal(declarationInventory.components);
+  const licenseDeclaration: LicenseDeclaration = {
+    components: declarationInventory.components.length,
+    unknown: declarationInventory.unknown,
+    complete: declarationInventory.complete,
+    note: declarationInventory.note,
+    notice: artifact.markdown,
+    noticeFilename: artifact.filename,
+    notCovered: artifact.notCovered,
+    suggestions: lookup.suggestions,
+  };
+  for (const item of declarationInventory.notCovered) {
+    notChecked.push({ scope: "dependency licences", reason: `${item.charAt(0).toUpperCase()}${item.slice(1)}.` });
+  }
+  if (declarationInventory.complete && declarationInventory.counted > 0) {
+    notChecked.push({
+      scope: "dependency licence terms",
+      reason: lookup.configured
+        ? "A guarded AI lookup was available for the Unknown licences."
+        : lookup.note,
+    });
+  }
   if (registry === null) {
     notChecked.push({ scope: "dependency terms", reason: "deps.dev and ClearlyDefined were not queried. Unknown stays unknown." });
   } else {
@@ -426,5 +488,6 @@ export function buildLocalReport(
     orderNote: "Ordered by severity and credential risk alone. The model did not choose which findings exist.",
     lockNote: inventory.note,
     sbom,
+    licenseDeclaration,
   };
 }
