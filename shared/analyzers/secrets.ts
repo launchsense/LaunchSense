@@ -161,15 +161,27 @@ export function containsProviderKey(line: string): boolean {
   let m: RegExpExecArray | null;
   while ((m = jwt.exec(line)) !== null) {
     const token = m[0];
+    // A CLI flag or a dashed package path is not a JWT. Reject when the match is
+    // preceded by `--` or `-`, or when any segment is a known flag word.
+    const before = line.slice(Math.max(0, m.index - 2), m.index);
+    if (before.includes("-")) continue;
     const segs = token.split(".");
     const hasUrlChar = segs.some((s) => /[-_]/.test(s));
     const looksBase64 = /^ey[A-Za-z0-9_-]/.test(token);
     const mixedCase = /[a-z]/.test(token) && /[A-Z]/.test(token);
-    // A dotted Java/Kotlin/Go package path is all lowercase with no url chars.
     const allLowerDotted = segs.every((s) => /^[a-z][a-z0-9]*$/.test(s));
+    // A JWT's three segments are base64url and contain no plain English words
+    // joined by dashes. A flag like mount-points-exclude is hyphenated prose.
+    const hyphenatedWords = segs.some((s) => /^[a-z]+(-[a-z]+){2,}$/.test(s));
+    if (hyphenatedWords) continue;
+    // Three lowercase identifiers joined by dots, with underscores or dashes, are
+    // still source code (Rust/Go/CLI), not base64url. A real JWT of this length is
+    // mixed case. Require mixed case for the url-char path; keep the eyJ path above.
+    const allLower = !/[A-Z]/.test(token);
     if (looksBase64) return true;
+    if (allLower) continue;
     if (hasUrlChar && mixedCase) return true;
-    if (allLowerDotted) continue; // a package path, not a token
+    if (allLowerDotted) continue;
     if (hasUrlChar) return true;
   }
   return false;
