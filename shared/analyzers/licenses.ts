@@ -281,3 +281,16 @@ export function analyzeLicenses(
     note: `No license signals in the license files and manifest field that were read. ${SIGNAL}`,
   };
 }
+
+/** What a licence policy allows us to do with the code it covers. */
+export type LicenseUsage = "mirror" | "reference-only" | "unknown";
+
+// A build-time gate for code we bring into our own tree. Mirror only what a
+// permissive licence allows. Everything that needs a human, or has no licence at
+// all, is reference-only: read it, do not copy it. A policy that was never
+// checked stays unknown, which is not a licence to copy.
+export function licenseUsage(policy: LicensePolicy): LicenseUsage {
+  if (policy === "Allowed") return "mirror";
+  if (policy === "Not checked") return "unknown";
+  return "reference-only";
+}

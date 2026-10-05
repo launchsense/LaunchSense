@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -56,6 +58,94 @@ func TestParseGitHubURL(t *testing.T) {
 	if !ok || owner != "octocat" || name != "Hello-World" {
 		t.Fatalf("%s %s %v", owner, name, ok)
 	}
+}
+
+// W3-INSTALL-ROOT. The server is started with cwd = <checkout>/mcp, so the
+// process folder cannot be the review root.
+func TestLaunchSenseRootWinsOverTheProcessFolder(t *testing.T) {
+	// The go test runs in the mcp module folder, so the process folder is the
+	// folder that must not be read.
+	t.Setenv("LAUNCHSENSE_ROOT", t.TempDir())
+	want, err := filepath.EvalSymlinks(os.Getenv("LAUNCHSENSE_ROOT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := reviewRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != want {
+		t.Fatalf("root = %s, want %s", root, want)
+	}
+}
+
+func TestLaunchSenseRootMustBeAFolder(t *testing.T) {
+	t.Setenv("LAUNCHSENSE_ROOT", "server_test.go")
+	if _, err := reviewRoot(); err == nil {
+		t.Fatal("a file is not a checkout root")
+	}
+	t.Setenv("LAUNCHSENSE_ROOT", filepath.Join(t.TempDir(), "absent"))
+	if _, err := reviewRoot(); err == nil {
+		t.Fatal("an unreadable root must be reported, not silently replaced")
+	}
+}
+
+// `cd mcp && go run .` is the documented local command. The mcp module folder
+// means the checkout is its parent, and a built binary that sits in mcp/ works
+// the same way.
+func TestModuleFolderMeansTheParentIsTheCheckout(t *testing.T) {
+	t.Setenv("LAUNCHSENSE_ROOT", "")
+	module := checkoutAbove(mustGetwd(t))
+	if module == "" {
+		t.Fatal("the go test folder is not recognised as the mcp module")
+	}
+	want, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if module != want {
+		t.Fatalf("module = %s, want %s", module, want)
+	}
+}
+
+func TestReviewScriptResolvesAgainstTheReviewRoot(t *testing.T) {
+	t.Setenv("LAUNCHSENSE_REVIEW", "")
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script, err := reviewScript(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if script != filepath.Join(root, "mcp", "review-entry.ts") {
+		t.Fatalf("script = %s", script)
+	}
+	// A root with no review script names the paths it tried, rather than handing
+	// node a path that cannot exist.
+	if _, err := reviewScript(t.TempDir()); err == nil {
+		t.Fatal("a checkout with no review script must say so")
+	}
+}
+
+func TestNamedReviewScriptIsUsedAsGiven(t *testing.T) {
+	t.Setenv("LAUNCHSENSE_REVIEW", "/somewhere/review-entry.ts")
+	script, err := reviewScript(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if script != "/somewhere/review-entry.ts" {
+		t.Fatalf("script = %s", script)
+	}
+}
+
+func mustGetwd(t *testing.T) string {
+	t.Helper()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cwd
 }
 
 type roundTrip func(*http.Request) (*http.Response, error)

@@ -39,6 +39,39 @@ const LOW_RULES = new Set([
   "deps.duplicate",
 ]);
 
+// Rules that are informational by design: hygiene gaps, a licence signal, a live
+// check note, and the structural signals from the local review. Listing them
+// explicitly means an emitted rule id is either classified here or the coverage
+// test fails, instead of quietly becoming info through the fallthrough below.
+const INFO_RULES = new Set([
+  "hygiene.duplicates",
+  "hygiene.env-usage",
+  "hygiene.generated-file",
+  "hygiene.languages",
+  "hygiene.large-files",
+  "hygiene.no-ci",
+  "hygiene.no-readme",
+  "hygiene.no-tests",
+  "license.signal",
+  "license.model-card",
+  "code.dead-copy",
+  "code.network-hint",
+  "code.repeated-function",
+  "live.blank",
+  "live.down",
+  "live.main-action",
+  "live.no-https",
+  "live.viewport",
+]);
+
+/** Every rule id this product can emit. The coverage test holds it complete. */
+export const KNOWN_RULE_IDS: ReadonlySet<string> = new Set([
+  ...HIGH_RULES,
+  ...MEDIUM_RULES,
+  ...LOW_RULES,
+  ...INFO_RULES,
+]);
+
 export function severityFor(ruleId: string): Severity {
   if (HIGH_RULES.has(ruleId)) return "high";
   if (MEDIUM_RULES.has(ruleId)) return "medium";

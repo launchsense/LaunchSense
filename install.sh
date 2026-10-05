@@ -48,17 +48,31 @@ do
   cp "$SKILL_SRC" "$dest/SKILL.md"
 done
 
+# The server is a Go module in mcp/. There is no go.mod at the repo root, so
+# `go run ./mcp` cannot start. cwd must be the module folder and args must run
+# the module in place. Without go on PATH, write no server at all rather than
+# a config that cannot start.
+if ! command -v go > /dev/null 2>&1; then
+  echo "go is not on PATH, so the local MCP server was not registered."
+  echo "Install Go, then run: cd $ROOT/mcp && go run ."
+  echo "The skill and the alpha config above are installed. The hosted address does not need Go."
+  exit 0
+fi
+
 mkdir -p "$HOME/.cursor" "$HOME/.config/launchsense"
 CONFIG="$HOME/.cursor/mcp.json"
 if [ ! -f "$CONFIG" ]; then
+  # cwd is the module folder, so LAUNCHSENSE_ROOT names the checkout to review.
+  # Without it the server would read the mcp folder instead of the checkout.
   cat > "$CONFIG" <<EOF
 {
   "mcpServers": {
     "launchsense": {
       "command": "go",
-      "args": ["run", "./mcp"],
-      "cwd": "$ROOT",
+      "args": ["run", "."],
+      "cwd": "$ROOT/mcp",
       "env": {
+        "LAUNCHSENSE_ROOT": "$ROOT",
         "LAUNCHSENSE_REVIEW": "$ROOT/mcp/review-entry.ts",
         "LAUNCHSENSE_AUTH_REQUIRED": "0"
       }
@@ -68,7 +82,8 @@ if [ ! -f "$CONFIG" ]; then
 EOF
   echo "Wrote $CONFIG"
 else
-  echo "Left existing $CONFIG in place. Point launchsense at: go run ./mcp in $ROOT"
+  echo "Left existing $CONFIG in place. Point launchsense at: cd $ROOT/mcp && go run ."
+  echo "Set LAUNCHSENSE_ROOT=$ROOT in that entry so the server reviews the checkout, not the mcp folder."
 fi
 
 echo "Installed the launchsense skill and the alpha config. Auth is not checked."

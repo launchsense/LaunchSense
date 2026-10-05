@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/launchsense/LaunchSense/blob/main/SECURITY.md
+    about: Do not open a public issue for a vulnerability. See the policy.
+  - name: Live site
+    url: https://harmless-chihuahua-667.convex.site
+    about: Run a scan without an account.
