@@ -36,6 +36,8 @@ Two useful moments:
 
 The checks are fixed code, so the same input always gives the same findings. Explanations in plain words are written separately, by an AI provider when one is configured. AI only rewrites findings in plainer language. It never decides what is a finding, and its output is thrown away if it references anything we did not check.
 
+It never decides a severity, a licence fact, consent, who a caller is, or whether a request is allowed either. Those are fixed code. Its `humanOversightLevel` is `prompt_guided` in C2PA Technical Specification 2.4 terms: a person pressed the button and nobody approved the answer afterwards. That vocabulary is borrowed, not conformed to.
+
 ## After you fix things
 
 Run a re-scan. We pin the new commit, run the same checks, and compare. Every finding lands in one of five states: fixed, still broken, new, back again, or unknown. Unknown means we did not read that file this time, so no conclusion is drawn. Unknown never becomes fixed.

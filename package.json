@@ -13,6 +13,9 @@
     "check": "npm run typecheck && npm run lint && npm run check:claims && node --test tests/*.mjs",
     "review:local": "node --experimental-strip-types mcp/review-entry.ts --root .",
     "notices": "node scripts/third-party-notices.mjs",
+    "consent-record": "node scripts/consent-record.mjs",
+    "register": "node scripts/processing-register.mjs",
+    "sbom": "node scripts/sbom.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "prepare": "git config core.hooksPath .githooks || true",
     "deploy": "static-hosting deploy"
