@@ -4,7 +4,7 @@ Generated from `shared/consent/register.ts` by `scripts/processing-register.mjs`
 
 Register version: launchsense.art30-register/1.0. Last reviewed against the code: 2026-10-06.
 
-This is the record GDPR Article 30(1) asks a controller to keep, in writing and in electronic form. It is generated from the schema, the retention constants, and the purge calls in this repository, so a change to the data model changes this document. Every claim in it has a file and a function behind it, and a claim with neither is not in it.
+This is the record GDPR Article 30(1) asks a controller to keep, in writing and in electronic form. It is generated from the schema, the retention constants, and the purge calls in this repository, so a change to the data model changes this document. Every table and column it names is checked against convex/schema.ts, and every retention line either names the purge that enforces it or says that nothing does.
 
 It is not legal advice, and no lawyer has reviewed it.
 
@@ -46,6 +46,8 @@ It is not legal advice, and no lawyer has reviewed it.
   - Table: rateLimits. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Table: osvCache. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Table: findingTransitions. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
+  - Table: shareArtifacts. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
+  - Table: passportArtifacts. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Not a table: Convex platform logs. Every request address lands in the host's logs. They are not a table in this schema and this product cannot read or delete them.
 - Recipients:
   - Convex (processor, region unknown, not confirmed): The database and the hosting, so the rows above exist
@@ -78,7 +80,7 @@ It is not legal advice, and no lawyer has reviewed it.
 - Consent purpose: token, asked in the sign-in panel and recorded nowhere.
 - Data subjects: Account holders who signed in with GitHub.
 - Personal data: A GitHub OAuth access token, stored as a plaintext string at rest; Account id, email address, and the account fields GitHub returns at sign-in; Scans linked to that account id; Saved projects, usage meters, and feature entitlements.
-- Columns holding it: githubScanTokens.accessToken, githubScanTokens.userId, githubScanTokens.updatedAt, scans.userId, scans.signedIn, projects.userId, projects.owner, projects.repo, usageMeters.userId, usageMeters.kind, usageMeters.day, featureEntitlements.featureKey, featureEntitlements.enabled.
+- Columns holding it: githubScanTokens.accessToken, githubScanTokens.userId, githubScanTokens.updatedAt, scans.userId, scans.signedIn, projects.userId, projects.owner, projects.repo, usageMeters.userId, usageMeters.kind, usageMeters.day, featureEntitlements.featureKey, featureEntitlements.enabled, connectedInstallations.userId, connectedInstallations.installationId, connectedInstallations.account, connectedInstallations.repoSelection, connectedInstallations.installationTargetId.
 - Storage:
   - Table: githubScanTokens. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Table: projects. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
