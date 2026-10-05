@@ -33,20 +33,37 @@ esac
 
 # The moment a decision was made, read back from the append-only log. A second
 # run must not overwrite the time the person answered, or the record moves every
-# time the installer is run. Parameter expansion only, no sed and no awk, so the
-# installer still runs with an almost empty PATH.
+# time the installer is run. Only the answer for the wording in force now counts,
+# so a record for old text cannot supply the timestamp for new text, and the last
+# such line wins. Parameter expansion only, no sed and no awk, so the installer
+# still runs with an almost empty PATH.
 decision_time_from_log() {
   [ -f "$CONSENT_LOG" ] || return 0
-  NEEDLE="\"granted\":$1"
+  NEEDLE="\"noticeVersion\":\"$NOTICE_VERSION\",\"granted\":$1"
+  FOUND=""
   while IFS= read -r LINE; do
     case "$LINE" in
       *"$NEEDLE"*)
         REST="${LINE#*\"decidedAt\":\"}"
-        printf '%s' "${REST%%\"*}"
-        return 0
+        FOUND="${REST%%\"*}"
         ;;
     esac
   done < "$CONSENT_LOG"
+  if [ -n "$FOUND" ]; then printf '%s' "$FOUND"; fi
+  return 0
+}
+
+# True when the same decision, for the same wording and the same source, is
+# already on the log. A repeat of an answer already on record is not a new
+# decision, so it writes no line. A changed answer is a new decision.
+decision_on_log() {
+  [ -f "$CONSENT_LOG" ] || return 1
+  while IFS= read -r LINE; do
+    case "$LINE" in
+      *"\"noticeVersion\":\"$1\""*"\"granted\":$2"*"\"source\":\"$3\""*) return 0 ;;
+    esac
+  done < "$CONSENT_LOG"
+  return 1
 }
 
 # An answer already on record for this exact wording is kept, so a second run
@@ -134,10 +151,10 @@ else
 fi
 
 # One append-only line per real decision, including a refusal. A refusal is
-# evidence too. This file is the record we cannot see from here. A run that
-# only repeats an answer already on record is not a new decision, so it writes
-# no line.
-if [ "${SOURCE#remembered}" = "$SOURCE" ]; then
+# evidence too. This file is the record we cannot see from here. A run that only
+# repeats a decision already on record for this wording writes no line, and a
+# changed answer is a new decision and does write one.
+if [ "${SOURCE#remembered}" = "$SOURCE" ] && ! decision_on_log "$NOTICE_VERSION" "$GRANTED_JSON" "$SOURCE"; then
   printf '{"noticeVersion":"%s","granted":%s,"decidedAt":"%s","source":"%s"}\n' \
     "$NOTICE_VERSION" "$GRANTED_JSON" "$DECIDED_AT" "$SOURCE" >> "$CONSENT_LOG"
 fi

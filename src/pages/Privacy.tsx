@@ -3,12 +3,14 @@ import { SiteFrame } from "../features/site/SiteFrame";
 // The privacy policy, at a route a visitor can open. It used to exist only as
 // docs/PRIVACY.md in the repository, which no visitor ever reaches, so the
 // notice was never actually given. The headings here match that file, and
-// tests/privacy-notice-checks.mjs fails if the two drift apart.
+// tests/privacy-notice-checks.mjs compares them.
 //
 // The copy is written to what the code does today. Where something is not
-// built, the page says so instead of describing it in the present tense. Where a
-// sentence depends on code in convex/, the test file checks the code too, so a
-// change there cannot leave the notice quietly wrong.
+// built, the page says so instead of describing it in the present tense. The
+// load-bearing facts (the read caps, the snippet cap, the redirect cap, and the
+// counter claim) are checked against the code's own constants in
+// tests/privacy-notice-checks.mjs. The remaining sentences have no such check,
+// so a person must review them when the code around them changes.
 
 export default function Privacy() {
   return (
@@ -17,7 +19,8 @@ export default function Privacy() {
         <h1 id="privacy-title">Privacy</h1>
         <p className="lead">
           Version 2026-10-05. This is the first version published at this address. The
-          same text is in <code>docs/PRIVACY.md</code>, and both copies change together.
+          same text is in <code>docs/PRIVACY.md</code>. Tests compare the two, so the
+          headings and the load-bearing facts cannot drift apart.
         </p>
       </header>
 
