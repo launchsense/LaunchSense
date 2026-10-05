@@ -78,6 +78,11 @@ const POSITIVE_CLAIMS = [
   // the same line, the same rule as "no findings" above.
   { phrase: /\bfull\s+(check|review|scan)\s+passed\b/i, qualifier: "not checked", why: "a bare full-check verdict hides the checks that did not run" },
   { phrase: /\bcomplete\s+(check|review|scan)\s+passed\b/i, qualifier: "not checked", why: "a bare complete-check verdict hides the checks that did not run" },
+  // A "full review" that only judged one rule family must say so. The 100-repo
+  // case exposed this: the full review emitted code, hygiene, deps, and license
+  // rows, and the run judged only secret.* rows (2017 rows dropped). Any verdict
+  // that reads as a whole-repo pass must name the families it did not grade.
+  { phrase: /\bfull\s+(review|check|scan)\b(?!.{0,40}not checked)/i, qualifier: /\b(not checked|not graded|one family|leak-only)\b/i, why: "a full review must name any rule family it did not grade" },
   // The product promises in three public docs that AI never decides what is a
   // finding, only the fixed checks do. The decision lane (Jev, Perplexity) may only
   // ORDER findings the checks already produced. This rule blocks copy that lets a
