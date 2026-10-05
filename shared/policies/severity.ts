@@ -21,13 +21,20 @@ const HIGH_RULES = new Set([
   "deps.install-script",
 ]);
 
+// Medium needs a person before sharing. `license.clash` and `deps.deprecated`
+// are here because both were emitted with no band at all: severityFor fell
+// through to "info" and reviewRequired said no. A dependency whose declared
+// licence clashes with the project's is a question for a person, not advice,
+// and it is the only per-dependency licence finding the product emits.
 const MEDIUM_RULES = new Set([
   "secret.debugger-statement",
   "code.debugger-statement",
   "code.inner-html",
   "code.weak-crypto",
   "deps.unpinned-version",
+  "deps.deprecated",
   "license.policy",
+  "license.clash",
 ]);
 
 const LOW_RULES = new Set([

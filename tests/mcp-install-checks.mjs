@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -244,6 +244,323 @@ describe("install.sh points the server at the checkout", () => {
     assert.ok(
       /LAUNCHSENSE_ROOT[\s\S]{0,160}checkout root/.test(text),
       "llms.txt must say the installer sets LAUNCHSENSE_ROOT to the checkout root",
+    );
+  });
+});
+
+// CONSENT-FALSE. install.sh used to write "agreed": true and "diagnostics":
+// "on" into ~/.config/launchsense/config.json before it asked anything. It
+// printed the refusal instruction afterwards, which means the script asserted
+// an agreement nobody gave and made the send path look like a switch the
+// reader had to find. R2 section C replaces it with a question whose default
+// is no, plus a versioned record of the answer. These tests run the real
+// script against an isolated HOME in a temp dir and read what it wrote.
+describe("install.sh asks before it records an agreement", () => {
+  const CONFIG_PATH = ".config/launchsense/config.json";
+  const LOG_PATH = ".config/launchsense/consent.jsonl";
+
+  function run(home, { answer = null, env = {} } = {}) {
+    const result = spawnSync("/bin/sh", [INSTALL], {
+      encoding: "utf8",
+      cwd: ROOT,
+      env: { PATH: process.env.PATH, HOME: home, LANG: process.env.LANG ?? "C", ...env },
+      input: answer === null ? "" : `${answer}\n`,
+    });
+    assert.equal(result.status, 0, `installer must finish; output was:\n${result.stdout}\n${result.stderr}`);
+    return `${result.stdout}\n${result.stderr}`;
+  }
+
+  function readConfig(home) {
+    return JSON.parse(readFileSync(join(home, CONFIG_PATH), "utf8"));
+  }
+
+  function readLog(home) {
+    const path = join(home, LOG_PATH);
+    if (!existsSync(path)) return [];
+    return readFileSync(path, "utf8")
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line));
+  }
+
+  it("records no agreement when nobody answers the question", () => {
+    withHome((home) => {
+      run(home);
+      const config = readConfig(home);
+      assert.equal(
+        config.agreed,
+        false,
+        "no answer means no agreement, so agreed must not be true",
+      );
+      assert.equal(config.diagnostics, "off", "usage counts must stay off without a yes");
+      assert.equal(config.diagnosticsConsent.granted, false);
+      assert.equal(config.diagnosticsConsent.grantedAt, null, "a refusal cannot carry a granted time");
+    });
+  });
+
+  it("records the yes only after a real yes on standard input", () => {
+    withHome((home) => {
+      run(home, { answer: "yes" });
+      const config = readConfig(home);
+      assert.equal(config.agreed, true, "an explicit yes is the one thing that may set agreed");
+      assert.equal(config.diagnostics, "on");
+      assert.equal(config.diagnosticsConsent.granted, true);
+      assert.match(
+        config.diagnosticsConsent.grantedAt,
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
+        `grantedAt must be a real timestamp; it was ${config.diagnosticsConsent.grantedAt}`,
+      );
+      assert.equal(config.diagnosticsConsent.source, "prompt");
+    });
+  });
+
+  it("keeps a refusal on record as well, because a refusal is evidence too", () => {
+    withHome((home) => {
+      run(home, { answer: "no" });
+      const config = readConfig(home);
+      assert.equal(config.agreed, false);
+      const lines = readLog(home);
+      assert.equal(lines.length, 1, `one line per decision; the log held ${lines.length}`);
+      assert.equal(lines[0].granted, false);
+      assert.equal(lines[0].source, "prompt");
+      assert.ok(lines[0].noticeVersion, "the log must name the wording the person answered");
+    });
+  });
+
+  it("writes no agreed:true and no diagnostics:on into the config before anything is asked", () => {
+    // The defect in one assertion. A heredoc line that hard-codes either value
+    // is a script that decides for the reader, whatever the prompt says later.
+    const script = readFileSync(INSTALL, "utf8");
+    const start = script.indexOf('cat > "$CONFIG" <<EOF');
+    assert.notEqual(start, -1, "the installer must still write the local config");
+    const end = script.indexOf("\nEOF", start);
+    const configBlock = script.slice(start, end);
+    assert.doesNotMatch(
+      configBlock,
+      /"agreed":\s*true/,
+      `the config heredoc must not hard-code agreed:true; it wrote:\n${configBlock}`,
+    );
+    assert.doesNotMatch(
+      configBlock,
+      /"diagnostics":\s*"on"/,
+      `the config heredoc must not hard-code diagnostics:on; it wrote:\n${configBlock}`,
+    );
+    assert.match(configBlock, /"agreed": \$/, "the agreed value must come from the decision");
+    assert.doesNotMatch(
+      script,
+      /^DIAGNOSTICS=on$/m,
+      "the default cannot be on: opt-out is not consent",
+    );
+  });
+
+  it("asks the question in the agreed wording, with no as the default", () => {
+    withHome((home) => {
+      const output = run(home);
+      for (const line of [
+        "Send anonymous usage counts to LaunchSense?",
+        "This sends rule id counts, the harness name, the version, how long the",
+        "review took, and which order source ran.",
+        "It does not send code, file paths, finding titles, or function names.",
+        "The review reads files on this machine. It does not upload them.",
+        "Type yes to send. Type no to keep it on this machine. Default is no.",
+        "yes or no:",
+      ]) {
+        assert.ok(output.includes(line), `the question is missing a line: ${line}`);
+      }
+    });
+  });
+
+  it("treats anything that is not a yes as a no", () => {
+    for (const answer of ["", "maybe", "y es", "no", "n"]) {
+      withHome((home) => {
+        run(home, { answer });
+        assert.equal(
+          readConfig(home).agreed,
+          false,
+          `the answer ${JSON.stringify(answer)} must not read as an agreement`,
+        );
+      });
+    }
+  });
+
+  it("asks once, then remembers the answer for the same wording", () => {
+    withHome((home) => {
+      const first = run(home, { answer: "yes" });
+      assert.ok(first.includes("Send anonymous usage counts to LaunchSense?"));
+      const grantedAt = readConfig(home).diagnosticsConsent.grantedAt;
+      const second = run(home, { answer: "yes" });
+      assert.ok(
+        !second.includes("Send anonymous usage counts to LaunchSense?"),
+        `the question must not be asked twice for one wording; output was:\n${second}`,
+      );
+      assert.equal(readConfig(home).agreed, true, "the remembered answer must survive a second run");
+      assert.equal(
+        readConfig(home).diagnosticsConsent.grantedAt,
+        grantedAt,
+        "a repeated run must not move the time the person agreed",
+      );
+      assert.equal(readLog(home).length, 1, "a repeated run is not a new decision, so it adds no line");
+    });
+  });
+
+  it("asks again when the wording changes, because the person agreed to old text", () => {
+    withHome((home) => {
+      run(home, { answer: "yes" });
+      const config = readConfig(home);
+      config.diagnosticsConsent.noticeVersion = "1999-01-01";
+      writeFileSync(join(home, CONFIG_PATH), JSON.stringify(config));
+      const second = run(home, { answer: "" });
+      assert.ok(
+        second.includes("Send anonymous usage counts to LaunchSense?"),
+        "new wording must be asked again",
+      );
+      assert.equal(readConfig(home).agreed, false, "the new wording defaults to no");
+    });
+  });
+
+  it("asks nothing and sends nothing on the enterprise tier, even on a yes", () => {
+    withHome((home) => {
+      const output = run(home, { answer: "yes", env: { LAUNCHSENSE_TIER: "enterprise" } });
+      assert.ok(
+        !output.includes("Send anonymous usage counts to LaunchSense?"),
+        "the enterprise tier decides the answer itself, so there is nothing to ask",
+      );
+      const config = readConfig(home);
+      assert.equal(config.tier, "enterprise");
+      assert.equal(config.agreed, false, "enterprise must not record an agreement");
+      assert.equal(config.diagnosticsConsent.source, "enterprise tier");
+    });
+  });
+
+  it("keeps one line and one time for a forced decision that repeats", () => {
+    // The comment at the ledger says a repeat of an answer already on record is
+    // not a new decision. On 2026-10-05 three enterprise runs wrote three
+    // identical lines, so the comment was false. This pins it true.
+    withHome((home) => {
+      run(home, { env: { LAUNCHSENSE_TIER: "enterprise" } });
+      const at = readConfig(home).diagnosticsConsent.decidedAt;
+      assert.match(at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, `a real timestamp; got ${at}`);
+      run(home, { env: { LAUNCHSENSE_TIER: "enterprise" } });
+      run(home, { env: { LAUNCHSENSE_TIER: "enterprise" } });
+      assert.equal(
+        readLog(home).length,
+        1,
+        `the same forced decision on the same wording is one line, not many; the log held ${readLog(home).length}`,
+      );
+      assert.equal(
+        readConfig(home).diagnosticsConsent.decidedAt,
+        at,
+        "a repeated forced decision must not move the recorded time",
+      );
+    });
+  });
+
+  it("writes a new line when the answer changes, under the same wording", () => {
+    // The dedupe must key on the answer, not only the wording. A no followed by
+    // a yes is two decisions, and dropping either is dropping evidence.
+    withHome((home) => {
+      run(home, { answer: "no" });
+      rmSync(join(home, CONFIG_PATH));
+      run(home, { answer: "yes" });
+      const lines = readLog(home);
+      assert.equal(
+        lines.length,
+        2,
+        `a changed answer is a new decision, so it adds a line; the log held ${lines.length}`,
+      );
+      assert.deepEqual(
+        lines.map((line) => line.granted),
+        [false, true],
+        "both decisions must be on record, in the order they were given",
+      );
+    });
+  });
+
+  it("does not lend one forced decision's time to a different one", () => {
+    // Two forced switches both refuse, but they are different decisions. The
+    // second must not inherit the first one's time from the log.
+    withHome((home) => {
+      mkdirSync(join(home, ".config", "launchsense"), { recursive: true });
+      writeFileSync(
+        join(home, LOG_PATH),
+        '{"noticeVersion":"2026-10-05","granted":false,"decidedAt":"2020-01-01T00:00:00Z","source":"enterprise tier"}\n',
+      );
+      run(home, { env: { LAUNCHSENSE_DIAGNOSTICS: "off" } });
+      const lines = readLog(home);
+      assert.equal(lines.length, 2, "a different forced switch is a new decision");
+      const mine = lines.find((line) => line.source === "LAUNCHSENSE_DIAGNOSTICS=off");
+      assert.ok(mine, "the new switch must write its own line");
+      assert.notEqual(
+        mine.decidedAt,
+        "2020-01-01T00:00:00Z",
+        "a different decision cannot inherit an older decision's time",
+      );
+      assert.match(mine.decidedAt, /^\d{4}-\d{2}-\d{2}T/, "the time must be this run's own");
+    });
+  });
+
+  it("still finishes when standard input ends immediately, because the default is no", () => {
+    withHome((home) => {
+      const result = spawnSync("/bin/sh", [INSTALL], {
+        encoding: "utf8",
+        cwd: ROOT,
+        env: { PATH: process.env.PATH, HOME: home },
+        input: "",
+      });
+      assert.equal(result.status, 0, "an unanswered prompt must not fail the install");
+      assert.equal(readConfig(home).agreed, false);
+    });
+  });
+
+  it("names the same value the local review reads, so a granted yes is not a dead key", () => {
+    // shared/review/diagnostics.ts is the only reader of this config. If that
+    // reader changes its field, this test fails and points at the coupling.
+    const diagnostics = readFileSync(join(ROOT, "shared", "review", "diagnostics.ts"), "utf8");
+    assert.ok(
+      /config\.agreed !== true/.test(diagnostics) && /config\.diagnostics === "off"/.test(diagnostics),
+      "the reader reads agreed and diagnostics; install.sh must keep writing those two names",
+    );
+  });
+});
+
+// llms.txt is the file a harness reads first, and the rate caps it states are a
+// claim about convex/mcpLimit.ts. The wave that raised those caps updated the
+// sentence, but nothing stopped the next edit from drifting it again, while the
+// privacy notice got a pin and this did not. These rules pin the numbers to the
+// constants, so a wrong number fails the gate.
+describe("llms.txt states the caps the code sets", () => {
+  function limitConstant(name) {
+    const source = readFileSync(join(ROOT, "convex", "mcpLimit.ts"), "utf8");
+    const match = source.match(new RegExp(`${name}\\s*=\\s*([0-9_]+)`));
+    assert.ok(match, `${name} must exist in convex/mcpLimit.ts`);
+    return Number(match[1].replace(/_/g, ""));
+  }
+
+  const text = readFileSync(LLMS, "utf8");
+
+  it("names the shared hosted cap and the lane cap the code sets", () => {
+    const shared = limitConstant("CALLER_LIMIT");
+    const lane = limitConstant("GLOBAL_LIMIT");
+    assert.ok(
+      text.includes(`${shared} scans an hour for the shared hosted bucket`),
+      `llms.txt must state the shared hosted cap as ${shared}, the value the code sets`,
+    );
+    assert.ok(
+      text.includes(`${lane} in total across the hosted lane`),
+      `llms.txt must state the hosted lane cap as ${lane}, the value the code sets`,
+    );
+  });
+
+  it("no longer names the retired per-caller caps", () => {
+    assert.doesNotMatch(
+      text,
+      /Two scans an hour from one caller/,
+      "the per-caller hosted cap is retired; the counter holds no caller",
+    );
+    assert.doesNotMatch(
+      text,
+      /eight an hour in total/i,
+      "the old lane total is retired; llms.txt must state the current one",
     );
   });
 });
