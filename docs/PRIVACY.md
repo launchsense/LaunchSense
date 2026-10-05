@@ -88,6 +88,28 @@ This address needs no account and signs you in to nothing. We keep a rate limit 
 so the service stays available. It is not linked to an account, and the counter holds no
 part of your network address. Those rows are not deleted automatically today.
 
+### What the coding tool connection records about its own use
+
+We record one row per protocol action on this address, so we can tell which agent is
+calling, which tool, how often, and whether it worked. Each row holds the tool name, the
+outcome, how long it took, the protocol version, and which of eight known harnesses made
+the call. We do not record the arguments or the result of a tool call. In particular we do
+not record the repository URL, even though the OpenTelemetry specification would allow it
+as an opt-in attribute: that attribute carries a warning about sensitive content, and here
+it would be a list of whose code you asked about. We do not record your network address,
+the file contents, file paths, finding titles, or error text. If the call read a
+repository, the row holds a one-way hash of the name and the date rather than the name.
+
+Those rows are deleted after 30 days by a nightly job. The rolled-up daily counts that
+come from them are kept, and they hold no repository name either: they are counts and a
+small set of labels.
+
+The daily counts answer "which harness calls us, which tool, how often, and does it
+work". They do not say who you are, and they do not name a repository.
+
+Which tool you are calling and whether it worked is not attributed to your account. It is
+an aggregate over every caller of the public address.
+
 ## 7. Fonts and what the browser sends without asking
 
 The site loads two font families from Google Fonts, so your browser contacts Google
@@ -106,6 +128,8 @@ stays in the server logs.
   automatic deletion today.
 - Quota counters: a single row, overwritten.
 - Rate limit counters: no automatic deletion today, and no network address in them.
+- Coding tool usage rows: deleted after 30 days by a later nightly job. The daily counts
+  folded from them are kept, and hold no repository name.
 - Your GitHub token: kept until you sign out from the menu. It is not deleted when the
   session expires.
 
