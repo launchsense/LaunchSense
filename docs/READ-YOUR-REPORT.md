@@ -34,6 +34,8 @@ It is always visible. It lists what was skipped and why, so skipped work never l
 
 The Explain in plain words button rewrites each finding in one or two short sentences. It runs through an AI provider when one is configured, and falls back to plain fixed wording when none is. AI never decides what is a finding. If the output references something we did not check, it is thrown away and the fixed wording is shown instead.
 
+The rewrite is the whole of the model's part. It never decides a severity, a licence fact, consent, who a caller is, or whether a request is allowed. Its `humanOversightLevel` is `prompt_guided` in C2PA Technical Specification 2.4 terms: you pressed the button and nobody approved the sentence afterwards. Read it anyway. A model writes plausible sentences about code it has not run.
+
 ## The four tabs
 
 **Repo DNA.** The shape of your project: folders, languages, entry points, what exists and what does not. Share Readiness sits here as a signal from the files we could read. Two numbers are shown: read coverage, which is how much of the repo was actually opened, and actionable share, which is how many findings need action. It is not a certification.
