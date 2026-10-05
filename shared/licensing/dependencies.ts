@@ -191,8 +191,16 @@ function resolve(
   }
   // An AND set states two licences that both apply. The record keeps the
   // expression and the notice names both obligations, so nothing is dropped.
+  // If any id in the set cannot be read, the set is not fully known: read it as
+  // Unknown rather than fabricating "X AND Unknown" and claiming a complete read.
   if (declaration.licenses.length > 1) {
-    out.spdx = declaration.licenses.join(" AND ");
+    const normalized = declaration.licenses.map((id) => normalizeSpdxId(id).id);
+    if (normalized.some((id) => id === UNKNOWN_LICENSE)) {
+      out.spdx = UNKNOWN_LICENSE;
+      out.unknownReason = `one id in ${declaration.licenses.join(" AND ")} could not be read, so the set is not fully known`;
+      return out;
+    }
+    out.spdx = normalized.join(" AND ");
     return out;
   }
   out.unknownReason = declaration.reasons.join("; ");
@@ -242,12 +250,20 @@ export function readNpmDependencyLicenses(
   const components: DependencyLicense[] = [];
   let fallbackReads = 0;
   let fallbackSkipped = 0;
+  let linkEntries = 0;
 
   for (const [pathKey, raw] of Object.entries(packages as Record<string, unknown>)) {
     if (pathKey === "" || typeof raw !== "object" || raw === null) continue;
     const name = nameFromPath(pathKey);
     if (name === null) continue;
     const record = raw as Record<string, unknown>;
+    // A workspace link has no version and is not an installed npm dependency, so
+    // there is no licence to read. Count it and name it rather than dropping it,
+    // or a workspace lockfile reads as a complete project with zero packages.
+    if (record["link"] === true) {
+      linkEntries += 1;
+      continue;
+    }
     const version = record["version"];
     if (typeof version !== "string" || version.length === 0) continue;
     const nested = pathKey.split("node_modules/").length > 2;
@@ -271,7 +287,11 @@ export function readNpmDependencyLicenses(
         fallbackReads += 1;
         const text = options.readInstalledManifest(name);
         manifestDeclared = text === null ? null : npmLicenseField(text);
-      } else if (lockDeclared === null) {
+      } else {
+        // The cross-check is capped, so an entry past the cap was not checked at
+        // all. Count it whether or not the lockfile declared a licence, because
+        // the point of the note is that these entries were not cross-checked, not
+        // that they were blank.
         fallbackSkipped += 1;
       }
     }
@@ -286,7 +306,7 @@ export function readNpmDependencyLicenses(
   const direct = sorted.filter((item) => item.depth === "direct").length;
   const capped =
     fallbackSkipped > 0
-      ? ` ${fallbackSkipped} entry(s) without a licence field were not checked against an installed manifest, because the cross-check stops at ${fallbackLimit} per lockfile.`
+      ? ` ${fallbackSkipped} entry(s) were not checked against an installed manifest, because the cross-check stops at ${fallbackLimit} per lockfile.`
       : "";
   const note =
     `The npm lockfile lists ${sorted.length} installed packages: ${direct} direct and ${sorted.length - direct} transitive. ` +
@@ -300,7 +320,14 @@ export function readNpmDependencyLicenses(
     counted: sorted.length,
     unknown,
     note,
-    notCovered: [...NOT_COVERED],
+    notCovered: [
+      ...NOT_COVERED,
+      ...(linkEntries > 0
+        ? [
+            `${linkEntries} workspace link(s) in the lockfile are not installed npm dependencies and carry no version, so no licence was read for them.`,
+          ]
+        : []),
+    ],
   };
 }
 

@@ -51,13 +51,10 @@ const FAMILY_SEVERITY: Record<LicenseFamily, Severity | null> = {
 
 /** The obligations that apply to one component's declaration. */
 export function componentObligations(component: DependencyLicense): LicenseObligation[] {
-  if (component.operator === "or") {
-    const offered = (component.declared ?? "")
-      .split(/\s+OR\s+/)
-      .map((part) => part.trim())
-      .filter((part) => part.length > 0);
-    return offered.map((id) => licenseObligation(id));
-  }
+  // An OR expression is a choice the reader makes. It attaches no obligation
+  // from either id: reading both would make a choice look like a set of duties,
+  // and would give a copyleft option a severity the person never accepted.
+  if (component.operator === "or") return [];
   if (component.spdx === UNKNOWN_LICENSE) return [];
   if (component.spdx.includes(" AND ")) {
     return component.spdx.split(" AND ").map((id) => licenseObligation(id.trim()));

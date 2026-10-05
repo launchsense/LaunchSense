@@ -181,19 +181,31 @@ export function compareFindings(
     const peerGone = oldList.some(
       (o) => o.ruleId === next.ruleId && o.path === next.path && o.fingerprint !== next.fingerprint,
     );
-    // A row that replaced a row at the same coordinate is the other half of that
-    // pair, so it takes the same cause. Reporting one half as an advisory or a
-    // licence change and the other half as a code change describes one event two
-    // ways, which is how a reader stops believing either. The coordinate has to
-    // read for this branch: a row whose rule carries no coordinate is not half of
-    // a pair, it is a row that arrived.
-    const atSameCoordinate = peerGone && opts.depOf(next.ruleId, next.title) !== null;
+    // The new row replaced an old row at the SAME dependency coordinate, not
+    // merely a row of the same rule at the same path. An added dependency sits at
+    // the same path and rule as the one before it, but at a different coordinate,
+    // so it is a code change, not a licence change. Requiring the coordinate to
+    // match is what keeps "a dependency added is a code change" true.
+    const nextCoordinate = opts.depOf(next.ruleId, next.title);
+    const peerAtSameCoordinate =
+      nextCoordinate !== null &&
+      oldList.some(
+        (o) =>
+          o.ruleId === next.ruleId &&
+          o.path === next.path &&
+          o.fingerprint !== next.fingerprint &&
+          opts.depOf(o.ruleId, o.title) === nextCoordinate,
+      );
     out.push({
       oldFingerprint: null,
       newFingerprint: next.fingerprint,
       ruleId: next.ruleId,
       state: "new",
-      cause: atSameCoordinate ? changeCause(opts, next.ruleId) : !changed ? ADVISORY_CAUSE : "code_change",
+      cause: peerAtSameCoordinate
+        ? changeCause(opts, next.ruleId)
+        : !changed && !peerGone
+          ? ADVISORY_CAUSE
+          : "code_change",
     });
   }
 

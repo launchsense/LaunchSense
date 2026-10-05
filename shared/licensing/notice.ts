@@ -108,7 +108,11 @@ export function buildNoticeArtifact(
   lines.push("");
 
   const noticeFileFamilies = inventory.components
-    .map((component) => licenseObligation(component.spdx))
+    .flatMap((component) =>
+      component.operator === "or" || component.spdx === UNKNOWN_LICENSE
+        ? []
+        : component.spdx.split(" AND ").map((id) => licenseObligation(id.trim())),
+    )
     .filter((obligation) => obligation.requiresNoticeFile)
     .map((obligation) => obligation.id);
   const uniqueNoticeFamilies = [...new Set(noticeFileFamilies)].sort();

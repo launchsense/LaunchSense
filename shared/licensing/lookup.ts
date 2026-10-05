@@ -83,8 +83,12 @@ function renderPrompt(request: LicenseLookupRequest): string {
 export function promptIsWhitelisted(prompt: string, request: LicenseLookupRequest): boolean {
   const template = PROMPT_TEMPLATE.replace("NAME", request.name).replace("VERSION", request.version);
   if (prompt !== template) return false;
-  // The name and version must be the request's own, so a substituted
-  // coordinate cannot ride in the place of the real one.
+  // No placeholder may survive the substitution, and the request's own name and
+  // version must both be present. A package named "VERSIONfoo" would otherwise
+  // swap the two placeholders and leave the rebuilt template matching itself, so
+  // this checks the result rather than re-running the same substitution.
+  if (/\bNAME\b|\bVERSION\b/.test(prompt)) return false;
+  if (!prompt.includes(request.name) || !prompt.includes(request.version)) return false;
   if (prompt.includes("/") && !request.name.startsWith("@")) return false;
   return true;
 }
