@@ -50,6 +50,24 @@ Three notes on surfaces. The first two are not the hosted address:
 
 Two tables, `usageMeters` and `connectedInstallations`, are defined in the schema but have no reader yet. No query returns them.
 
+## Analytics
+
+Two tables, and one nightly fold.
+
+- `usageEvents` holds one row per MCP protocol action on the hosted address: `initialize`, `tools/list`, `tools/call`. It is the only table this lane writes per call.
+- `dailyMetrics` is the rollup. One row per (day, metric, low-cardinality dims). Every dashboard reads this table and nothing else.
+- `rollupDaily` runs at 03:20 UTC and folds yesterday. It replaces the day rather than appending, so a retried cron cannot double count.
+- `purgeExpiredUsageEvents` runs at 03:40 UTC and deletes `usageEvents` rows past 30 days, bounded at 500 rows a run and reporting when it hits that bound. Separate from the fold because a Convex mutation cannot call another mutation.
+- `scans.surface` is new and optional. Nothing writes it yet, so every metric row currently reads `surface` as `unspecified`. The web and MCP write paths are not wired.
+
+The north star is `repos_with_proven_fix`: distinct repositories where a `findingTransitions` row says `state=fixed` and `cause=code_change` and both endpoint scans reached `status=completed`. A fix counted as `advisory_update` or `analyzer_update` is this product shipping a rule pack, so those are three separate metrics from day one and never folded in.
+
+Two guardrails. `partial_coverage_rate` is partial over all analyzed, split by `truncated`, `tree_truncated`, and `errorKind`. `regression_after_fix_rate` is the share of proven fixes whose `ruleId` came back in the next completed scan of the same repo. Both are lower bounds where the read window runs out, and the code says so.
+
+What is never collected, enforced in code by `convex/analytics/privacy.ts`: file content, paths, findings titles, snippets, raw error text, secrets, IP addresses, model names, prompt text, and the OTel Opt-In attributes `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, `gen_ai.prompt.variable.*`, and `mcp.resource.uri`. The argument to a scan tool is a repository URL, which is the reason the Opt-In is refused rather than merely not required. `repoKey` is `HMAC(deployment salt, day + "owner/repo")` or absent; the salt comes from `ANALYTICS_DAY_SALT`, so same-day joins work and nothing joins across days. `clientName` goes through a fixed eight-value allowlist, because `clientInfo.name` is client-declared and storing it raw would let one caller mint a new dimension per request.
+
+Names it will not segment on: a repository. The rollup counts distinct repos while it runs and stores only the count, so a stored day cannot be joined back to a repo. Per-rule and per-severity fix breakdowns are not on `dailyMetrics`: `findingTransitions` holds them, and a per-rule dimension would multiply rows for a few hundred numbers.
+
 ## Do not claim
 
 The review does not say the app will sell. It does not edit the repo. It does not certify anything. It does not treat a source-available license as open source.

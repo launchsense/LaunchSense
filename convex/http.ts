@@ -3,8 +3,17 @@ import { registerStaticRoutes } from "@convex-dev/static-hosting";
 import { components, api, internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
-import { formatPublicScan, formatReport, handleMcpMessage, wantsEventStream, type ToolName } from "./mcpHttp";
+import {
+  formatPublicScan,
+  formatReport,
+  handleMcpMessage,
+  wantsEventStream,
+  type McpUsageEvent,
+  type ToolName,
+} from "./mcpHttp";
 import { USAGE_KEY_HEADER, usageKeyMatches } from "./mcpLimit";
+import { repoKeyFor } from "./analytics/privacy";
+import { parseGitHubRepoUrl } from "../shared/githubUrl";
 
 // The Convex runtime exposes environment variables here; Convex TypeScript does
 // not declare it. Same declaration as the server adapters use.
@@ -15,6 +24,42 @@ declare const process: { env: Record<string, string | undefined> };
 // expected value is only ever read here, never returned or logged.
 function usageAuthorized(request: Request): boolean {
   return usageKeyMatches(request.headers.get(USAGE_KEY_HEADER), process.env["USAGE_ROUTE_KEY"]);
+}
+
+// The deployment secret the repo identity is hashed with. It is read here and
+// nowhere else, is never returned or logged, and is never part of a row: only its
+// HMAC output is. Unset means the scan tool stores no repo key at all, which is
+// the honest failure. Rotating it breaks same-day joins only.
+const ANALYTICS_SALT_ENV = "ANALYTICS_DAY_SALT";
+
+/** One MCP usage event per protocol action, stored as one usageEvents row. */
+async function storeMcpUsageEvent(
+  ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
+  event: McpUsageEvent,
+): Promise<void> {
+  // The write must never be the reason a caller gets no answer, so a failed
+  // analytics row is swallowed. The tool's own result is what the caller came for.
+  try {
+    await ctx.runMutation(internal.analytics.ingest.recordMcpUsageEvent, {
+      kind: event.kind,
+      clientName: event.clientName,
+      clientVersion: event.clientVersion,
+      protocolVersion: event.protocolVersion,
+      mcpMethodName: event.mcpMethodName,
+      toolName: event.toolName,
+      outcome: event.outcome,
+      errorType: event.errorType,
+      rpcResponseStatusCode: event.rpcResponseStatusCode,
+      durationMs: event.durationMs,
+      // A hash of the day and the repo name, or nothing. The mutation refuses
+      // anything that is not 64 hex characters, so a literal cannot be stored
+      // even if this call site were changed carelessly.
+      repoKey: event.repoKey,
+    });
+  } catch {
+    // Nothing here is worth surfacing to the caller and nothing here is worth
+    // failing the request over.
+  }
 }
 
 const http = httpRouter();
@@ -171,7 +216,18 @@ http.route({
     }
     // The caller's network address is not read on this route. The scan gate has a
     // shared hosted bucket, so no caller value is needed and none is stored.
-    const result = await handleMcpMessage(body, (name, args) => callHostedTool(ctx, name, args));
+    //
+    // The reporter is where clientInfo is read and allowlisted. The protocol layer
+    // hands over one event per action and this route decides whether that becomes
+    // a row, so the protocol code holds no database call.
+    const result = await handleMcpMessage(
+      body,
+      (name, args) => callHostedTool(ctx, name, args),
+      // Awaited, so the row is written before the caller gets its answer. A write
+      // that raced the response would be lost silently, and a lost row reads as a
+      // drop in traffic.
+      (event) => storeMcpUsageEvent(ctx, event),
+    );
     if (result.status === 202 || result.body === null) {
       return new Response(null, { status: 202, headers: mcpCors });
     }
@@ -210,15 +266,34 @@ async function callHostedTool(
 async function scanPublicTool(
   ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
   repoUrl: string,
-): Promise<{ text: string; isError: boolean }> {
+): Promise<{ text: string; isError: boolean; outcome?: "quota_denied"; repoKey?: string }> {
   if (!repoUrl) return { text: "repoUrl is required.", isError: true };
   const gate = await ctx.runMutation(internal.mcpLimit.consumeMcpScan, {});
   if (!gate.allowed) {
-    return { text: "This route is paused until the shared quota window resets.", isError: true };
+    // The refusal is counted as its own outcome rather than as a tool error,
+    // because "the shared quota window closed" and "the repo would not open" are
+    // two different facts about the lane.
+    return {
+      text: "This route is paused until the shared quota window resets.",
+      isError: true,
+      outcome: "quota_denied",
+    };
   }
+  // The repo name is read here, at the one place that already has it, and hashed
+  // into a day-scoped key. The literal never reaches the analytics write path.
+  const parsed = parseGitHubRepoUrl(repoUrl);
+  const repoKey =
+    parsed.ok
+      ? ((await repoKeyFor(
+          process.env[ANALYTICS_SALT_ENV],
+          new Date().toISOString().slice(0, 10),
+          parsed.value.owner,
+          parsed.value.repo,
+        )) ?? undefined)
+      : undefined;
   const scan = await ctx.runAction(api.scans.actions.runScan, { repoUrl });
   if (scan.status === "failed") {
-    return { text: `Scan could not start. Scan ${scan.scanId}`, isError: true };
+    return { text: `Scan could not start. Scan ${scan.scanId}`, isError: true, repoKey };
   }
   const analyzed = await ctx.runAction(api.scans.analyze.analyzeScan, { scanId: scan.scanId });
   const report = await ctx.runQuery(api.scans.queries.getResults, { scanId: scan.scanId });
@@ -237,6 +312,7 @@ async function scanPublicTool(
       })),
     }),
     isError: false,
+    repoKey,
   };
 }
 
