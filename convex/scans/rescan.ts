@@ -13,7 +13,11 @@ import {
   type RateLimitInfo,
 } from "../adapters/github";
 import type { ActionCtx } from "../_generated/server";
-import { compareFindings, depOfVuln } from "../../shared/reports/compare.ts";
+import {
+  causeForDependencyChange,
+  compareFindings,
+  depOfDependency,
+} from "../../shared/reports/compare.ts";
 import { readSessionToken } from "../github/readToken";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { checkSnapshot, commitTreeShaOf, treeRequestUrl, treeShaOf } from "./snapshot";
@@ -347,7 +351,12 @@ export const compareScans = action({
       oldContents: new Map(oldContents.map((c) => [c.path, c.contentSha])),
       newContents: new Map(newContents.map((c) => [c.path, c.contentSha])),
       previouslyFixed,
-      depOf: depOfVuln,
+      // Both dependency-shaped rules read a coordinate out of the same title
+      // shape, so one reader covers an advisory change and a licence change. A
+      // licence change is reported as a licence change, which is the only thing
+      // that makes a re-licensed dependency visible on the rescan.
+      depOf: depOfDependency,
+      causeForChange: causeForDependencyChange,
     });
 
     await ctx.runMutation(internal.scans.store.saveTransitions, {

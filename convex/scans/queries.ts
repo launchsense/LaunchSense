@@ -523,6 +523,7 @@ const transitionDetail = v.object({
       v.literal("code_change"),
       v.literal("advisory_update"),
       v.literal("analyzer_update"),
+      v.literal("license_change"),
     ),
   ),
   title: v.string(),

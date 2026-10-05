@@ -304,6 +304,16 @@ function render(report: ReviewReport, diagnosticsSent: boolean, quote: string | 
   if (report.sbom !== null) {
     lines.push(`SBOM from ${report.sbom.tool}: ${report.sbom.components} components. Omissions: ${report.sbom.omissions.join("; ")}.`);
   }
+  if (report.licenseDeclaration !== null) {
+    const declaration = report.licenseDeclaration;
+    lines.push(
+      `Third-party licence declaration: ${declaration.components} components, ${declaration.unknown} unknown. ${declaration.note}`,
+    );
+    // The notice text is a file the builder can commit, so it goes to stdout in
+    // full rather than behind a flag. The JSON output carries it as
+    // licenseDeclaration.notice under the same name.
+    lines.push(declaration.notice);
+  }
   if (report.notChecked.length > 0) {
     lines.push("Not checked:");
     for (const item of report.notChecked.slice(0, 30)) lines.push(`- ${item.scope}: ${item.reason}`);

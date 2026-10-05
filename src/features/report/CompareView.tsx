@@ -7,7 +7,7 @@ export interface CompareTransition {
   newFingerprint?: string;
   ruleId: string;
   state: "fixed" | "still_broken" | "new" | "regressed" | "unknown";
-  cause?: "code_change" | "advisory_update" | "analyzer_update";
+  cause?: "code_change" | "advisory_update" | "analyzer_update" | "license_change";
   title: string;
   path: string;
   line: number;
@@ -31,6 +31,10 @@ const CAUSE_LINE: Record<string, string> = {
   code_change: "the code changed",
   advisory_update: "the advisory data changed",
   analyzer_update: "the checker itself changed",
+  // A dependency's declared licence changed. It says so in its own words,
+  // because "the code changed" is how a re-licensed package disappears from a
+  // reader's attention.
+  license_change: "a dependency's declared licence changed",
 };
 
 export default function CompareView(props: {

@@ -12,6 +12,7 @@
     "check:claims": "node scripts/check-claims.mjs",
     "check": "npm run typecheck && npm run lint && npm run check:claims && node --test tests/*.mjs",
     "review:local": "node --experimental-strip-types mcp/review-entry.ts --root .",
+    "notices": "node scripts/third-party-notices.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "prepare": "git config core.hooksPath .githooks || true",
     "deploy": "static-hosting deploy"
