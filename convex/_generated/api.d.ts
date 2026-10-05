@@ -18,6 +18,7 @@ import type * as adapters_share from "../adapters/share.js";
 import type * as adapters_tarball from "../adapters/tarball.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
+import type * as decisionMonitoring from "../decisionMonitoring.js";
 import type * as entitlements from "../entitlements.js";
 import type * as github_app from "../github/app.js";
 import type * as github_readToken from "../github/readToken.js";
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   "adapters/tarball": typeof adapters_tarball;
   auth: typeof auth;
   crons: typeof crons;
+  decisionMonitoring: typeof decisionMonitoring;
   entitlements: typeof entitlements;
   "github/app": typeof github_app;
   "github/readToken": typeof github_readToken;
