@@ -24,6 +24,8 @@ The client POSTs one JSON-RPC message. The server returns one JSON answer, or a 
 
 `launchsense_get_report` takes `scanId` and returns the coverage line and the findings.
 
+Those two names belong to this address. The local server under Surfaces has its own names, and its `launchsense_scan_public_notice` scans nothing: it only points back here.
+
 A partial result is not a pass. This address does not read a repo that exists only on a laptop. A private repo uses Sign in on the website.
 
 ## Checks
@@ -34,9 +36,15 @@ License lines are signals, not legal advice. Unknown stays unknown. A model may 
 
 ## Surfaces
 
-Two more surfaces live in this repo and are not the hosted address:
+Three notes on surfaces. The first two are not the hosted address:
 
-- A local stdio MCP server (`mcp/main.go`, wired by `install.sh`) reviews a checkout on that machine. The Go module is `mcp/`, and there is no `go.mod` at the repo root, so it starts with `cd mcp && go run .`. `install.sh` writes that command for Cursor, with `cwd` set to the `mcp` folder. It needs Go on `PATH`; without Go the installer says so and registers no server. The server reviews `LAUNCHSENSE_ROOT`, which `install.sh` sets to the checkout root, so it reads the checkout and not the `mcp` folder. With `LAUNCHSENSE_ROOT` unset it reads the checkout above a `mcp` module folder, and otherwise the folder it was started in. It reads files locally and does not upload them. It is for a checkout of this repository, not for the public address.
+- A local stdio MCP server (`mcp/main.go`, wired by `install.sh`) reviews a checkout on that machine. The Go module is `mcp/`, and there is no `go.mod` at the repo root, so it starts with `cd mcp && go run .`. `install.sh` writes that command for Cursor, with `cwd` set to the `mcp` folder. It needs Go on `PATH`; without Go the installer says so and registers no server. It is for a checkout of this repository, not for the public address.
+  - It speaks MCP over stdio as newline-delimited JSON: one JSON message per line in, one JSON message per line out, with no length header. `initialize` answers with protocol version 2024-11-05. Refused and error lines go to stderr, so stdout carries protocol only.
+  - One message may not pass 4 MiB. A longer line is answered with a JSON-RPC error, nothing runs, and the next message is still answered.
+  - Its tools are `launchsense_scan_repo`, which reviews the checkout and takes no arguments, `launchsense_report`, which asks the hosted API for a report by scan id, `launchsense_github`, which reports the local `gh` login, and `launchsense_scan_public_notice`, which scans nothing and only names where the public read lives. A tool name this server does not have is a protocol error, so the hosted name `launchsense_scan_public` called here is refused rather than answered with a scan. A missing, wrong-typed, or undeclared argument is refused rather than ignored.
+  - `launchsense_scan_repo` reviews `LAUNCHSENSE_ROOT`, which `install.sh` sets to the checkout root, so it reads the checkout and not the `mcp` folder. With `LAUNCHSENSE_ROOT` unset it reads the checkout above a `mcp` module folder, and otherwise the folder it was started in. `LAUNCHSENSE_ROOT` must be absolute, and a folder that is not a checkout is named in the answer.
+  - A report body over 1 MiB comes back marked partial and is never returned as a whole report. An API call gives up after 8 seconds and the local review after 10 minutes, so a call that hangs ends in an error instead of holding the session open.
+  - It reads files locally and does not upload them. Unless diagnostics are refused, the review also sends rule id counts, the harness name, the version, how long it took, and which order source ran. That share carries no code, paths, titles, or function names. `install.sh --enterprise` and `LAUNCHSENSE_DIAGNOSTICS=off` leave it off.
 - A GitHub App installation-token minter (`convex/github/app.ts`) mints a short-lived installation token. No scan flow calls it yet; the connected GitHub App read is roadmap, not built.
 - The hosted usage route (`POST /api/mcp/usage`) writes counts only. It needs a deployment secret header, `x-launchsense-usage-key`. When `USAGE_ROUTE_KEY` is unset, it rejects every caller.
 
