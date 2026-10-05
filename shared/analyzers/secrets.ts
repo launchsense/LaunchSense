@@ -167,7 +167,7 @@ export function isHardcodedCredential(line: string, path = ""): boolean {
     // XML/HTML/IDE attributes: `key="..."` where the value is a path or a numeric
     // zoom. A framework attribute named `key` is not a credential assignment.
     if (/[<>]/.test(line) || /\s(?:key|value|name)\s*=\s*["']/.test(line)) continue;
-    if (valueAtIsCredential(line, assign.index, assign[0].length)) return true;
+    if (valueAtIsCredential(line, assign.index, assign[0].length, nameMatch[1])) return true;
   }
   return false;
 }
@@ -227,8 +227,15 @@ export function containsProviderKey(line: string): boolean {
   return false;
 }
 
-/** Check the value that follows one assignment. Split out so a line can be scanned in full. */
-function valueAtIsCredential(line: string, at: number, opLen: number): boolean {
+/**
+ * Check the value that follows one assignment. Split out so a line can be scanned in full.
+ *
+ * `name` is the variable the value is assigned to. The value gate needs it for the one
+ * shape it cannot judge alone: a lowercase hyphenated slug under a constant-style name
+ * is a label, and `USAGE_KEY_HEADER = "x-launchsense-usage-key"` is the measured case.
+ * Everything else is judged on the value.
+ */
+function valueAtIsCredential(line: string, at: number, opLen: number, name: string): boolean {
   let rest = line.slice(at + opLen).trim();
   rest = stripTypeAnnotation(rest);
   rest = unwrapTypeCast(rest);
@@ -268,7 +275,7 @@ function valueAtIsCredential(line: string, at: number, opLen: number): boolean {
   // false negative on a secret is worse than a false positive.
   if (/:\s+it'?s\s|\b(it'?s|there'?s|doesn'?t|isn'?t|won'?t)\b/i.test(rest)) return false;
 
-  return looksLikeSecretValue(value, quoted !== null);
+  return looksLikeSecretValue(value, quoted !== null, name);
 }
 
 function pushCapped(
@@ -316,8 +323,10 @@ export function trackedEnvHasLiveValue(content: string): boolean {
     const value = line.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
     if (!nameLooksLikeCredential(key)) continue;
     if (value.length === 0) continue;
-    // The same value gate the rest of the analyzer uses.
-    if (looksLikeSecretValue(value, true)) return true;
+    // The same value gate the rest of the analyzer uses, with the key as the name so a
+    // slug label under a constant-style key is judged here the same way as in source.
+    // Provider shapes still bypass the rule, so a real key in a tracked `.env` fires.
+    if (looksLikeSecretValue(value, true, key)) return true;
   }
   return false;
 }
