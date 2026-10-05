@@ -458,11 +458,11 @@ export async function buildConsentReceipt(record: ConsentRecord): Promise<Consen
       notice_version: record.privacy_notice.version,
       notice_wording_sha256: record.privacy_notice.wording_sha256,
     },
-    notice_wording: record.privacy_notice.wording_sha256 === null ? null : DIAGNOSTICS_NOTICE_WORDING,
+    notice_wording: record.privacy_notice.version === DIAGNOSTICS_NOTICE_VERSION ? DIAGNOSTICS_NOTICE_WORDING : null,
     notice_wording_note:
-      record.privacy_notice.wording_sha256 === null
-        ? `This build carries the text of ${DIAGNOSTICS_NOTICE_VERSION}, and this decision names ${record.privacy_notice.version}. The wording the person read is not reproduced here rather than showing them text they did not agree to.`
-        : null,
+      record.privacy_notice.version === DIAGNOSTICS_NOTICE_VERSION
+        ? null
+        : `This build carries the text of ${DIAGNOSTICS_NOTICE_VERSION}, and this decision names ${record.privacy_notice.version}. The wording the person read is not reproduced here rather than showing them text they did not agree to.`,
     categories_involved: record.pii_information.map((item) => item.type),
     where_it_goes: record.pii_controllers.map((party) => ({
       party: party.party_id,
@@ -496,8 +496,9 @@ export async function buildConsentReceipt(record: ConsentRecord): Promise<Consen
  * The receipt as text a person can keep.
  *
  * Plain lines, no formatting to depend on, every number stated. It repeats the
- * wording that was on screen rather than pointing at a hash, because a hash
- * proves two texts are the same and does not tell a reader what they agreed to.
+ * wording that was on screen when this build carries it, and says so when it does
+ * not, rather than pointing at a hash, because a hash proves two texts are the
+ * same and does not tell a reader what they agreed to.
  */
 export function renderConsentReceipt(receipt: ConsentReceipt): string {
   const lines: string[] = [];
