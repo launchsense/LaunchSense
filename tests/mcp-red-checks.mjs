@@ -22,10 +22,16 @@
 //   server.go:139-163  readMessage: reassemble, refuse oversize, drain
 //   server.go:165-204  handle: no session state, no envelope check
 //   review_local.go:18 reviewTimeout  = 10 minutes, same single loop
+//
+// W41-MCP moved the lifecycle, the envelope, the version negotiation and the
+// write guard into server.go, and made the loop concurrent. Rows 6.1 to 6.10 and
+// 4.3 below were flipped from OPEN to DEFENDED against that change; every other
+// row was re-run unchanged, because a session change can break a framing row
+// that has nothing to do with it.
 
-import { describe, it, before, after } from "node:test";
+import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { join, dirname } from "node:path";
@@ -60,9 +66,35 @@ function session(steps, { env = {}, killAfterMs = 60_000, keepOpen = false } = {
       env: { PATH: process.env.PATH, HOME, LAUNCHSENSE_API_URL: DEAD_API, ...env },
       stdio: ["pipe", "pipe", "pipe"],
     });
+    const startedAt = Date.now();
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (d) => (stdout += d));
+    // When each answer arrived, in milliseconds after the session started. The
+    // loop is concurrent and the session ends only when stdin closes and every
+    // handler in flight has finished, so the time a session took is not the time
+    // a particular answer took. A test that wants to know how fast one message
+    // was answered reads this instead.
+    const arrivedAt = new Map();
+    let scanned = 0;
+    const noteArrivals = () => {
+      const consumed = stdout.lastIndexOf("\n");
+      if (consumed < scanned) return;
+      const complete = stdout.slice(scanned, consumed);
+      scanned = consumed + 1;
+      for (const line of complete.split("\n")) {
+        if (line === "") continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg && msg.id !== undefined) arrivedAt.set(msg.id, Date.now() - startedAt);
+        } catch {
+          // A framing break shows up in the assertions on stdout, not here.
+        }
+      }
+    };
+    child.stdout.on("data", (d) => {
+      stdout += d;
+      noteArrivals();
+    });
     child.stderr.on("data", (d) => (stderr += d));
     // A wedged server fails the test instead of hanging it.
     const timer = setTimeout(() => child.kill("SIGKILL"), killAfterMs);
@@ -75,6 +107,7 @@ function session(steps, { env = {}, killAfterMs = 60_000, keepOpen = false } = {
         stdout,
         stderr,
         lines,
+        arrivedAt,
         // Every line on stdout must be one JSON message. A line that does not
         // parse is kept as a marker so a framing break shows up as a failure
         // rather than being quietly skipped.
@@ -119,6 +152,12 @@ const callTool = (id, name, args) =>
 
 /** A ping we can always expect back, used to prove a session survived. */
 const PING = frame(request(999, "ping"));
+
+/** The handshake every session needs before anything but ping. The server now
+ *  negotiates the same versions the hosted surface serves, and refuses anything
+ *  else before initialize, so a session probe starts the same way a real client
+ *  does. */
+const HELLO = frames(request(0, "initialize", { protocolVersion: "2025-06-18" }));
 
 /** A loopback HTTP fixture. Open sockets are destroyed on close so a fixture
  *  that never answers still lets the test finish. */
@@ -190,18 +229,23 @@ describe("Red team: the local MCP server", () => {
   describe("target 1: transport", () => {
     it("[DEFENDED] 1.1 an LSP Content-Length frame is one parse error, and the messages after it still answer", async () => {
       needGo();
-      const body = JSON.stringify(request(1, "initialize", {}));
+      const body = JSON.stringify(request(1, "initialize", { protocolVersion: "2024-11-05" }));
       const lsp = `Content-Length: ${body.length}\r\n\r\n${body}\n`;
       const result = await session(lsp + PING);
       // Three answers: the header line is a parse error, the two blank CR lines
-      // are not messages, and the body plus the ping both answer.
+      // are not messages, and the body plus the ping both answer. They are
+      // matched by id, not by position, because each message is handled in its
+      // own goroutine and the two real answers can arrive in either order.
       assert.equal(result.replies.length, 3, `the header line and the two messages answer: ${result.stdout}`);
-      assert.equal(result.replies[0].error.code, -32700, "a Content-Length header is not JSON");
-      assert.equal(result.replies[0].id, null, "the id is null, because none could be read");
-      assert.equal(result.replies[1].id, 1, "the body inside the old frame is read as a plain message");
-      assert.ok(result.replies[1].result.serverInfo, "and answered with a result");
-      assert.equal(result.replies[2].id, 999, "the message after the frame still answers: no desync");
-      assert.ok(result.replies[2].result, "and it is answered with a result");
+      const parseError = result.replies.find((r) => r.id === null && r.error?.code === -32700);
+      assert.ok(parseError, `a Content-Length header is not JSON: ${result.stdout.slice(0, 200)}`);
+      assert.equal(parseError.id, null, "the id is null, because none could be read");
+      const handshake = result.replies.find((r) => r.id === 1);
+      assert.ok(handshake?.result?.serverInfo, "the body inside the old frame is read as a plain message and answered");
+      assert.ok(
+        result.replies.find((r) => r.id === 999)?.result,
+        "the message after the frame still answers: no desync",
+      );
       assert.match(result.stderr, /parse error/, "one line on stderr names the refusal");
       assert.equal(result.code, 0, "the session ends cleanly, not with a crash");
     });
@@ -224,9 +268,11 @@ describe("Red team: the local MCP server", () => {
         '{"jsonrpc":"2.0","id":8,"method":"ping","note":"line one\nline two"}\n' + PING,
       );
       assert.equal(result.replies.length, 3, `two fragments, then the ping: ${result.stdout}`);
-      assert.equal(result.replies[0].error.code, -32700, "the head fragment is not JSON");
-      assert.equal(result.replies[1].error.code, -32700, "the tail fragment is not JSON either");
-      assert.equal(result.replies[2].id, 999, "the next real message still answers");
+      // Both fragments are refused on the reader loop with a null id, so they are
+      // counted by code and the ping is matched by id.
+      const parseErrors = result.replies.filter((r) => r.id === null && r.error?.code === -32700);
+      assert.equal(parseErrors.length, 2, `the head and the tail are both refused: ${result.stdout}`);
+      assert.ok(result.replies.find((r) => r.id === 999)?.result, "the next real message still answers");
       assert.equal(result.code, 0);
     });
 
@@ -243,22 +289,42 @@ describe("Red team: the local MCP server", () => {
           PING,
       );
       assert.equal(result.replies.length, 3, `${result.stdout.slice(0, 200)}`);
-      assert.equal(result.replies[0].error.code, -32700, "the broken head is refused");
-      assert.equal(result.replies[1].id, 666, "the tail is read as its own message");
-      assert.equal(result.replies[2].id, 999, "and the session is still aligned afterwards");
+      // Matched by id. The broken head is refused on the reader loop with a null
+      // id, and the two real messages are answered by their own goroutines, so
+      // their order on stdout is not fixed.
+      assert.ok(
+        result.replies.some((r) => r.id === null && r.error?.code === -32700),
+        "the broken head is refused",
+      );
+      assert.equal(result.replies.find((r) => r.id === 666)?.id, 666, "the tail is read as its own message");
+      assert.equal(result.replies.find((r) => r.id === 999)?.id, 999, "and the session is still aligned afterwards");
       assert.equal(result.code, 0);
     });
 
     it("[DEFENDED] 1.5 a partial line is reassembled across three writes, then the next message answers", async () => {
       needGo();
+      // The split line is the handshake itself, so no separate initialize is
+      // needed and the reassembled message is still the one under test.
       const result = await session(
-        ['{"jsonrpc":"2.0","id":1,', 200, '"method":"tools/list"', 200, "}\n" + PING, 200, CLOSE],
+        [
+          '{"jsonrpc":"2.0","id":1,',
+          200,
+          '"method":"initialize","params":{"protocolVersion":"2025-06-18"}',
+          200,
+          "}\n" + PING,
+          200,
+          CLOSE,
+        ],
         { killAfterMs: 20_000 },
       );
-      assert.equal(result.replies.length, 2, `one message in, one answer: ${result.stdout.slice(0, 200)}`);
-      assert.equal(result.replies[0].id, 1, "the halves were joined, not cut");
-      assert.ok(Array.isArray(result.replies[0].result.tools), "tools/list answered with tools");
-      assert.equal(result.replies[1].id, 999, "the next message answers");
+      assert.equal(result.replies.length, 2, `one message in, one answer each: ${result.stdout.slice(0, 200)}`);
+      // Matched by id, not by position: the ping may answer before the handshake
+      // does, because each message is handled in its own goroutine.
+      const handshake = result.replies.find((r) => r.id === 1);
+      assert.ok(handshake, `the joined message answered; got: ${result.stdout.slice(0, 200)}`);
+      assert.ok(handshake.result?.serverInfo, "the halves were joined, not cut, so initialize was served");
+      const ping = result.replies.find((r) => r.id === 999);
+      assert.ok(ping?.result, "the next message answers");
       assert.equal(result.stderr, "", "nothing was logged for a legal split write");
     });
 
@@ -268,16 +334,31 @@ describe("Red team: the local MCP server", () => {
       assert.equal(result.replies.length, 1, `the half message is answered: ${result.stdout}`);
       assert.equal(result.replies[0].error.code, -32700, "an unfinished message is a parse error");
       assert.equal(result.replies[0].id, null, "with a null id, because none could be read");
+      // One answer in the session, so position and id are the same thing here.
       assert.match(result.stderr, /parse error/, "and one line on stderr");
       assert.equal(result.code, 0, "the server does not die on a truncated message");
     });
 
-    it("[DEFENDED] 1.7 two messages in one write are answered in order", async () => {
+    it("[DEFENDED] 1.7 two messages in one write are each answered once, matched by id", async () => {
       needGo();
-      const result = await session(frames(request(1, "initialize", {}), request(2, "tools/list"), request(3, "ping")));
-      assert.deepEqual(result.replies.map((r) => r.id), [1, 2, 3], `${result.stdout.slice(0, 200)}`);
-      assert.ok(result.replies[1].result.tools, "the middle message answered with its tools");
-      assert.ok(result.replies[2].result, "the last one answered with a result");
+      const result = await session(
+        frames(
+          request(1, "initialize", { protocolVersion: "2025-06-18" }),
+          request(2, "tools/list"),
+          request(3, "ping"),
+        ),
+      );
+      // The loop is concurrent now, so three answers in one write are three
+      // answers, not necessarily in this order. Every id is matched exactly once.
+      assert.deepEqual(
+        [...result.replies.map((r) => r.id)].sort((a, b) => a - b),
+        [1, 2, 3],
+        `${result.stdout.slice(0, 200)}`,
+      );
+      const byId = new Map(result.replies.map((r) => [r.id, r]));
+      assert.ok(byId.get(1).result.serverInfo, "the handshake answered");
+      assert.ok(Array.isArray(byId.get(2).result.tools), "the middle message answered with its tools");
+      assert.ok(byId.get(3).result, "the last one answered with a result");
       assert.equal(result.stderr, "", "a legal session logs nothing");
     });
 
@@ -292,26 +373,45 @@ describe("Red team: the local MCP server", () => {
     it("[DEFENDED] 1.9 a CRLF session answers every message", async () => {
       needGo();
       const result = await session(
-        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\r\n' +
+        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}\r\n' +
           '{"jsonrpc":"2.0","id":2,"method":"tools/list"}\r\n' +
           "\r\n" +
           '{"jsonrpc":"2.0","id":3,"method":"ping"}\r\n',
       );
-      assert.deepEqual(result.replies.map((r) => r.id), [1, 2, 3], `${result.stdout.slice(0, 200)}`);
-      assert.ok(result.replies[0].result.serverInfo, "initialize answered");
-      assert.ok(result.replies[1].result.tools, "tools/list answered");
-      assert.ok(result.replies[2].result, "ping answered");
+      assert.deepEqual(
+        [...result.replies.map((r) => r.id)].sort((a, b) => a - b),
+        [1, 2, 3],
+        `${result.stdout.slice(0, 200)}`,
+      );
+      const byId = new Map(result.replies.map((r) => [r.id, r]));
+      assert.ok(byId.get(1).result.serverInfo, "initialize answered");
+      assert.ok(Array.isArray(byId.get(2).result.tools), "tools/list answered");
+      assert.ok(byId.get(3).result, "ping answered");
     });
 
     it("[DEFENDED] 1.10 an answer whose text holds real newlines stays one stdout line", async () => {
       needGo();
-      const result = await session(callTool(1, "launchsense_scan_public_notice", {}));
-      assert.equal(result.lines.length, 1, `the reply is one line: ${JSON.stringify(result.stdout)}`);
-      const text = result.replies[0].result.content[0].text;
+      const result = await session(
+        frames(request(0, "initialize", { protocolVersion: "2025-06-18" })) +
+          callTool(1, "launchsense_scan_public_notice", {}),
+      );
+      assert.equal(result.lines.length, 2, `the handshake and one reply: ${JSON.stringify(result.stdout)}`);
+      const reply = result.replies.find((r) => r.id === 1);
+      assert.ok(reply.result, `the tool answered: ${result.stdout.slice(0, 160)}`);
+      const text = reply.result.content[0].text;
       assert.ok(text.includes("\n"), "the tool text really does hold newlines");
-      assert.ok(
-        !result.stdout.slice(0, -1).includes("\n"),
-        "so the JSON encoder escaped them and the framing survived",
+      // Two lines for two messages, and every line parses as one JSON message
+      // (a line that did not would come back as a NOT_JSON marker). That is what
+      // proves the encoder escaped the newlines and the framing survived. The
+      // previous check counted newlines in the whole stdout, which is only true
+      // while there is exactly one answer; with a handshake line and a tool line
+      // there is one separator between them, and that separator is not a break.
+      const notJSON = result.replies.filter((r) => "NOT_JSON" in r);
+      assert.deepEqual(notJSON, [], `every line is one whole JSON message: ${result.stdout.slice(0, 200)}`);
+      assert.equal(
+        result.stdout.split("\n").filter((line) => line !== "").length,
+        2,
+        "two messages, two lines, no line split by an embedded newline",
       );
     });
   });
@@ -326,33 +426,39 @@ describe("Red team: the local MCP server", () => {
       // the cap is served and one byte more is refused. That makes the largest
       // servable JSON body cap-1 bytes. The refusal text says the limit is
       // `cap` bytes, which is one byte generous for a body. Recorded, low.
+      // ping is the one method that answers before the handshake, so the probe
+      // lines are served without a session.
       const atCapMinusOne = await session(lineOfBytes(CAP - 1, 20) + PING, { killAfterMs: 30_000 });
       assert.deepEqual(
-        atCapMinusOne.replies.map((r) => r.id),
+        atCapMinusOne.replies.map((r) => r.id).sort((a, b) => a - b),
         [20, 999],
         `a line one byte under the cap is a normal message: ${atCapMinusOne.stderr}`,
       );
-      assert.ok(atCapMinusOne.replies[0].result, "and it is answered with a result");
+      assert.ok(
+        atCapMinusOne.replies.find((r) => r.id === 20).result,
+        "and it is answered with a result",
+      );
 
       const atCap = await session(lineOfBytes(CAP, 21) + PING, { killAfterMs: 30_000 });
       assert.deepEqual(
-        atCap.replies.map((r) => r.id),
+        atCap.replies.map((r) => r.id).sort((a, b) => a - b),
         [21, 999],
         `a line of exactly the cap is still served: ${atCap.stderr}`,
       );
-      assert.ok(atCap.replies[0].result, "and it is answered with a result");
+      assert.ok(atCap.replies.find((r) => r.id === 21).result, "and it is answered with a result");
     });
 
     it("[DEFENDED] 2.2 a line one byte over the cap is refused with a protocol error, and nothing runs", async () => {
       needGo();
       const result = await session(lineOfBytes(CAP + 1, 30) + PING, { killAfterMs: 30_000 });
       assert.equal(result.replies.length, 2, `the oversize line is answered, not dropped: ${result.stdout.slice(0, 120)}`);
-      assert.equal(result.replies[0].error.code, -32600, "an unusable message is Invalid Request");
-      assert.equal(result.replies[0].id, null, "no id could be read from a message that was refused");
-      assert.match(result.replies[0].error.message, /too large/i, "the answer says why");
-      assert.match(result.replies[0].error.message, new RegExp(String(CAP)), "and names the cap");
-      assert.ok(!("result" in result.replies[0]), "a refusal is not a result");
-      assert.equal(result.replies[1].id, 999, "the next message answers: the stream did not desync");
+      const refused = result.replies.find((r) => r.error?.code === -32600);
+      assert.ok(refused, `the oversize line is refused: ${result.stdout.slice(0, 160)}`);
+      assert.equal(refused.id, null, "no id could be read from a message that was refused");
+      assert.match(refused.error.message, /too large/i, "the answer says why");
+      assert.match(refused.error.message, new RegExp(String(CAP)), "and names the cap");
+      assert.ok(!("result" in refused), "a refusal is not a result");
+      assert.equal(result.replies.find((r) => r.id === 999).id, 999, "the next message answers: the stream did not desync");
       assert.equal(result.code, 0, `clean exit; stderr: ${result.stderr}`);
       assert.doesNotMatch(result.stderr, /out of memory|SIGSEGV|goroutine/, "no crash over one big line");
     });
@@ -377,10 +483,10 @@ describe("Red team: the local MCP server", () => {
       assert.equal(Buffer.byteLength(over), CAP + 3, "three bytes over the cap");
       const result = await session(under + over + PING, { killAfterMs: 30_000 });
       assert.equal(result.replies.length, 3, `${result.stdout.slice(0, 120)}`);
-      assert.ok(result.replies[0].result, "the multi-byte line at the cap is served");
-      assert.equal(result.replies[0].id, 40);
-      assert.equal(result.replies[1].error.code, -32600, "the multi-byte line over the cap is refused");
-      assert.equal(result.replies[2].id, 999, "and the next message still answers");
+      const atCap = result.replies.find((r) => r.id === 40);
+      assert.ok(atCap.result, "the multi-byte line at the cap is served");
+      assert.equal(result.replies.find((r) => r.error?.code === -32600).id, null, "the multi-byte line over the cap is refused");
+      assert.equal(result.replies.find((r) => r.id === 999).id, 999, "and the next message still answers");
       assert.equal(result.code, 0);
     });
 
@@ -395,8 +501,12 @@ describe("Red team: the local MCP server", () => {
       const result = await session(parts.join(""), { killAfterMs: 45_000 });
       const waited = Date.now() - started;
       assert.equal(result.replies.length, 2, `${result.stdout.slice(0, 120)}`);
-      assert.equal(result.replies[0].error.code, -32600, "64 MiB is refused like any oversize line");
-      assert.equal(result.replies[1].id, 999, "the ping after it answers, so the 64 MiB was drained to the newline");
+      assert.equal(
+        result.replies.find((r) => r.error?.code === -32600)?.id,
+        null,
+        "64 MiB is refused like any oversize line",
+      );
+      assert.equal(result.replies.find((r) => r.id === 999)?.id, 999, "the ping after it answers, so the 64 MiB was drained to the newline");
       assert.equal(result.code, 0, `clean exit; stderr: ${result.stderr.slice(0, 200)}`);
       assert.doesNotMatch(result.stderr, /out of memory|SIGSEGV|goroutine 1 \[/, "no Go runtime death");
       assert.ok(waited < 20_000, `refused and drained in ${waited}ms, not held in memory`);
@@ -409,7 +519,10 @@ describe("Red team: the local MCP server", () => {
       assert.ok(Buffer.byteLength(line) > CAP);
       const result = await session(line, { killAfterMs: 30_000 });
       assert.equal(result.replies.length, 1, `refused, not dropped: ${result.stdout.slice(0, 120)}`);
+      // One answer in the session: the refusal is answered on the reader loop
+      // with a null id because the line was too long to read an id from.
       assert.equal(result.replies[0].error.code, -32600);
+      assert.equal(result.replies[0].id, null);
       assert.equal(result.code, 0, "and the server then exits cleanly at EOF");
     });
   });
@@ -428,10 +541,10 @@ describe("Red team: the local MCP server", () => {
         res.end(body);
       });
       try {
-        const result = await session(callTool(1, "launchsense_report", { scanId: "fixture" }), {
+        const result = await session(HELLO + callTool(1, "launchsense_report", { scanId: "fixture" }), {
           env: { LAUNCHSENSE_API_URL: host.url },
         });
-        const reply = result.replies[0];
+        const reply = result.replies.find((r) => r.id === 1);
         assert.equal(reply.result.isError, false, "a body exactly at the cap is not an error");
         assert.equal(reply.result.content[0].text.length, REPORT_CAP, "every byte came through");
         assert.doesNotMatch(reply.result.content[0].text, /partial/i, "and nothing claims it was clipped");
@@ -448,10 +561,10 @@ describe("Red team: the local MCP server", () => {
         res.end(body);
       });
       try {
-        const result = await session(callTool(1, "launchsense_report", { scanId: "fixture" }), {
+        const result = await session(HELLO + callTool(1, "launchsense_report", { scanId: "fixture" }), {
           env: { LAUNCHSENSE_API_URL: host.url },
         });
-        const reply = result.replies[0];
+        const reply = result.replies.find((r) => r.id === 1);
         const text = reply.result.content[0].text;
         assert.equal(reply.result.isError, true, `a clipped body must not be a success; text was ${text.length} characters`);
         assert.match(text, /partial/i, `the answer says it is partial: ${text}`);
@@ -470,11 +583,12 @@ describe("Red team: the local MCP server", () => {
         res.end();
       });
       try {
-        const result = await session(callTool(1, "launchsense_report", { scanId: "fixture" }), {
+        const result = await session(HELLO + callTool(1, "launchsense_report", { scanId: "fixture" }), {
           env: { LAUNCHSENSE_API_URL: host.url },
         });
-        assert.equal(result.replies[0].result.isError, false, "no content-length header, same result");
-        assert.equal(result.replies[0].result.content[0].text.length, REPORT_CAP);
+        const reply = result.replies.find((r) => r.id === 1);
+        assert.equal(reply.result.isError, false, "no content-length header, same result");
+        assert.equal(reply.result.content[0].text.length, REPORT_CAP);
       } finally {
         await host.close();
       }
@@ -488,10 +602,10 @@ describe("Red team: the local MCP server", () => {
         res.socket.destroy(); // hang up mid-body
       });
       try {
-        const result = await session(callTool(1, "launchsense_report", { scanId: "truncated" }), {
+        const result = await session(HELLO + callTool(1, "launchsense_report", { scanId: "truncated" }), {
           env: { LAUNCHSENSE_API_URL: host.url },
         });
-        const reply = result.replies[0];
+        const reply = result.replies.find((r) => r.id === 1);
         assert.equal(reply.result.isError, true, "a half-read body is a failure");
         const text = reply.result.content[0].text;
         assert.doesNotMatch(text, /RRRRR/, "the partial bytes are not handed over as a report");
@@ -514,18 +628,19 @@ describe("Red team: the local MCP server", () => {
       try {
         const started = Date.now();
         const result = await session(
-          callTool(1, "launchsense_report", { scanId: "hangs" }) + PING,
+          HELLO + callTool(1, "launchsense_report", { scanId: "hangs" }) + PING,
           { env: { LAUNCHSENSE_API_URL: host.url }, killAfterMs: 40_000 },
         );
         const waited = Date.now() - started;
-        assert.equal(result.replies.length, 2, `both messages answer: ${result.stdout.slice(0, 160)}`);
-        assert.equal(result.replies[0].result.isError, true, "the hung call is an error");
+        assert.equal(result.replies.length, 3, `every message answers: ${result.stdout.slice(0, 160)}`);
+        const call = result.replies.find((r) => r.id === 1);
+        assert.equal(call.result.isError, true, "the hung call is an error");
         assert.match(
-          result.replies[0].result.content[0].text,
+          call.result.content[0].text,
           /timeout|deadline/i,
-          `and it names the timeout: ${result.replies[0].result.content[0].text}`,
+          `and it names the timeout: ${call.result.content[0].text}`,
         );
-        assert.equal(result.replies[1].id, 999, "a hung endpoint does not take ping down with it");
+        assert.equal(result.replies.find((r) => r.id === 999).id, 999, "a hung endpoint does not take ping down with it");
         assert.ok(waited >= 7_000 && waited < 20_000, `gave up in ${waited}ms, not before the 8s budget and not forever`);
         assert.equal(result.code, 0);
       } finally {
@@ -543,48 +658,118 @@ describe("Red team: the local MCP server", () => {
       try {
         const started = Date.now();
         const result = await session(
-          callTool(1, "launchsense_report", { scanId: "stalls" }) + PING,
+          HELLO + callTool(1, "launchsense_report", { scanId: "stalls" }) + PING,
           { env: { LAUNCHSENSE_API_URL: host.url }, killAfterMs: 40_000 },
         );
         const waited = Date.now() - started;
-        assert.equal(result.replies.length, 2, `both messages answer: ${result.stdout.slice(0, 160)}`);
-        assert.equal(result.replies[0].result.isError, true, "a stalled body read is an error");
-        assert.match(result.replies[0].result.content[0].text, /timeout|deadline|context/i);
-        assert.equal(result.replies[1].id, 999, "ping still answers");
+        assert.equal(result.replies.length, 3, `every message answers: ${result.stdout.slice(0, 160)}`);
+        const call = result.replies.find((r) => r.id === 1);
+        assert.equal(call.result.isError, true, "a stalled body read is an error");
+        assert.match(call.result.content[0].text, /timeout|deadline|context/i);
+        assert.equal(result.replies.find((r) => r.id === 999).id, 999, "ping still answers");
         assert.ok(waited < 20_000, `gave up in ${waited}ms`);
       } finally {
         await host.close();
       }
     });
 
-    it("[OPEN] 4.3 a review subprocess that never finishes blocks every later message for the full 10 minute budget", async () => {
+    it("[DEFENDED] 4.3 a review subprocess that never finishes does not block any later message", async () => {
       needGo();
-      // review_local.go:18 sets reviewTimeout to 10 minutes, and serve() answers
-      // one message at a time. So a review that never exits takes ping, and
-      // every other tool, down with it for ten minutes. The API path was given
-      // an 8s budget; this path was not. OPEN until the loop stops being the
-      // only thing standing between a stuck subprocess and the client.
+      // review_local.go:18 sets reviewTimeout to 10 minutes, so a review that
+      // never exits is still running ten minutes later. What changed is that it no
+      // longer runs on the read loop: each message is handled in its own
+      // goroutine, so ping and every other request are answered while the review
+      // is still going. The review itself is still bounded by its own budget and
+      // comes back as an error, which TestReviewSubprocessTimeout in mcp/ covers.
       const dir = mkdtempSync("/tmp/opencode/w4-red-review-");
       const script = join(dir, "never-finishes.ts");
       writeFileSync(script, "setInterval(() => {}, 1000);\n");
       try {
-        const started = Date.now();
         const result = await session(
-          callTool(1, "launchsense_scan_repo", {}) + PING,
+          frames(request(0, "initialize", { protocolVersion: "2025-06-18" })) +
+            callTool(1, "launchsense_scan_repo", {}) +
+            PING,
           {
             env: { LAUNCHSENSE_REVIEW: script, LAUNCHSENSE_ROOT: dir },
-            killAfterMs: 25_000,
+            // The review never exits, so serve waits for it after stdin closes and
+            // this session can only end when the harness kills the process.
+            killAfterMs: 15_000,
+          },
+        );
+        // The handshake and the ping both answer. The review does not, because the
+        // script never exits, and that is the point: it is not holding anything up.
+        // Matched by id, not by position: the ping is answered while the review is
+        // still running, so it is normally first on stdout.
+        const ids = result.replies.map((r) => r.id);
+        assert.deepEqual(
+          [...ids.filter((id) => id !== 1)].sort((a, b) => a - b),
+          [0, 999],
+          `the handshake and the ping answer while the review is still running: ${result.stdout.slice(0, 200)}`,
+        );
+        assert.ok(
+          !ids.includes(1),
+          "the review itself has no answer yet, which is what a 10 minute budget looks like from here",
+        );
+        const ping = result.replies.find((r) => r.id === 999);
+        assert.ok(ping.result, `ping is answered with a result: ${JSON.stringify(ping)}`);
+        // The ping's own arrival time, not the length of the session. This session
+        // cannot finish early: stdin closes and serve waits for the review still
+        // running under its 10 minute budget, so the session is only over when the
+        // harness kills it at killAfterMs. Timing the session would time the kill.
+        const pingAt = result.arrivedAt.get(999);
+        assert.equal(typeof pingAt, "number", `the ping's arrival was recorded: ${[...result.arrivedAt.entries()]}`);
+        assert.ok(pingAt < 5_000, `the ping came back in ${pingAt}ms, not after the 10 minute review budget`);
+        assert.ok(
+          result.arrivedAt.get(0) < pingAt + 5_000,
+          `the handshake answered too, in ${result.arrivedAt.get(0)}ms`,
+        );
+        // The review never answered at all, so its arrival was never recorded.
+        assert.equal(result.arrivedAt.has(1), false, "the review is still running when the ping answered");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("[DEFENDED] 4.4 ten concurrent pings all answer while one slow tool call is in flight", async () => {
+      needGo();
+      // The defect was a serialised loop, so this is the shape that broke it: one
+      // request that takes its time and a pile of cheap ones behind it. Each gets
+      // its own answer and no two answers share a line.
+      const dir = mkdtempSync("/tmp/opencode/w4-red-slow-");
+      const script = join(dir, "slow-review.ts");
+      writeFileSync(script, "setTimeout(() => {}, 6000);\nconsole.log('{\"findings\":[]}');\n");
+      try {
+        const started = Date.now();
+        const result = await session(
+          frames(request(0, "initialize", { protocolVersion: "2025-06-18" })) +
+            callTool(1, "launchsense_scan_repo", {}) +
+            Array.from({ length: 10 }, (_, i) => frame(request(100 + i, "ping"))).join(""),
+          {
+            env: { LAUNCHSENSE_REVIEW: script, LAUNCHSENSE_ROOT: dir },
+            killAfterMs: 30_000,
           },
         );
         const waited = Date.now() - started;
-        assert.equal(
-          result.replies.length,
-          0,
-          `a ping sent after a hung review got no answer at all in ${waited}ms: ${result.stdout.slice(0, 160)}`,
+        const pings = result.replies.filter((r) => typeof r.id === "number" && r.id >= 100);
+        assert.equal(pings.length, 10, `all ten pings answer: ${result.stdout.slice(0, 200)}`);
+        // Each ping is matched by its own id, so all ten really answered rather
+        // than one id answering twice.
+        for (let i = 0; i < 10; i += 1) {
+          const answer = result.replies.filter((r) => r.id === 100 + i);
+          assert.equal(answer.length, 1, `exactly one answer for ping ${100 + i}`);
+          assert.ok(answer[0].result, `ping ${100 + i} answered with a result`);
+        }
+        for (const ping of pings) {
+          assert.ok(ping.result, `ping ${ping.id} answered with a result`);
+        }
+        // One line per message: no answer was split by a concurrent writer.
+        assert.equal(result.replies.length, result.lines.length, `framing held: ${result.stdout.slice(0, 200)}`);
+        assert.ok(
+          result.replies.some((r) => r.id === 1),
+          `the slow review answered too, once its script finished: ${result.stdout.slice(0, 300)}`,
         );
-        assert.equal(result.signal, "SIGKILL", "the server had to be killed, it never exited on its own");
-        assert.equal(result.code, null);
-        assert.ok(waited >= 25_000, `proved over ${waited}ms with no reply, which is the 10 minute budget showing through`);
+        assert.ok(waited < 30_000, `the whole exchange took ${waited}ms`);
+        assert.equal(result.code, 0, `the session ends cleanly; stderr: ${result.stderr.slice(0, 200)}`);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -595,11 +780,14 @@ describe("Red team: the local MCP server", () => {
   // Target 5: tool names and arguments
   // ------------------------------------------------------------------
   describe("target 5: tool names and arguments", () => {
-    /** One tools/call per session, so nothing else can answer for it. */
+    /** One tools/call per session, so nothing else can answer for it. The
+     *  handshake is sent first because the server now refuses a tool call that
+     *  arrives before it, which is row 6.2. */
     const ask = async (name, args, extra = {}) => {
-      const result = await session(callTool(1, name, args), extra);
-      assert.equal(result.replies.length, 1, `one answer: ${result.stdout.slice(0, 200)}`);
-      return result.replies[0];
+      const result = await session(HELLO + callTool(1, name, args), extra);
+      const reply = result.replies.find((r) => r.id === 1);
+      assert.ok(reply, `the tool call is answered: ${result.stdout.slice(0, 200)}`);
+      return reply;
     };
 
     it("[DEFENDED] 5.1 the hosted tool name called locally is a protocol error, not a scan that reports nothing", async () => {
@@ -610,8 +798,8 @@ describe("Red team: the local MCP server", () => {
       assert.match(reply.error.message, /launchsense_scan_public/, "and it names what was asked for");
       assert.doesNotMatch(reply.error.message, /scan of|scanned|scan complete/i, "it must not read like a scan ran");
       // The list must not advertise it either, or a client would keep trying.
-      const list = await session(frame(request(1, "tools/list")));
-      const names = list.replies[0].result.tools.map((t) => t.name);
+      const list = await session(HELLO + frame(request(1, "tools/list")));
+      const names = list.replies.find((r) => r.id === 1).result.tools.map((t) => t.name);
       assert.ok(!names.includes("launchsense_scan_public"), `tools/list must not offer it: ${names.join(", ")}`);
       assert.ok(names.includes("launchsense_scan_public_notice"), "the pointer to the hosted read is offered instead");
     });
@@ -676,9 +864,12 @@ describe("Red team: the local MCP server", () => {
         ["an unknown method", '{"jsonrpc":"2.0","id":1,"method":"does/not/exist"}\n', -32601, /Method not found/],
       ];
       for (const [name, input, code, pattern] of cases) {
-        const result = await session(input);
-        assert.equal(result.replies.length, 1, `${name}: one answer, got ${result.stdout.slice(0, 160)}`);
-        const reply = result.replies[0];
+        // HELLO first: before the handshake the server answers -32002, which would
+        // hide the argument check under test. Its id is 0, so the answer for id 1
+        // is the one under test.
+        const result = await session(HELLO + input);
+        const reply = result.replies.find((r) => r.id === 1);
+        assert.ok(reply, `${name}: one answer, got ${result.stdout.slice(0, 160)}`);
         assert.ok(!("result" in reply), `${name}: must not be a result, got ${JSON.stringify(reply).slice(0, 160)}`);
         assert.equal(reply.error.code, code, `${name}: wrong code`);
         assert.match(reply.error.message, pattern, `${name}: wrong message: ${reply.error.message}`);
@@ -691,22 +882,27 @@ describe("Red team: the local MCP server", () => {
       // The real mistake is the envelope: params was null, so there was no tool
       // call to name. The answer says "Unknown tool: " with nothing after it,
       // which points a reader at the tool list instead of at the bad message.
-      const nullParams = await session('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":null}\n');
-      assert.equal(nullParams.replies.length, 1);
-      assert.equal(nullParams.replies[0].error.code, -32602, "measured: -32602");
+      const nullParams = await session(
+        HELLO + '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":null}\n',
+      );
+      const blank = nullParams.replies.find((r) => r.id === 1);
+      assert.ok(blank, `one answer: ${nullParams.stdout.slice(0, 160)}`);
+      assert.equal(blank.error.code, -32602, "measured: -32602");
       assert.match(
-        nullParams.replies[0].error.message,
+        blank.error.message,
         /Unknown tool: $/,
-        `measured: the name after the colon is empty, so the message names nothing: ${JSON.stringify(nullParams.replies[0].error.message)}`,
+        `measured: the name after the colon is empty, so the message names nothing: ${JSON.stringify(blank.error.message)}`,
       );
 
       // The same blank name comes from a missing name and from an empty one.
-      const missingName = await session('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"arguments":{}}}\n');
-      assert.match(missingName.replies[0].error.message, /Unknown tool: $/, "measured: same blank name");
+      const missingName = await session(
+        HELLO + '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"arguments":{}}}\n',
+      );
+      assert.match(missingName.replies.find((r) => r.id === 2).error.message, /Unknown tool: $/, "measured: same blank name");
 
       const emptyName = await callTool(3, "", {});
-      const empty = await session(emptyName);
-      assert.match(empty.replies[0].error.message, /Unknown tool: $/, "measured: same blank name");
+      const empty = await session(HELLO + emptyName);
+      assert.match(empty.replies.find((r) => r.id === 3).error.message, /Unknown tool: $/, "measured: same blank name");
     });
 
     it("[DEFENDED] 5.8 multi-byte text survives the round trip through a tool answer", async () => {
@@ -716,11 +912,12 @@ describe("Red team: the local MCP server", () => {
       const dir = mkdtempSync("/tmp/opencode/w4-red-root-");
       const odd = "café-\u{1F600}-tab\there";
       try {
-        const result = await session(callTool(1, "launchsense_scan_repo", {}), {
+        const result = await session(HELLO + callTool(1, "launchsense_scan_repo", {}), {
           env: { LAUNCHSENSE_ROOT: odd },
         });
-        const text = result.replies[0].result.content[0].text;
-        assert.equal(result.replies[0].result.isError, true, "a relative root is refused, which is the path we want");
+        const reply = result.replies.find((r) => r.id === 1);
+        const text = reply.result.content[0].text;
+        assert.equal(reply.result.isError, true, "a relative root is refused, which is the path we want");
         assert.ok(text.includes("café-\u{1F600}"), `multi-byte characters survive: ${text}`);
         assert.ok(!text.includes("\uFFFD"), "no replacement character, so nothing was mangled");
       } finally {
@@ -733,81 +930,111 @@ describe("Red team: the local MCP server", () => {
   // Target 6: session and envelope
   // ------------------------------------------------------------------
   describe("target 6: session and envelope", () => {
-    it("[OPEN] 6.1 tools/list before initialize is answered with the whole tool list", async () => {
+    // W41-MCP flipped 6.1 to 6.5, 6.7, 6.9 and 6.10. 6.8, a JSON-RPC batch, is
+    // still OPEN and still measured below.
+    it("[DEFENDED] 6.1 tools/list before initialize is refused with -32002 and no tool list comes back", async () => {
       needGo();
       const result = await session(frame(request(1, "tools/list")));
-      assert.equal(result.replies.length, 1, `answered before any initialize: ${result.stdout.slice(0, 160)}`);
-      assert.ok(result.replies[0].result, "measured: a result, not an error");
-      const tools = result.replies[0].result.tools;
-      assert.ok(Array.isArray(tools) && tools.length > 0, `measured: ${tools?.length} tools served with no session`);
-      assert.equal(result.stderr, "", "and nothing was logged about the missing handshake");
-      // OPEN: the MCP lifecycle starts at initialize. A request before it is
-      // answered by a server that keeps no session state at all.
+      assert.equal(result.replies.length, 1, `one answer: ${result.stdout.slice(0, 160)}`);
+      const reply = result.replies[0];
+      assert.ok(!("result" in reply), "a refused request never returns a result");
+      assert.equal(reply.error.code, -32002, "before the handshake a request is Server not initialized");
+      assert.match(reply.error.message, /not initialized/i, `the answer says why: ${reply.error.message}`);
+      assert.equal(reply.id, 1, "the id is echoed, so the client can match the refusal to its request");
+      assert.equal(result.stderr, "", "the refusal is on stdout as a protocol answer, not a log line");
     });
 
-    it("[OPEN] 6.2 a tools/call before initialize does real work and reports success", async () => {
+    it("[DEFENDED] 6.2 a tools/call before initialize does not run the tool", async () => {
       needGo();
       const result = await session(callTool(1, "launchsense_scan_public_notice", {}));
       assert.equal(result.replies.length, 1);
-      assert.ok(result.replies[0].result, "measured: a result");
-      assert.equal(result.replies[0].result.isError, false, "measured: isError false, so the tool ran");
-      assert.ok(
-        result.replies[0].result.content[0].text.includes("convex.site/mcp"),
-        "measured: the tool really produced its answer with no session",
+      assert.ok(!("result" in result.replies[0]), "no result: the tool was not run");
+      assert.equal(result.replies[0].error.code, -32002);
+      assert.doesNotMatch(
+        result.stdout,
+        /convex\.site\/mcp/,
+        "none of the tool's text comes back, so nothing reads as a finished tool call",
       );
+      assert.equal(result.code, 0, "the server is alive and refuses politely");
     });
 
-    it("[OPEN] 6.3 a second initialize is answered as if it were the first", async () => {
+    it("[DEFENDED] 6.3 a second initialize is refused, and the session keeps working", async () => {
       needGo();
       const result = await session(
         frames(
           request(1, "initialize", { protocolVersion: "2024-11-05" }),
           request(2, "initialize", { protocolVersion: "2025-11-25" }),
+          request(3, "tools/list"),
         ),
       );
-      assert.deepEqual(result.replies.map((r) => r.id), [1, 2], `both answered: ${result.stdout.slice(0, 200)}`);
-      assert.ok(result.replies[0].result.serverInfo, "measured: the first answered");
-      assert.ok(result.replies[1].result.serverInfo, "measured: the second answered too, with no complaint");
-      // OPEN: the lifecycle allows one initialize. A second one is a client
-      // that restarted or raced, and the answer should say so rather than hand
-      // out a second full handshake.
+      const byId = new Map(result.replies.map((r) => [r.id, r]));
+      assert.equal(byId.size, 3, `each message is answered once: ${result.stdout.slice(0, 240)}`);
+      assert.ok(byId.get(1).result.serverInfo, "the first initialize is a full handshake");
+      assert.equal(byId.get(1).result.protocolVersion, "2024-11-05", "in the version the client asked for");
+      assert.ok(!("result" in byId.get(2)), "a second initialize is not a second handshake");
+      assert.equal(byId.get(2).error.code, -32600, "it is Invalid Request");
+      assert.match(byId.get(2).error.message, /already initialized/i, `the answer says why: ${byId.get(2).error.message}`);
+      assert.ok(Array.isArray(byId.get(3).result.tools), "the session still serves tools after the refusal");
+      assert.equal(result.code, 0);
     });
 
-    it("[OPEN] 6.4 jsonrpc 1.0, and a message with no jsonrpc member at all, are both served normally", async () => {
+    it("[DEFENDED] 6.4 a wrong or missing jsonrpc member is refused with -32600 and nothing runs", async () => {
       needGo();
       for (const [name, input] of [
         ["jsonrpc 1.0", '{"jsonrpc":"1.0","id":1,"method":"tools/list"}\n'],
         ["no jsonrpc member", '{"id":2,"method":"tools/list"}\n'],
-        ["no jsonrpc, a tool call", '{"id":3,"method":"tools/call","params":{"name":"launchsense_scan_public_notice","arguments":{}}}\n'],
+        ["jsonrpc is a number", '{"jsonrpc":2.0,"id":3,"method":"tools/list"}\n'],
+        ["jsonrpc is an array", '{"jsonrpc":["2.0"],"id":4,"method":"tools/list"}\n'],
+        ["no jsonrpc, a tool call", '{"id":5,"method":"tools/call","params":{"name":"launchsense_scan_public_notice","arguments":{}}}\n'],
       ]) {
         const result = await session(input);
         assert.equal(result.replies.length, 1, `${name}: one answer, got ${result.stdout.slice(0, 120)}`);
         const reply = result.replies[0];
-        assert.ok(reply.result, `${name}: measured as served normally, result present`);
-        assert.equal(reply.jsonrpc, "2.0", `${name}: the server always says 2.0 on the way out`);
-        assert.ok(!("error" in reply), `${name}: no error was raised about the envelope`);
+        assert.ok(!("result" in reply), `${name}: nothing ran, so no result`);
+        assert.equal(reply.error.code, -32600, `${name}: a message that is not JSON-RPC 2.0 is Invalid Request`);
+        assert.match(reply.error.message, /jsonrpc/i, `${name}: the answer names the member: ${reply.error.message}`);
+        assert.doesNotMatch(result.stderr, /Go struct field/, `${name}: the log line does not leak a Go internal`);
+        assert.equal(result.code, 0, `${name}: the server stays up`);
       }
-      // OPEN, and this is the known one from the release QA (F8). The jsonrpc
-      // member is never read, so a wrong version or no version at all is
-      // indistinguishable from a correct client.
     });
 
-    it("[OPEN] 6.5 protocolVersion on the way in is ignored, and every version gets 2024-11-05", async () => {
+    it("[DEFENDED] 6.5 protocolVersion is negotiated among the four the hosted surface serves", async () => {
       needGo();
-      for (const version of ["2025-06-18", "2025-11-25", "2099-01-01", 20250618, null]) {
+      // The hosted list, read from its own source so the two surfaces cannot drift
+      // apart without this failing.
+      const hosted = readFileSync(join(REPO, "convex", "mcpHttp.ts"), "utf8");
+      const listLine = hosted.split("\n").find((line) => line.includes("PROTOCOL_VERSIONS") && line.includes("["));
+      assert.ok(listLine, "the hosted protocol version list was found");
+      const hostedVersions = [...listLine.matchAll(/"(\d{4}-\d{2}-\d{2})"/g)].map((m) => m[1]);
+      assert.ok(hostedVersions.length > 0, `no versions parsed from: ${listLine}`);
+
+      for (const version of hostedVersions) {
+        const result = await session(frame(request(1, "initialize", { protocolVersion: version })));
+        assert.equal(result.replies.length, 1, `one answer for ${version}`);
+        assert.equal(
+          result.replies[0].result.protocolVersion,
+          version,
+          `a version this server serves is echoed, not replaced: ${version} came back as ${result.replies[0].result.protocolVersion}`,
+        );
+      }
+      // Anything else is answered with the default rather than refused: a client
+      // asking for a version nobody has is told which version it did get.
+      const defaultAnswer = "2025-03-26";
+      for (const version of ["2099-01-01", 20250618, null]) {
         const result = await session(frame(request(1, "initialize", { protocolVersion: version })));
         assert.equal(result.replies.length, 1, `one answer for ${JSON.stringify(version)}`);
         assert.equal(
           result.replies[0].result.protocolVersion,
-          "2024-11-05",
-          `measured: ${JSON.stringify(version)} is answered with 2024-11-05`,
+          defaultAnswer,
+          `${JSON.stringify(version)} is answered with the default`,
         );
       }
       const absent = await session(frame(request(1, "initialize")));
-      assert.equal(absent.replies[0].result.protocolVersion, "2024-11-05", "measured: no version asked, one given");
-      // OPEN: a version the server does not implement, and a version nobody
-      // has heard of, are both accepted silently. Negotiation needs either an
-      // error for an unsupported version or a stated policy.
+      assert.equal(absent.replies[0].result.protocolVersion, defaultAnswer, "no version asked, the default given");
+      assert.ok(
+        hostedVersions.includes(defaultAnswer),
+        `the default must be a version the hosted surface serves: ${defaultAnswer}`,
+      );
     });
 
     it("[DEFENDED] 6.6 a notification carries no id and is correctly not answered", async () => {
@@ -819,56 +1046,89 @@ describe("Red team: the local MCP server", () => {
       assert.equal(result.code, 0);
     });
 
-    it("[OPEN] 6.7 an explicit \"id\": null is dropped like a notification, so a client that sends it waits forever", async () => {
+    it("[DEFENDED] 6.7 an explicit \"id\": null is a request and is answered with id null", async () => {
       needGo();
-      // JSON-RPC 2.0: a missing id means a notification. An id that is present
-      // and null is a request, and it must be answered with id null. The
-      // server treats both as a notification, so nothing comes back and
-      // nothing says why.
+      // JSON-RPC 2.0: a missing id member means a notification. An id that is
+      // present and null is a request, and the answer must carry the same null id.
+      // The server used to drop both, which left a client that sent id null
+      // waiting with nothing on stderr to say why.
       const result = await session('{"jsonrpc":"2.0","id":null,"method":"ping"}\n');
-      assert.equal(result.replies.length, 0, `measured: no answer at all: ${JSON.stringify(result.stdout)}`);
-      assert.equal(result.stderr, "", "measured: and nothing on stderr to explain the silence");
-      assert.equal(result.code, 0, "the server is alive, it just never answered");
+      assert.equal(result.replies.length, 1, `one answer, id null: ${JSON.stringify(result.stdout)}`);
+      assert.equal(result.replies[0].id, null, "the id is answered with null, which is what was asked");
+      assert.ok(result.replies[0].result, "with a result, so ping is answered and not merely acknowledged");
+      assert.ok(!("error" in result.replies[0]), "a null id is legal JSON-RPC, so it is not an error");
+      assert.equal(result.code, 0);
+      // The missing-id case is the other half and is 6.6: still silence.
+      const absent = await session('{"jsonrpc":"2.0","method":"ping"}\n');
+      assert.equal(absent.replies.length, 0, "a missing id is a notification and is not answered");
     });
 
     it("[OPEN] 6.8 a JSON-RPC batch is answered as a parse error", async () => {
       needGo();
+      // Still OPEN, and still measured. W41-MCP fixed the session state and the
+      // envelope for single messages. A batch is a different shape: it is a
+      // well-formed JSON array of messages, and this server runs one message per
+      // line. Unmarshalling it into the request struct fails, so it is still
+      // answered -32700 rather than -32600, which is the honest code for it.
       const result = await session('[{"jsonrpc":"2.0","id":1,"method":"ping"}]\n');
       assert.equal(result.replies.length, 1, `one answer: ${result.stdout}`);
       assert.equal(result.replies[0].error.code, -32700, "measured: a batch is called a parse error");
       assert.equal(result.replies[0].id, null);
       assert.match(result.stderr, /parse error/, "measured: stderr calls an array a parse error too");
       // OPEN, low. Batching arrived with protocol 2025-03-26 and this server
-      // only claims 2024-11-05, so refusing is defensible. What is not
+      // negotiates up to 2025-11-25, so refusing is defensible. What is not
       // defensible is calling a well-formed JSON array a parse error: the line
       // parsed fine, the message shape was wrong. It should be -32600.
+      // Note that this server now negotiates versions in which batching is
+      // defined, so the gap is narrower than it was but still there.
+      const ping = await session(frames(request(1, "initialize", { protocolVersion: "2025-06-18" }), request(2, "ping")));
+      assert.equal(
+        ping.replies.find((r) => r.id === 1).result.protocolVersion,
+        "2025-06-18",
+        "the server does negotiate a version in which batches exist",
+      );
     });
 
-    it("[OPEN] 6.9 a jsonrpc member of the wrong JSON type is answered as a parse error", async () => {
+    it("[DEFENDED] 6.9 a jsonrpc member of the wrong JSON type is Invalid Request, not a parse error", async () => {
       needGo();
       const result = await session('{"jsonrpc":2.0,"id":1,"method":"ping"}\n');
       assert.equal(result.replies.length, 1, `one answer: ${result.stdout}`);
       assert.equal(
         result.replies[0].error.code,
-        -32700,
-        "measured: -32700, but the line was valid JSON, so this is a shape error (-32600)",
+        -32600,
+        "the line parsed as JSON, so this is a shape error. -32700 would blame the bytes for a mistake in the message",
       );
-      assert.match(result.stderr, /cannot unmarshal number into Go struct/, "measured: the Go error leaks the struct name");
+      assert.match(result.replies[0].error.message, /jsonrpc/i, "the answer names the member");
+      assert.doesNotMatch(result.stderr, /cannot unmarshal number into Go struct/, "the Go struct name is not the mistake");
+      assert.equal(result.code, 0);
     });
 
-    it("[OPEN] 6.10 a non-scalar id is echoed back unchanged", async () => {
+    it("[DEFENDED] 6.10 a non-scalar id is refused, while string, number and null ids are echoed", async () => {
       needGo();
-      const result = await session('{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}\n');
-      assert.equal(result.replies.length, 1, `one answer: ${result.stdout}`);
-      assert.deepEqual(
-        result.replies[0].id,
-        { a: 1 },
-        "measured: an object id is echoed. JSON-RPC 2.0 allows only a string, a number or null",
-      );
+      for (const [name, id] of [
+        ["an object", '{"a":1}'],
+        ["an array", "[1]"],
+        ["a boolean", "true"],
+      ]) {
+        const result = await session(`{"jsonrpc":"2.0","id":${id},"method":"ping"}\n`);
+        assert.equal(result.replies.length, 1, `${name}: one answer: ${result.stdout}`);
+        assert.equal(
+          result.replies[0].error.code,
+          -32600,
+          `${name}: JSON-RPC 2.0 allows only a string, a number or null as an id`,
+        );
+        assert.match(result.replies[0].error.message, /id member/, `${name}: the answer names the member`);
+        assert.ok(!("result" in result.replies[0]), `${name}: nothing ran`);
+      }
+      // The three allowed shapes are still echoed unchanged, so a client that
+      // used one of them is not broken by the check.
       const stringId = await session('{"jsonrpc":"2.0","id":"abc","method":"ping"}\n');
-      assert.equal(stringId.replies[0].id, "abc", "measured: a string id is echoed, which is allowed");
+      assert.equal(stringId.replies[0].id, "abc", "a string id is echoed");
       const zeroId = await session('{"jsonrpc":"2.0","id":0,"method":"ping"}\n');
-      assert.equal(zeroId.replies[0].id, 0, "measured: id 0 is answered, so zero is not mistaken for absent");
+      assert.equal(zeroId.replies[0].id, 0, "id 0 is answered, so zero is not mistaken for absent");
+      const nullId = await session('{"jsonrpc":"2.0","id":null,"method":"ping"}\n');
+      assert.equal(nullId.replies[0].id, null, "a null id is echoed, as 6.7 covers");
+      assert.ok(nullId.replies[0].result, "and answered with a result");
     });
   });
 });

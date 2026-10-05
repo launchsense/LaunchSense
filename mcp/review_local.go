@@ -11,10 +11,11 @@ import (
 )
 
 // reviewTimeout bounds the local review subprocess. The review is a node script
-// that may reach the network for OSV, so it is slower than an API call, but the
-// stdio loop answers one message at a time: a process that never exits would
-// hold every later message, ping included. It is a variable so a test can shorten
-// it; nothing in production changes it.
+// that may reach the network for OSV, so it is slower than an API call. The stdio
+// loop answers messages concurrently, so a slow review no longer holds up ping or
+// any other request; this budget bounds the review itself, so a review that never
+// finishes cannot leave a goroutine behind for ever. It is a variable so a test
+// can shorten it; nothing in production changes it.
 var reviewTimeout = 10 * time.Minute
 
 func runNodeReview(root string) (string, error) {
