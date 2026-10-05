@@ -21,6 +21,7 @@ const readRepo = (rel) => readFileSync(new URL(rel, repoRoot), "utf8");
 
 const raw = readRepo("convex/decisionMonitoring.ts");
 const http = readRepo("convex/http.ts");
+const limitRaw = readRepo("convex/mcpLimit.ts");
 const aiExplainRaw = readRepo("convex/scans/aiExplain.ts");
 // Comments say what the code must never do, so they are stripped before the
 // assertions below look for that behaviour. Only executable code is checked.
@@ -136,6 +137,54 @@ function makeCtx(rows) {
   };
   return { ctx, calls };
 }
+
+// A real rateLimits table, so the gate's own bump path runs for real. It records
+// every key it writes, which is how a test sees what a key actually holds.
+function makeRateCtx() {
+  const rows = new Map();
+  const written = [];
+  let nextId = 0;
+  const ctx = {
+    db: {
+      query(table) {
+        assert.equal(table, "rateLimits", "the gate must only touch rateLimits");
+        return {
+          withIndex(name, rangeFn) {
+            assert.equal(name, "by_key", "the gate reads a counter by its key");
+            let key = "";
+            rangeFn({
+              eq: (field, value) => {
+                assert.equal(field, "key");
+                key = value;
+              },
+            });
+            return { unique: async () => rows.get(key) ?? null };
+          },
+        };
+      },
+      insert(table, doc) {
+        assert.equal(table, "rateLimits", "the gate must only write rateLimits");
+        nextId += 1;
+        const row = { _id: `row${nextId}`, ...doc };
+        rows.set(doc.key, row);
+        written.push(doc.key);
+        return row._id;
+      },
+      async patch(table, id, fields) {
+        assert.equal(table, "rateLimits", "the gate must only write rateLimits");
+        const entry = [...rows.entries()].find(([, row]) => row._id === id);
+        assert.ok(entry, "the patch must target a row the gate inserted");
+        rows.set(entry[0], { ...entry[1], ...fields });
+      },
+    },
+  };
+  return { ctx, rows, written };
+}
+
+// Two addresses, both of the shape the proxy used to hand over. They are test
+// inputs, not stored values, and neither is a real address.
+const ADDRESS_A = ["203", "0", "113", "7"].join(".");
+const ADDRESS_B = ["198", "51", "100", "23"].join(".");
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -271,6 +320,124 @@ describe("usage write route", () => {
       "an absent orderSource must not be stored as a table row",
     );
     assert.match(route, /orderSource:[^\n]*"unspecified"/);
+  });
+});
+
+// The hosted rate limit key. Two defects lived in one line: the key held the
+// caller's raw address from `x-forwarded-for`, and the caps were set for one
+// caller rather than for a pilot group. The key is now a fixed bucket name and
+// the caps are pilot numbers, so both are checked here.
+describe("hosted rate limit key", () => {
+  it("never puts the caller's address in a key, and reads no address header", async () => {
+    // The header is gone from the routes, so there is nothing to hash later.
+    assert.ok(
+      !/x-forwarded-for/.test(http),
+      "no route may read the caller address once the key no longer needs one",
+    );
+
+    const { ctx, written } = makeRateCtx();
+    // Both shapes an address used to arrive in: the argument the mutation took,
+    // and the header the route read. Neither may appear in a stored key.
+    await loadWithStubs("convex/mcpLimit.ts").then((mod) =>
+      mod.consumeMcpScan.handler(ctx, { caller: ADDRESS_A }),
+    );
+    await loadWithStubs("convex/mcpLimit.ts").then((mod) =>
+      mod.consumeUsageWrite.handler(ctx, { caller: ADDRESS_B }),
+    );
+
+    assert.ok(written.length >= 2, "the two gates must each have written a row");
+    for (const key of written) {
+      assert.ok(!key.includes(ADDRESS_A), `no key may hold the caller address: ${key}`);
+      assert.ok(!key.includes(ADDRESS_B), `no key may hold the caller address: ${key}`);
+      // A key is kind, window, bucket. A dotted quad or a colon-joined port in
+      // the last segment is an address, whatever else it is called.
+      const bucket = key.split(":").slice(2).join(":");
+      assert.doesNotMatch(
+        bucket,
+        /(?:\d{1,3}\.){3}\d{1,3}/,
+        `the bucket part of a key must not be an address: ${key}`,
+      );
+    }
+  });
+
+  it("spends one shared bucket for every hosted caller, and stops there", async () => {
+    const mod = await loadWithStubs("convex/mcpLimit.ts");
+    const { ctx, rows } = makeRateCtx();
+
+    // Two different addresses, one shared bucket. The second caller's budget is
+    // the first caller's budget, which is the honest shape while the hosted
+    // lane has no caller identity.
+    await mod.consumeMcpScan.handler(ctx, { caller: ADDRESS_A });
+    await mod.consumeMcpScan.handler(ctx, { caller: ADDRESS_B });
+    const callerRow = [...rows.values()].find((row) => row.key.includes("mcp-scan:") && !row.key.includes("global"));
+    assert.ok(callerRow, "the per-caller bucket row must exist");
+    assert.equal(callerRow.count, 2, "two callers share one bucket, not one bucket each");
+
+    // The cap still holds, so raising it for the pilot did not remove the limit.
+    const gate = makeRateCtx();
+    let allowed = 0;
+    for (let i = 0; i < mod.CALLER_LIMIT + 5; i += 1) {
+      if ((await mod.consumeMcpScan.handler(gate.ctx, { caller: ADDRESS_A })).allowed) allowed += 1;
+    }
+    assert.equal(allowed, mod.CALLER_LIMIT, "one shared bucket still stops at the named cap");
+  });
+
+  it("keeps the lane total above the shared bucket, so the bucket binds first", async () => {
+    const mod = await loadWithStubs("convex/mcpLimit.ts");
+    assert.ok(
+      mod.GLOBAL_LIMIT > mod.CALLER_LIMIT,
+      `the lane total (${mod.GLOBAL_LIMIT}) must sit above the shared bucket (${mod.CALLER_LIMIT})`,
+    );
+
+    // Ten pilot callers on one shared bucket stop at the bucket, not the total.
+    const { ctx, rows } = makeRateCtx();
+    for (let i = 0; i < mod.CALLER_LIMIT + 3; i += 1) {
+      await mod.consumeMcpScan.handler(ctx, { caller: `pilot-${i}` });
+    }
+    const total = [...rows.values()].find((row) => row.key.includes("mcp-scan-global:"));
+    assert.ok(total, "the lane total row must exist");
+    assert.ok(
+      total.count <= mod.GLOBAL_LIMIT,
+      `the lane total must never pass its own cap, it reached ${total.count}`,
+    );
+  });
+
+  it("sets pilot caps for about ten builders, and names them unmeasured", async () => {
+    const mod = await loadWithStubs("convex/mcpLimit.ts");
+
+    // Ten builders over a two month pilot. Before the fix CALLER_LIMIT was 2 an
+    // hour and GLOBAL_LIMIT was 8, which is one working pair of builders.
+    assert.ok(Number.isInteger(mod.CALLER_LIMIT), "CALLER_LIMIT must be a number the pilot can be checked against");
+    assert.ok(mod.CALLER_LIMIT >= 10, "the shared bucket must fit a group of about ten builders");
+    assert.ok(mod.GLOBAL_LIMIT >= 20, "the lane total must sit above the group it serves");
+
+    // The numbers are a policy choice with no traffic measurement behind them,
+    // and the file has to say so, so a reader cannot mistake them for a measurement.
+    assert.match(limitRaw, /no traffic measurement/i);
+    assert.match(limitRaw, /pilot/i);
+    // A load handler is named as the later unit that would measure them, not as
+    // work that exists.
+    assert.match(limitRaw, /load handler/i);
+    assert.match(limitRaw, /later unit/i);
+    assert.ok(
+      !/loadHandler\s*=|export const loadHandler/.test(limitRaw),
+      "the load handler is a later unit, so no handler of that name may exist yet",
+    );
+  });
+
+  it("still fails closed: an exhausted cap answers denied, not allowed", async () => {
+    const mod = await loadWithStubs("convex/mcpLimit.ts");
+    const { ctx } = makeRateCtx();
+    let last = { allowed: true };
+    for (let i = 0; i < mod.CALLER_LIMIT + 1; i += 1) {
+      last = await mod.consumeMcpScan.handler(ctx, { caller: ADDRESS_A });
+    }
+    assert.equal(last.allowed, false, "past the cap the gate must answer denied");
+
+    // The hosted tool turns that into an error result rather than a scan.
+    const toolBlock = http.slice(http.indexOf("async function scanPublicTool"));
+    assert.match(toolBlock, /if \(!gate\.allowed\)/, "the gate result must be checked before the scan runs");
+    assert.match(toolBlock, /isError: true/, "a denied gate must answer as an error");
   });
 });
 
