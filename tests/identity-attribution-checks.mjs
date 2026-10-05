@@ -1179,6 +1179,15 @@ describe("7. commitSha and treeSha are both recorded and never assumed equal", (
     assert.doesNotMatch(github, /\?ref=\$\{sha\}/, "the blob ref must not be built inline");
   });
 
+  it("pins the tarball read too, so no adapter trusts its caller for a sha", () => {
+    // The tarball sha came from scan.sha, which is only written after the same
+    // check passes. Enforcing it at the writer but not the reader is exactly the
+    // shape that left the blob path unpinned, so the reader checks as well.
+    const tarball = readRepo("convex/adapters/tarball.ts");
+    assert.match(tarball, /import \{ isPinnedCommitSha \} from "\.\.\/scans\/snapshot"/);
+    assert.match(tarball, /if \(!isPinnedCommitSha\(sha\)\)/);
+  });
+
   it("reads the two shas off the responses the code actually gets", () => {
     const commit = { sha: COMMIT, commit: { tree: { sha: TREE } } };
     assert.equal(snapshot.commitShaOf(commit), COMMIT);
