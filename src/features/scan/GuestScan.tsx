@@ -5,6 +5,8 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { buildFixPlan } from "../../../shared/reports/fixPlan";
 import type { PlanFinding } from "../../../shared/reports/fixPlan";
+import { toLiveUserError } from "../../../shared/reports/scope";
+import { GUEST_MAX_BYTES, GUEST_MAX_FILES } from "../../../shared/scanCaps";
 import ScanReport from "../report/ScanReport";
 import { AuthPanel } from "../auth/AuthPanel";
 import CompareView from "../report/CompareView";
@@ -52,6 +54,23 @@ export default function GuestScan() {
   const [scanId, setScanId] = useState<Id<"scans"> | null>(null);
   const [phase, setPhase] = useState<"idle" | "fetching" | "analyzing" | "live">("idle");
   const [submitError, setSubmitError] = useState("");
+  // The live lane keeps its own error. A live check is a second step after the
+  // repository scan, so its failure is named as its own and never as a scan that
+  // did not run. Rendering it beside the status line would put "completed" next
+  // to a failure notice, which is the same contradiction in a new place.
+  const [liveError, setLiveError] = useState("");
+  // What the live check actually answered. Held here as well as in the scan row
+  // because getResults only returns the stored live row once analyzedAt is set,
+  // and a signed-in scan whose GitHub token has gone is marked failed before
+  // saveResults runs. That gate cannot drop a check that did run.
+  const [liveOutcome, setLiveOutcome] = useState<{
+    reaches: boolean;
+    httpStatus: number | null;
+  } | null>(null);
+  // Whether the live check has run for the scan on screen. The not-checked box
+  // reads this, not the URL input: an address that was typed and never checked
+  // is not a check that ran.
+  const [liveAttempted, setLiveAttempted] = useState(false);
   const [wasCached, setWasCached] = useState(false);
   const [refShare] = useState<string | null>(() => readRef());
 
@@ -105,9 +124,34 @@ export default function GuestScan() {
     comparePair === null ? "skip" : { fromScanId: comparePair.from, toScanId: comparePair.to },
   );
 
+  // The one place the live app is checked. Every path that reaches a finished
+  // scan calls this, so the live app is never checked on one path and silently
+  // skipped on another. The live lane has its own error state: a live failure
+  // must not be reported as a repository scan that did not run.
+  async function runLiveCheck(targetScanId: Id<"scans">) {
+    if (liveUrl.trim().length === 0) return;
+    setLiveAttempted(true);
+    setPhase("live");
+    try {
+      const checked = await checkLive({
+        scanId: targetScanId,
+        url: liveUrl.trim(),
+        mainAction: mainAction.trim().length > 0 ? mainAction.trim() : undefined,
+      });
+      setLiveOutcome({ reaches: checked.reaches, httpStatus: checked.httpStatus });
+      void logEvent({ kind: "live_checked", scanId: targetScanId });
+    } catch (error) {
+      setLiveError(toLiveUserError(error, "Could not check the live app. The repository scan is finished."));
+    }
+    setPhase("idle");
+  }
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitError("");
+    setLiveError("");
+    setLiveOutcome(null);
+    setLiveAttempted(false);
     setShareError("");
     setShareId(null);
     setPassportId(null);
@@ -139,6 +183,9 @@ export default function GuestScan() {
         void logEvent({ kind: "referred_scan_started", scanId: result.scanId, refShareId: refShare });
       }
       if (result.status === "failed") {
+        // The repository never opened, but the live app is a different address
+        // and the check still ran, so the result is shown rather than dropped.
+        await runLiveCheck(result.scanId);
         setPhase("idle");
         return;
       }
@@ -179,15 +226,7 @@ export default function GuestScan() {
         kind: analyzed.status === "completed" ? "scan_completed" : "scan_partial",
         scanId: result.scanId,
       });
-      if (liveUrl.trim().length > 0) {
-        setPhase("live");
-        await checkLive({
-          scanId: result.scanId,
-          url: liveUrl.trim(),
-          mainAction: mainAction.trim().length > 0 ? mainAction.trim() : undefined,
-        });
-        void logEvent({ kind: "live_checked", scanId: result.scanId });
-      }
+      await runLiveCheck(result.scanId);
       setPhase("idle");
     } catch (error) {
       setSubmitError(toUserError(error, "Could not run the scan. Try again."));
@@ -232,6 +271,10 @@ export default function GuestScan() {
         kind: result.status === "completed" ? "scan_completed" : "scan_partial",
         scanId: queuedScan.scanId,
       });
+      // A resumed scan reaches the same finished state as a fresh one, so it
+      // gets the same live check. This is the path a signed-in scan is most
+      // likely to arrive by, because a bigger read holds a slot for longer.
+      await runLiveCheck(queuedScan.scanId);
       setPhase("idle");
     } catch {
       // The scan row or its commit is gone, so there is nothing to resume.
@@ -282,6 +325,10 @@ export default function GuestScan() {
       setExplainNote("");
       setComparePair({ from: base, to: rescan.scanId });
       setRescanRan(true);
+      // The re-scan is a new row and a new report, so the live app is checked
+      // again against the new row. Without this the new report had no live
+      // section while the not-checked box still said the live app was looked at.
+      await runLiveCheck(rescan.scanId);
       setPhase("idle");
     } catch (error) {
       setSubmitError(toUserError(error, "Could not rescan. Try again."));
@@ -356,8 +403,25 @@ export default function GuestScan() {
       scan.errorKind === "rate_limited" ||
       scan.errorKind === "truncated" ||
       scan.truncated === true ||
-      (scan.fetchedFileCount ?? 0) >= 200);
+      (scan.fetchedFileCount ?? 0) >= GUEST_MAX_FILES);
+  // A guest can stop for two unrelated reasons, and they are not fixed by the
+  // same thing. A repository GitHub would not open may be private, or the
+  // address may simply be wrong, and signing in cannot create a repository that
+  // does not exist. A read that stopped at the shared guest caps is fixed by
+  // signing in, because that raises the cap. One sentence for both cases told a
+  // visitor with a typo to sign in, and told a visitor who had run out of guest
+  // read that their repository was not public.
   const showSignIn = !isAuthenticated && (guestCapHit || repoMiss);
+  const capReason: "guestCap" | "repoMiss" | null = !showSignIn
+    ? null
+    : repoMiss
+      ? "repoMiss"
+      : "guestCap";
+  const capHeading = capReason === "repoMiss" ? "That repository did not open" : "Sign in to read more";
+  const capBody =
+    capReason === "repoMiss"
+      ? "GitHub would not open that repository. It may be private, or the address may be wrong. No files were read."
+      : `This scan stopped at the guest limit of ${GUEST_MAX_FILES.toLocaleString("en-US")} files and about ${Math.round(GUEST_MAX_BYTES / 1_000_000)}MB. The rest of the repository was not read.`;
   const capDialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -456,8 +520,14 @@ export default function GuestScan() {
         </div>
       )}
       {submitError.length > 0 && <p role="alert">{submitError}</p>}
+      {liveError.length > 0 && <p role="alert">{liveError}</p>}
       {queueNote.length > 0 && <p role="status">{queueNote}</p>}
-      {status !== null && <p role="status">Status: {status}{wasCached ? " (cached)" : ""}</p>}
+      {/* A machine status line is hidden while any failure is on screen. Reading
+          "Status: completed" above a red line says the scan failed when it did
+          not, which is the contradiction this block exists to prevent. */}
+      {status !== null && submitError.length === 0 && liveError.length === 0 && (
+        <p role="status">Status: {status}{wasCached ? " (cached)" : ""}</p>
+      )}
       {progress !== null && (
         <div aria-label="Progress">
           <progress value={progress.done} max={Math.max(1, progress.total)} />
@@ -484,6 +554,21 @@ export default function GuestScan() {
           {scan.rateLimitResetAt !== undefined && (
             <p>Quota resets at {new Date(scan.rateLimitResetAt).toLocaleTimeString()}.</p>
           )}
+          {/* Shown when the report cannot render at all, which is what a scan
+              marked failed before saveResults leaves behind: analyzedAt is
+              never set, so the stored live row is not returned. The action's own
+              answer is still true, so it is shown here on its own rather than
+              lost. */}
+          {liveOutcome !== null && !analyzed && (
+            <div aria-label="Live app result">
+              <p>
+                Your live app was checked on its own.{" "}
+                {liveOutcome.reaches ? "It answered." : "It did not answer."}
+                {liveOutcome.httpStatus !== null ? ` It answered with HTTP ${liveOutcome.httpStatus}.` : ""}{" "}
+                The repository scan above did not finish, so there is no report to put this beside.
+              </p>
+            </div>
+          )}
           {analyzed && resultsState !== undefined && (
             <ScanReport
               findings={resultsState.findings}
@@ -495,7 +580,7 @@ export default function GuestScan() {
               skippedFileCount={scan.skippedFileCount ?? 0}
               fileCount={scan.fileCount}
               treeTruncated={scan.truncated === true}
-              liveProvided={liveUrl.trim().length > 0}
+              liveProvided={liveAttempted}
               aiConfigured={providerAnswered}
               signedIn={scan.signedIn === true}
               priorityOrder={scan.priorityOrder ?? []}
@@ -626,8 +711,8 @@ export default function GuestScan() {
       {scan !== null && <CapacityMeter waiting={0} running={0} quota={null} />}
       {showSignIn && (
         <dialog ref={capDialog} className="cap-dialog" aria-labelledby="limit-signin-title">
-          <h2 id="limit-signin-title">Sign in to read more</h2>
-          <p>This sample stopped at the guest cap, or the repo was not public.</p>
+          <h2 id="limit-signin-title">{capHeading}</h2>
+          <p>{capBody}</p>
           <AuthPanel />
         </dialog>
       )}
