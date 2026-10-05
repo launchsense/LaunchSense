@@ -951,9 +951,12 @@ describe("target 5: the fingerprint occurrence number (WS-4)", () => {
 const GO_SERVER = join(mkdtempSync("/tmp/opencode/red-team-go-"), "launchsense-mcp");
 let goStatus = "not built";
 
+// W4-MCP. The MCP stdio transport is newline-delimited JSON with no headers.
+// This used to write an LSP Content-Length frame and the comment above it
+// called that "the way an MCP client would", which is how CI stayed green over a
+// server no conformant client could reach.
 function frame(object) {
-  const body = JSON.stringify(object);
-  return `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
+  return `${JSON.stringify(object)}\n`;
 }
 
 /** One launchsense_scan_repo call over stdio, with the review forced offline. */
