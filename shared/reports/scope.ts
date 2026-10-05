@@ -151,6 +151,12 @@ export function buildVerdict(input: VerdictInput): Verdict {
 // The fixed list of checks this product does not run. Kept next to the verdict
 // so the two can never drift apart.
 export function buildNotCheckedList(options: {
+  /**
+   * Whether a provider wrote the explanations on screen. This must be a
+   * structural fact from the explain lane, never a test over a string a provider
+   * wrote: the provider chooses the model name that ends up in the note, so a
+   * string test would let a provider add or remove the disclosure below.
+   */
   aiConfigured: boolean;
   liveProvided: boolean;
   /** Read caps this scan used. Defaults to the guest caps. */

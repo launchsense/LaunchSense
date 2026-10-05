@@ -41,7 +41,7 @@ const VALUES_STUB = `
 export const v = new Proxy({}, { get: () => () => ({}) });
 `;
 const API_STUB = `
-export const internal = { scans: { store: { fetchScan: "fetchScan", listFindings: "listFindings" } } };
+export const internal = { scans: { store: { fetchScan: "fetchScan", listFindings: "listFindings" } }, mcpLimit: { consumeExplain: "consumeExplain" } };
 export const api = {};
 export const components = {};
 `;
@@ -295,6 +295,7 @@ export const OLLAMA_DEFAULT_MODEL = "nemotron-3-nano:30b-cloud";
     const ctx = {
       runQuery: async (ref) => (ref === "fetchScan" ? { analyzedAt: 1 } : []),
       runMutation: async (_ref, args) => {
+        if (_ref === "consumeExplain") return { allowed: true, reason: "allowed" };
         saved.push(args);
         return null;
       },
