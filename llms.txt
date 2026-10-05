@@ -20,7 +20,7 @@ The client POSTs one JSON-RPC message. The server returns one JSON answer, or a 
 
 ## Tools
 
-`launchsense_scan_public` takes `repoUrl` like `https://github.com/owner/repo`. It reads that public repo on our server. Guest limits of 200 files and about 2MB apply. OSV covers up to 50 packages. deps.dev is not asked. Two scans an hour from one caller, and eight an hour in total, then the route pauses.
+`launchsense_scan_public` takes `repoUrl` like `https://github.com/owner/repo`. It reads that public repo on our server. Guest limits of 200 files and about 2MB apply. OSV covers up to 50 packages. deps.dev is not asked. The hosted read shares one hourly budget: 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then the route pauses. The counter holds no part of your network address.
 
 `launchsense_get_report` takes `scanId` and returns the coverage line and the findings.
 
@@ -44,7 +44,7 @@ Three notes on surfaces. The first two are not the hosted address:
   - Its tools are `launchsense_scan_repo`, which reviews the checkout and takes no arguments, `launchsense_report`, which asks the hosted API for a report by scan id, `launchsense_github`, which reports the local `gh` login, and `launchsense_scan_public_notice`, which scans nothing and only names where the public read lives. A tool name this server does not have is a protocol error, so the hosted name `launchsense_scan_public` called here is refused rather than answered with a scan. A missing, wrong-typed, or undeclared argument is refused rather than ignored.
   - `launchsense_scan_repo` reviews `LAUNCHSENSE_ROOT`, which `install.sh` sets to the checkout root, so it reads the checkout and not the `mcp` folder. With `LAUNCHSENSE_ROOT` unset it reads the checkout above a `mcp` module folder, and otherwise the folder it was started in. `LAUNCHSENSE_ROOT` must be absolute, and a folder that is not a checkout is named in the answer.
   - A report body over 1 MiB comes back marked partial and is never returned as a whole report. An API call gives up after 8 seconds and the local review after 10 minutes, so a call that hangs ends in an error instead of holding the session open.
-  - It reads files locally and does not upload them. Unless diagnostics are refused, the review also sends rule id counts, the harness name, the version, how long it took, and which order source ran. That share carries no code, paths, titles, or function names. `install.sh --enterprise` and `LAUNCHSENSE_DIAGNOSTICS=off` leave it off.
+  - It reads files locally and does not upload them. Usage counts are off unless you answer yes to one question. `install.sh` asks before it records anything and defaults to no; it keeps the answer, with the wording it agreed to, in `~/.config/launchsense/consent.jsonl`. With a yes it sends rule id counts, the harness name, the version, how long it took, and which order source ran. That share carries no code, paths, titles, or function names. `install.sh --enterprise` and `LAUNCHSENSE_DIAGNOSTICS=off` leave it off. The notice for all of this is at `/privacy` and in `docs/PRIVACY.md`.
 - A GitHub App installation-token minter (`convex/github/app.ts`) mints a short-lived installation token. No scan flow calls it yet; the connected GitHub App read is roadmap, not built.
 - The hosted usage route (`POST /api/mcp/usage`) writes counts only. It needs a deployment secret header, `x-launchsense-usage-key`. When `USAGE_ROUTE_KEY` is unset, it rejects every caller.
 

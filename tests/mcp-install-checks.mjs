@@ -432,6 +432,29 @@ describe("install.sh asks before it records an agreement", () => {
     });
   });
 
+  it("keeps one line and one time for a forced decision that repeats", () => {
+    // The comment at the ledger says a repeat of an answer already on record is
+    // not a new decision. On 2026-10-05 three enterprise runs wrote three
+    // identical lines, so the comment was false. This pins it true.
+    withHome((home) => {
+      run(home, { env: { LAUNCHSENSE_TIER: "enterprise" } });
+      const at = readConfig(home).diagnosticsConsent.decidedAt;
+      assert.match(at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, `a real timestamp; got ${at}`);
+      run(home, { env: { LAUNCHSENSE_TIER: "enterprise" } });
+      run(home, { env: { LAUNCHSENSE_TIER: "enterprise" } });
+      assert.equal(
+        readLog(home).length,
+        1,
+        `the same forced decision on the same wording is one line, not many; the log held ${readLog(home).length}`,
+      );
+      assert.equal(
+        readConfig(home).diagnosticsConsent.decidedAt,
+        at,
+        "a repeated forced decision must not move the recorded time",
+      );
+    });
+  });
+
   it("still finishes when standard input ends immediately, because the default is no", () => {
     withHome((home) => {
       const result = spawnSync("/bin/sh", [INSTALL], {
