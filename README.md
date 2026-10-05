@@ -10,8 +10,8 @@ The checks are fixed. A model does not invent a finding, and it does not choose 
 
 AI is already in the product, in two places. Both are still evolving.
 
-- Plain words. When an AI provider is configured, it rewrites a finding the checks already produced. If it fails, fixed wording is used. None is configured in this release, so fixed wording is what you see.
-- Order. A decision model may reorder findings inside one severity band. If it does not answer, a fixed table sets the order. This release uses that table.
+- Plain words. When an AI provider is configured, it rewrites a finding the checks already produced. If it fails, fixed wording is used. When no provider answers, fixed wording is shown.
+- Order. A decision model may reorder findings inside one severity band. If it does not answer, a fixed table sets the order. The table is always the floor.
 
 The next step is a reinforcement learning loop, and it is not a trained model yet. A later scan shows what was fixed, what is still broken, and what is unknown. A person can use that record to change a check. The model does not add the check, and it does not train on the code.
 
@@ -88,7 +88,7 @@ The findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASV
 - The hosted MCP reads a public GitHub repo on our server. The Connect page shows the address. It does not read a repo that exists only on your laptop.
 - GitHub quota for guest scans is shared, so heavy use can pause those scans until the quota resets.
 - A guest scan reads at most 200 files and 2 MB. Signed in, the cap is 1,000 files and about 8MB. The rest is listed as not checked.
-- Plain words and ordering are described under "AI, and where it is going." None is configured in this release, so fixed wording is shown, and the fixed table sets the order.
+- Plain words and ordering are described under "AI, and where it is going." When no provider answers, fixed wording is shown, and the fixed table sets the order. The table is always the floor.
 - More detail: `docs/LIMITS.md`. Privacy detail: `docs/PRIVACY.md`.
 
 ## Run it locally
