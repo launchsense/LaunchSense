@@ -611,7 +611,7 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
     }
   });
 
-  it("says AI never decides the six things in the one sentence every surface uses", () => {
+  it("says AI never decides the six things in the shared sentence", () => {
     for (const sentence of [
       "never decides a finding",
       "a severity",
@@ -665,12 +665,17 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
     assert.match(privacyPage, /prompt_guided/);
   });
 
-  it("shows the same level on every surface that names one", () => {
+  it("shows prompt_guided, and no other level, on the surfaces that name one", () => {
     for (const [name, source] of [
       ["docs/PRIVACY.md", privacyDoc],
       ["Connect", connectPage],
       ["docs/LIMITS.md", limitsDoc],
+      ["docs/HOW-IT-WORKS.md", howItWorks],
+      ["docs/READ-YOUR-REPORT.md", readYourReport],
+      ["skills/launchsense/SKILL.md", skill],
       ["llms.txt", llms],
+      ["README.md", read("README.md")],
+      ["docs/PRODUCT.md", read("docs", "PRODUCT.md")],
     ]) {
       // A sentence may name a level to say we do not reach it, so a match whose
       // window carries a negation is a statement about absence, not a claim.
@@ -793,5 +798,34 @@ describe("the wording hash is only taken over words the person read", () => {
   it("still hashes when the ledger names the version this build carries", async () => {
     const record = await buildConsentRecord(granted, "usage");
     assert.match(record.privacy_notice.wording_sha256, /^sha256:[0-9a-f]{64}$/);
+  });
+});
+
+// The receipt is the copy the person keeps, so the same version guard has to
+// reach it. Before this, a stale-version decision persisted a receipt printing
+// today's words under the heading "The wording you were shown".
+describe("the receipt does not reproduce words the person did not read", () => {
+  it("leaves the wording out and says why when the ledger names another version", async () => {
+    const stale = { ...granted, noticeVersion: "2026-06-01", latest: true };
+    const record = await buildConsentRecord(stale, "usage");
+    const receipt = await buildConsentReceipt(record);
+    assert.equal(receipt.notice_wording, null, "the receipt must not reproduce words the person did not read");
+    assert.ok(
+      receipt.notice_wording_note !== null && /not reproduced/i.test(receipt.notice_wording_note),
+      "the receipt must say why the wording is absent",
+    );
+    const text = renderConsentReceipt(receipt);
+    assert.ok(
+      !text.includes(DIAGNOSTICS_NOTICE_WORDING[0]),
+      "the stale receipt must not print the current first line under the old version",
+    );
+    assert.match(text, /Not reproduced/);
+    assert.ok(!/not computed on this runtime/.test(text), "the reason must be the version, not a false runtime limit");
+  });
+
+  it("still prints the wording when the version matches", async () => {
+    const receipt = await buildConsentReceipt(await buildConsentRecord(granted));
+    assert.ok(Array.isArray(receipt.notice_wording));
+    assert.ok(renderConsentReceipt(receipt).includes(DIAGNOSTICS_NOTICE_WORDING[0]));
   });
 });

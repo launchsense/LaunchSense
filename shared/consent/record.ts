@@ -163,8 +163,13 @@ export interface ConsentReceipt {
     notice_version: string;
     notice_wording_sha256: string | null;
   };
-  /** The exact lines that were on screen. The record keeps a hash; this keeps the text. */
-  notice_wording: readonly string[];
+  /**
+   * The exact lines that were on screen, or null when this build does not carry
+   * the wording the decision names. The record keeps a hash; this keeps the text.
+   */
+  notice_wording: readonly string[] | null;
+  /** Why the wording is not reproduced, when it is null. */
+  notice_wording_note: string | null;
   categories_involved: string[];
   where_it_goes: Array<{ party: string; role: string; region: string; region_unknown: boolean }>;
   how_long: {
@@ -453,7 +458,11 @@ export async function buildConsentReceipt(record: ConsentRecord): Promise<Consen
       notice_version: record.privacy_notice.version,
       notice_wording_sha256: record.privacy_notice.wording_sha256,
     },
-    notice_wording: DIAGNOSTICS_NOTICE_WORDING,
+    notice_wording: record.privacy_notice.wording_sha256 === null ? null : DIAGNOSTICS_NOTICE_WORDING,
+    notice_wording_note:
+      record.privacy_notice.wording_sha256 === null
+        ? `This build carries the text of ${DIAGNOSTICS_NOTICE_VERSION}, and this decision names ${record.privacy_notice.version}. The wording the person read is not reproduced here rather than showing them text they did not agree to.`
+        : null,
     categories_involved: record.pii_information.map((item) => item.type),
     where_it_goes: record.pii_controllers.map((party) => ({
       party: party.party_id,
@@ -503,10 +512,14 @@ export function renderConsentReceipt(receipt: ConsentReceipt): string {
   lines.push(`  ${receipt.what_you_agreed_to.description}`);
   lines.push(`  Lawful basis: ${receipt.what_you_agreed_to.lawful_basis} (${receipt.what_you_agreed_to.lawful_basis_citation})`);
   lines.push(`  Notice version: ${receipt.what_you_agreed_to.notice_version}`);
-  lines.push(`  Notice wording hash: ${receipt.what_you_agreed_to.notice_wording_sha256 ?? "not computed on this runtime"}`);
+  lines.push(`  Notice wording hash: ${receipt.what_you_agreed_to.notice_wording_sha256 ?? "not carried for this notice version"}`);
   lines.push("");
   lines.push("The wording you were shown");
-  for (const line of receipt.notice_wording) lines.push(`  ${line}`);
+  if (receipt.notice_wording === null) {
+    lines.push(`  Not reproduced. ${receipt.notice_wording_note ?? ""}`);
+  } else {
+    for (const line of receipt.notice_wording) lines.push(`  ${line}`);
+  }
   lines.push("");
   lines.push("Categories involved");
   for (const category of receipt.categories_involved) lines.push(`  ${category}`);
