@@ -69,6 +69,13 @@ function readScope(fetched: number, total: number | undefined, skipped: number):
   if (unread === 0 && skipped === 0) {
     return `We read all ${total} ${plural(total, "file", "files")} in the repository.`;
   }
+  // fetched === total with skipped > 0 is reachable: every path in the tree was
+  // selected and some content fetches failed. Falling through to the line below
+  // printed "The other 0 files were not read." while the headline said partial.
+  // A file that was chosen and could not be read is not an unread file.
+  if (unread === 0) {
+    return `We read all ${total} ${plural(total, "file", "files")} listed, but ${skipped} ${plural(skipped, "file", "files")} could not be read.`;
+  }
   return `We read ${fetched} of ${total} ${plural(total, "file", "files")}. The other ${unread} ${plural(unread, "was", "were")} not read.`;
 }
 
@@ -178,4 +185,51 @@ export function buildNotCheckedList(options: {
     list.push("Plain word explanations. No AI provider answered this scan.");
   }
   return list;
+}
+
+//
+// The live-lane error boundary.
+//
+// A live check fails for ordinary, fixable reasons: an address that does not
+// parse, a hostname that is not public, a URL with a password in it.
+// validateLiveUrl in shared/ssrf.ts writes each of those as one plain sentence
+// with no hostname, path or upstream text in it, and convex/scans/livecheck.ts
+// throws them verbatim. They were all replaced by the scan-level fallback, so a
+// mistyped live URL was reported to the visitor as a broken repository scan, and
+// nine different causes rendered as one sentence.
+//
+// The repository lane keeps its own short list in src/features/scan/userError.ts.
+// This list is the live lane only, so a live reason cannot widen what a
+// repository error is allowed to say.
+//
+
+/**
+ * Every sentence the live lane can throw, taken from the two places that write
+ * one: shared/ssrf.ts and the scan lookup in convex/scans/livecheck.ts. A
+ * sentence added there without an entry here renders as the generic fallback
+ * again, which tests/scope-checks.mjs fails on.
+ */
+export const LIVE_CHECK_REASONS: readonly string[] = [
+  "Enter a live site URL.",
+  "That URL is too long.",
+  "That does not look like a URL.",
+  "Only http and https sites can be checked.",
+  "URLs with credentials are not allowed.",
+  "That hostname is not allowed.",
+  "That address is not allowed.",
+  "Local and test hostnames are not allowed.",
+  "Single-word hostnames are not allowed.",
+  "IPv6 addresses are not allowed for live checks.",
+  "Scan was not found.",
+];
+
+/**
+ * Turns a live-check throw into something a visitor can act on, or into the
+ * given fallback when the message is not one of ours. Same shape as
+ * toUserError, separate list, so the two lanes cannot be confused for each other.
+ */
+export function toLiveUserError(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (LIVE_CHECK_REASONS.some((reason) => raw.startsWith(reason))) return raw;
+  return fallback;
 }
