@@ -9,8 +9,27 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 )
+
+// maxMessageBytes bounds one JSON-RPC message. The MCP stdio transport frames a
+// message as one line of JSON with no length header, so the line itself is the
+// only bound on memory. 4 MiB is far above any initialize or tools/call this
+// server sends or receives. A longer line is refused before its bytes are kept,
+// and the rest of it is drained so the next message still starts on a newline.
+const maxMessageBytes = 4 << 20
+
+// maxReportBytes bounds one report body from the API. A body that reaches this
+// limit is reported as a partial answer, never returned as a whole report.
+const maxReportBytes = 1 << 20
+
+// apiTimeout bounds one call to the LaunchSense API. review-entry.ts gives its
+// own fetch the same 8 seconds. The stdio loop answers one message at a time, so
+// an endpoint that accepts and never answers would otherwise take ping down
+// with it.
+const apiTimeout = 8 * time.Second
 
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -35,6 +54,9 @@ type server struct {
 	private privateFunc
 	client  *http.Client
 	review  reviewFunc
+	// errOut carries one line per refused or unparsable message. stdout carries
+	// protocol only, so a client reading stdout never sees a log line.
+	errOut io.Writer
 }
 
 func newServer() *server {
@@ -46,31 +68,97 @@ func newServer() *server {
 		apiURL:  strings.TrimRight(apiURL, "/"),
 		account: localAccount,
 		private: lookupRepo,
-		client:  http.DefaultClient,
+		client:  &http.Client{Timeout: apiTimeout},
+		errOut:  os.Stderr,
 	}
 }
 
+// logf writes one line to stderr when a stderr writer is set. A nil writer is
+// the quiet case, used by tests that only read stdout.
+func (s *server) logf(format string, args ...any) {
+	if s.errOut == nil {
+		return
+	}
+	fmt.Fprintf(s.errOut, "launchsense-mcp: "+format+"\n", args...)
+}
+
+// serve reads one JSON message per line and writes one JSON message per line.
+// That is the MCP stdio transport: no length header, no embedded newline, a
+// blank line is not a message.
 func (s *server) serve(in io.Reader, out io.Writer) error {
-	reader := bufio.NewReader(in)
+	reader := bufio.NewReaderSize(in, 64*1024)
 	for {
-		body, err := readFrame(reader)
+		line, oversize, err := readMessage(reader)
 		if err == io.EOF {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+		if !oversize && len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		if oversize {
+			s.logf("message over the %d byte limit was refused", maxMessageBytes)
+			err = writeResult(out, nil, nil, &rpcError{
+				Code:    -32600,
+				Message: fmt.Sprintf("Message too large. The limit is %d bytes (4 MiB) and nothing was run.", maxMessageBytes),
+			})
+			if err != nil {
+				return err
+			}
+			continue
+		}
 		var req rpcRequest
-		if err := json.Unmarshal(body, &req); err != nil {
+		if err := json.Unmarshal(line, &req); err != nil {
+			s.logf("parse error: %v", err)
+			err = writeResult(out, nil, nil, &rpcError{
+				Code:    -32700,
+				Message: "Parse error. The line was not one JSON message, so nothing was run.",
+			})
+			if err != nil {
+				return err
+			}
 			continue
 		}
 		if len(req.ID) == 0 || string(req.ID) == "null" {
+			// A notification carries no id, so it gets no answer.
 			continue
 		}
 		result, rpcErr := s.handle(req)
 		if err := writeResult(out, req.ID, result, rpcErr); err != nil {
 			return err
 		}
+	}
+}
+
+// readMessage reads one newline-terminated line. It reports an oversize line
+// instead of keeping it: the remainder is drained to the newline so the next
+// read starts on a message boundary. A final line with no newline is still a
+// message, which is what a client that closed its pipe sent.
+func readMessage(r *bufio.Reader) (line []byte, oversize bool, err error) {
+	total := 0
+	for {
+		chunk, readErr := r.ReadSlice('\n')
+		total += len(chunk)
+		if total > maxMessageBytes {
+			oversize = true
+			line = nil
+		} else if !oversize {
+			line = append(line, chunk...)
+		}
+		if readErr == bufio.ErrBufferFull {
+			continue
+		}
+		if readErr == io.EOF && (line != nil || oversize) {
+			// A client that closed its pipe may leave the last line unterminated.
+			// It is still a message, and the next read reports the EOF.
+			return bytes.TrimRight(line, "\r\n"), oversize, nil
+		}
+		if readErr != nil {
+			return nil, false, readErr
+		}
+		return bytes.TrimRight(line, "\r\n"), oversize, nil
 	}
 }
 
@@ -91,6 +179,20 @@ func (s *server) handle(req rpcRequest) (any, *rpcError) {
 		if err := json.Unmarshal(req.Params, &call); err != nil {
 			return nil, &rpcError{Code: -32602, Message: "Invalid tool call."}
 		}
+		def, known := toolDef(call.Name)
+		if !known {
+			// isError means a tool ran and failed. A name this server does not
+			// have is a protocol error, and the spec's own example is -32602.
+			return nil, &rpcError{Code: -32602, Message: "Unknown tool: " + call.Name}
+		}
+		if schema, ok := def["inputSchema"].(map[string]any); ok {
+			if err := validateArgs(schema, call.Arguments); err != nil {
+				return nil, &rpcError{
+					Code:    -32602,
+					Message: "Invalid arguments for " + call.Name + ": " + err.Error(),
+				}
+			}
+		}
 		text, err := s.callTool(call)
 		if err != nil {
 			return toolText(err.Error(), true), nil
@@ -101,49 +203,182 @@ func (s *server) handle(req rpcRequest) (any, *rpcError) {
 	}
 }
 
+// toolDef is the published definition of one tool. tools/list sends it and the
+// argument check reads it, so the schema a client reads is the schema that is
+// enforced.
+func toolDef(name string) (map[string]any, bool) {
+	for _, def := range toolDefs() {
+		if def["name"] == name {
+			return def, true
+		}
+	}
+	return nil, false
+}
+
+// validateArgs checks the arguments against the schema the tool publishes. A
+// missing required field, a wrong JSON type, and an undeclared field are three
+// different mistakes and each answer says which one it is, instead of calling
+// every one of them a missing field or quietly running with the extra ignored.
+func validateArgs(schema map[string]any, raw json.RawMessage) error {
+	args := map[string]json.RawMessage{}
+	if trimmed := bytes.TrimSpace(raw); len(trimmed) > 0 && string(trimmed) != "null" {
+		if err := json.Unmarshal(trimmed, &args); err != nil {
+			return fmt.Errorf("arguments must be a JSON object")
+		}
+	}
+	props, _ := schema["properties"].(map[string]any)
+	for _, name := range requiredNames(schema) {
+		value, ok := args[name]
+		if !ok || isEmptyValue(value) {
+			return fmt.Errorf("%s is required", name)
+		}
+	}
+	// A schema that does not say otherwise is treated as closed. Every schema
+	// this server publishes sets additionalProperties, and an argument no tool
+	// declares is a mistake worth reporting rather than a field to drop.
+	closed := true
+	if flag, ok := schema["additionalProperties"].(bool); ok {
+		closed = !flag
+	}
+	for _, name := range sortedNames(args) {
+		declared, ok := props[name].(map[string]any)
+		if !ok {
+			if len(props) == 0 {
+				return fmt.Errorf("unexpected property %s. This tool takes no arguments.", name)
+			}
+			return fmt.Errorf("unexpected property %s. Declared properties: %s", name, strings.Join(sortedKeys(props), ", "))
+		}
+		if !closed {
+			continue
+		}
+		want, _ := declared["type"].(string)
+		got, err := jsonTypeOf(args[name])
+		if err != nil {
+			return err
+		}
+		if want != "" && got != want {
+			return fmt.Errorf("%s must be a %s, got %s", name, want, got)
+		}
+	}
+	return nil
+}
+
+func requiredNames(schema map[string]any) []string {
+	raw, ok := schema["required"].([]string)
+	if !ok {
+		return nil
+	}
+	return raw
+}
+
+func sortedNames(values map[string]json.RawMessage) []string {
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func sortedKeys(values map[string]any) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// isEmptyValue reports a field that is absent, null, or a blank string. A blank
+// scan id is no more usable than a missing one, and it says so the same way.
+func isEmptyValue(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return true
+	}
+	if trimmed[0] == '"' {
+		var text string
+		if err := json.Unmarshal(trimmed, &text); err == nil {
+			return strings.TrimSpace(text) == ""
+		}
+	}
+	return false
+}
+
+func jsonTypeOf(raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return "", fmt.Errorf("a value is missing")
+	}
+	switch trimmed[0] {
+	case '"':
+		return "string", nil
+	case '{':
+		return "object", nil
+	case '[':
+		return "array", nil
+	case 't', 'f':
+		return "boolean", nil
+	case 'n':
+		return "null", nil
+	default:
+		return "number", nil
+	}
+}
+
 func toolDefs() []map[string]any {
 	return []map[string]any{
 		{
-			"name":        "launchsense_scan_public",
-			"description": "Points at the website paste. This tool does not download GitHub.",
-			"inputSchema": objectSchema(map[string]any{
-				"repoUrl": map[string]any{"type": "string", "description": "https://github.com/owner/repo"},
-			}, "repoUrl"),
+			// The hosted server really reads a public repo under this name. A
+			// local tool of that name that reads nothing is how a scan gets
+			// reported that never happened, so this one says where the hosted
+			// read lives and is named so it cannot be mistaken for it.
+			"name":        "launchsense_scan_public_notice",
+			"description": "Does nothing by itself. It names where the public repo read actually lives: the website, or the hosted MCP address. This server reads only files on this machine and never downloads GitHub.",
+			"inputSchema": objectSchema(map[string]any{}),
 		},
 		{
 			"name":        "launchsense_report",
 			"description": "Read a LaunchSense report by scan id.",
 			"inputSchema": objectSchema(map[string]any{
-				"scanId": map[string]any{"type": "string"},
+				"scanId": map[string]any{"type": "string", "description": "The scan id the website or the hosted address gave you."},
 			}, "scanId"),
 		},
 		{
 			"name":        "launchsense_github",
 			"description": "See if gh is logged in on this machine, and which repo is open. Does not send a token anywhere.",
-			"inputSchema": objectSchema(map[string]any{}, ""),
+			"inputSchema": objectSchema(map[string]any{}),
 		},
 		{
 			"name":        "launchsense_scan_repo",
-			"description": "Review the files already on this machine. Does not download GitHub. Alpha has no login.",
-			"inputSchema": objectSchema(map[string]any{
-				"repoUrl": map[string]any{"type": "string", "description": "Optional. Defaults to the repo gh sees as current."},
-			}, ""),
+			"description": "Review the files already on this machine, under LAUNCHSENSE_ROOT. Does not download GitHub. Alpha has no login.",
+			"inputSchema": objectSchema(map[string]any{}),
 		},
 	}
 }
 
-func objectSchema(props map[string]any, required string) map[string]any {
-	schema := map[string]any{"type": "object", "properties": props}
-	if required != "" {
-		schema["required"] = []string{required}
+// objectSchema publishes a closed object schema. A closed schema is what makes
+// an argument the server does not use a visible mistake rather than a silent
+// no-op.
+func objectSchema(props map[string]any, required ...string) map[string]any {
+	schema := map[string]any{
+		"type":                 "object",
+		"properties":           props,
+		"additionalProperties": false,
+	}
+	if len(required) > 0 {
+		schema["required"] = required
 	}
 	return schema
 }
 
 func (s *server) callTool(call toolCall) (string, error) {
 	switch call.Name {
-	case "launchsense_scan_public":
-		return "The public paste is the website. This tool reviews the files on this machine and does not download GitHub.", nil
+	case "launchsense_scan_public_notice":
+		return "The public paste is the website, and the hosted address reads a public repo too: " +
+			"https://harmless-chihuahua-667.convex.site/mcp\n" +
+			"This server reviews the files on this machine and does not download GitHub. " +
+			"Use launchsense_scan_repo for the checkout.", nil
 	case "launchsense_report":
 		var args struct {
 			ScanID string `json:"scanId"`
@@ -159,11 +394,7 @@ func (s *server) callTool(call toolCall) (string, error) {
 	case "launchsense_github":
 		return s.githubStatus()
 	case "launchsense_scan_repo":
-		var args struct {
-			RepoURL string `json:"repoUrl"`
-		}
-		_ = json.Unmarshal(call.Arguments, &args)
-		return s.scanRepo(strings.TrimSpace(args.RepoURL))
+		return s.scanRepo()
 	default:
 		return "", fmt.Errorf("unknown tool %s", call.Name)
 	}
@@ -194,7 +425,11 @@ func accountText(account Account) string {
 	return b.String()
 }
 
-func (s *server) scanRepo(string) (string, error) {
+// scanRepo reviews the checkout named by LAUNCHSENSE_ROOT. It takes no arguments
+// on purpose: it reads files on this machine, so a repository URL would be a
+// promise this tool cannot keep. A caller that sends one is told by the argument
+// check rather than quietly ignored.
+func (s *server) scanRepo() (string, error) {
 	root, err := reviewRoot()
 	if err != nil {
 		return "", err
@@ -315,34 +550,6 @@ func checkoutAbove(folder string) string {
 	return parent
 }
 
-func resolveRepo(repoURL string, account Account) (string, string, error) {
-	if repoURL == "" {
-		if account.Repo() == "" {
-			return "", "", fmt.Errorf("no repo URL, and gh has no current repo")
-		}
-		return account.Owner, account.Name, nil
-	}
-	owner, name, ok := parseGitHubURL(repoURL)
-	if !ok {
-		return "", "", fmt.Errorf("repoUrl must look like https://github.com/owner/repo")
-	}
-	return owner, name, nil
-}
-
-func parseGitHubURL(raw string) (string, string, bool) {
-	trimmed := strings.TrimSpace(raw)
-	trimmed = strings.TrimPrefix(trimmed, "https://")
-	trimmed = strings.TrimPrefix(trimmed, "http://")
-	trimmed = strings.TrimPrefix(trimmed, "github.com/")
-	trimmed = strings.Trim(trimmed, "/")
-	parts := strings.Split(trimmed, "/")
-	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
-	}
-	name := strings.TrimSuffix(parts[1], ".git")
-	return parts[0], name, true
-}
-
 func (s *server) postJSON(path string, body any) ([]byte, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -358,12 +565,20 @@ func (s *server) postJSON(path string, body any) ([]byte, error) {
 		return nil, err
 	}
 	defer res.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	// One byte past the cap, so a body that is exactly at the cap is whole and a
+	// body that crosses it is known to be clipped rather than assumed complete.
+	data, err := io.ReadAll(io.LimitReader(res.Body, maxReportBytes+1))
 	if err != nil {
 		return nil, err
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("LaunchSense API error %d", res.StatusCode)
+	}
+	if len(data) > maxReportBytes {
+		return nil, fmt.Errorf(
+			"the report body is over %d bytes and was cut off, so this is a partial answer and not a report. Ask again for a smaller scan, or read the report on the website.",
+			maxReportBytes,
+		)
 	}
 	return data, nil
 }
@@ -380,6 +595,10 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
+// writeResult writes one JSON-RPC message and a newline. A nil id writes null,
+// which is what a parse error has to answer with because no id could be read.
+// json.Marshal escapes every newline inside a string, so a message can never
+// break the line framing.
 func writeResult(out io.Writer, id json.RawMessage, result any, rpcErr *rpcError) error {
 	msg := map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(id)}
 	if rpcErr != nil {
@@ -391,31 +610,6 @@ func writeResult(out io.Writer, id json.RawMessage, result any, rpcErr *rpcError
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "Content-Length: %d\r\n\r\n%s", len(body), body)
+	_, err = fmt.Fprintf(out, "%s\n", body)
 	return err
-}
-
-func readFrame(r *bufio.Reader) ([]byte, error) {
-	length := -1
-	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			return nil, err
-		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		if strings.HasPrefix(strings.ToLower(line), "content-length:") {
-			fmt.Sscanf(strings.TrimSpace(line[len("content-length:"):]), "%d", &length)
-		}
-	}
-	if length < 0 {
-		return nil, fmt.Errorf("missing Content-Length")
-	}
-	buf := make([]byte, length)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return nil, err
-	}
-	return buf, nil
 }
