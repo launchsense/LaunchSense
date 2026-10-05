@@ -67,6 +67,11 @@ export default function GuestScan() {
   const [rescanRan, setRescanRan] = useState(false);
   const [rescanNote, setRescanNote] = useState("");
   const [explainNote, setExplainNote] = useState("");
+  // Whether the wording on screen was written by an AI provider. This is the
+  // action's own structural boolean, never a guess read out of a note string: the
+  // provider chooses the model name in that note, so a string test here would let
+  // a provider add or remove the disclosure in the not-checked box.
+  const [providerAnswered, setProviderAnswered] = useState(false);
   const [explanations, setExplanations] = useState<
     Array<{ fingerprint: string; plain: string }>
   >([]);
@@ -124,6 +129,7 @@ export default function GuestScan() {
       setRescanRan(false);
       setComparePair(null);
       setExplainNote("");
+      setProviderAnswered(false);
       void logEvent({ kind: "scan_started", scanId: result.scanId, refShareId: refShare ?? undefined });
       if (refShare !== null) {
         void logEvent({ kind: "referred_scan_started", scanId: result.scanId, refShareId: refShare });
@@ -266,17 +272,21 @@ export default function GuestScan() {
   async function onExplain() {
     if (scanId === null || phase !== "idle") return;
     setExplainNote("");
+    setProviderAnswered(false);
     setExplanations([]);
     setNotActionable([]);
     setPhase("analyzing");
     try {
       const result = await explainScan({ scanId });
+      setProviderAnswered(result.providerCalled);
       setExplainNote(
         `${result.note} Explained ${result.explained} item(s).`,
       );
       setExplanations(result.explanations);
       setNotActionable(result.notActionable);
     } catch (error) {
+      // A press that threw called no provider, so the disclosure stays in place.
+      setProviderAnswered(false);
       setExplainNote(toUserError(error, "Could not explain. Try again."));
     } finally {
       setPhase("idle");
@@ -467,7 +477,7 @@ export default function GuestScan() {
               fileCount={scan.fileCount}
               treeTruncated={scan.truncated === true}
               liveProvided={liveUrl.trim().length > 0}
-              aiConfigured={explainNote.length > 0 && !/No AI provider/i.test(explainNote)}
+              aiConfigured={providerAnswered}
               signedIn={scan.signedIn === true}
               priorityOrder={scan.priorityOrder ?? []}
               priorityNote={scan.priorityNote}

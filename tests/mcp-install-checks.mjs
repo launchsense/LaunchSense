@@ -156,3 +156,56 @@ describe("llms.txt names a command that can run", () => {
     );
   });
 });
+
+// W3-INSTALL-ROOT. cwd is the mcp module folder, so a server that took the
+// process folder as the review root read mcp/ instead of the checkout. The
+// server now reads LAUNCHSENSE_ROOT, and the installer must set it, or the
+// shipped server is back to reviewing a handful of Go files.
+describe("install.sh points the server at the checkout", () => {
+  it("writes LAUNCHSENSE_ROOT as the repo root, not the mcp folder", () => {
+    withHome((home) => {
+      const result = runInstaller(home);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert.equal(result.status, 0, `installer must succeed; output was:\n${output}`);
+      const server = readCursorConfig(home).mcpServers.launchsense;
+      assert.equal(
+        server.env?.LAUNCHSENSE_ROOT,
+        ROOT,
+        `LAUNCHSENSE_ROOT must be the checkout root; it was ${JSON.stringify(server.env?.LAUNCHSENSE_ROOT)}`,
+      );
+      assert.ok(
+        !String(server.env?.LAUNCHSENSE_ROOT).endsWith("/mcp"),
+        "LAUNCHSENSE_ROOT must not be the module folder, or the review reads mcp/ again",
+      );
+    });
+  });
+
+  it("the server resolves the review root through LAUNCHSENSE_ROOT, not the process folder", () => {
+    const server = readFileSync(join(ROOT, "mcp", "server.go"), "utf8");
+    assert.ok(
+      /LAUNCHSENSE_ROOT/.test(server) && /func reviewRoot\(\)/.test(server),
+      "mcp/server.go must resolve the review root through reviewRoot() and LAUNCHSENSE_ROOT",
+    );
+    assert.ok(
+      !/func \(s \*server\) scanRepo\(string\) \(string, error\) \{\s*root, err := os\.Getwd\(\)/.test(server),
+      "scanRepo must not take the process folder as the review root; cwd is the mcp module",
+    );
+    const runner = readFileSync(join(ROOT, "mcp", "review_local.go"), "utf8");
+    assert.ok(
+      !/filepath\.Join\("mcp", "review-entry\.ts"\)/.test(runner),
+      "the default review script must resolve against the review root, not the process folder",
+    );
+  });
+
+  it("llms.txt says the server reviews LAUNCHSENSE_ROOT and that the installer sets it", () => {
+    const text = readFileSync(LLMS, "utf8");
+    assert.ok(
+      text.includes("LAUNCHSENSE_ROOT"),
+      "llms.txt must name the review-root variable, or an agent has to guess it",
+    );
+    assert.ok(
+      /LAUNCHSENSE_ROOT[\s\S]{0,160}checkout root/.test(text),
+      "llms.txt must say the installer sets LAUNCHSENSE_ROOT to the checkout root",
+    );
+  });
+});

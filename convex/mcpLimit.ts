@@ -66,6 +66,42 @@ export const consumeUsageWrite = internalMutation({
   },
 });
 
+// The explain lane spends a provider call per press, so a scan id alone must not
+// be able to ask for one over and over. Same table, same bump helper, same hourly
+// window as the limits above: one cap per scan, one cap per caller. A guest has
+// no account to key a caller bucket on, so its caller bucket is its own scan, and
+// the per-scan cap is then the whole cap for that visitor.
+export const EXPLAIN_SCAN_LIMIT = 2;
+export const EXPLAIN_CALLER_LIMIT = 12;
+
+/** The bucket a caller spends from. An account id, or the scan when there is none. */
+export function explainCallerKey(caller: string | null, scanId: string): string {
+  const who = caller === null || caller.length === 0 ? `scan:${scanId}` : `user:${caller}`;
+  return who.slice(0, 80);
+}
+
+/**
+ * Claim one explain slot. Both caps must pass, and neither is taken from the
+ * caller's word for it: a scan id and an account id are all this reads.
+ */
+export const consumeExplain = internalMutation({
+  args: { scanId: v.id("scans"), caller: v.optional(v.string()) },
+  returns: v.object({ allowed: v.boolean(), reason: v.string() }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const hour = new Date(now).toISOString().slice(0, 13);
+    const day = hour.slice(0, 10);
+    // Per scan first. A scan id is the only credential a guest holds, so this is
+    // the cap that has to hold when nothing else is known about the caller.
+    const scanOk = await bump(ctx, `explain:${hour}:scan:${args.scanId}`, day, EXPLAIN_SCAN_LIMIT, now);
+    if (!scanOk) return { allowed: false, reason: "scan_limit" };
+    const caller = explainCallerKey(args.caller ?? null, args.scanId);
+    const callerOk = await bump(ctx, `explain:${hour}:caller:${caller}`, day, EXPLAIN_CALLER_LIMIT, now);
+    if (!callerOk) return { allowed: false, reason: "caller_limit" };
+    return { allowed: true, reason: "allowed" };
+  },
+});
+
 export const recordUsage = internalMutation({
   args: {
     stage: v.string(),
