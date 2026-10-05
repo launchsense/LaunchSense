@@ -46,12 +46,24 @@ export function severityFor(ruleId: string): Severity {
   return "info";
 }
 
+// A test path is expected to hold fake keys, sample payloads, and probes, so a
+// handful of rules are pure noise there. Only those rules are demoted. A real
+// provider key committed under tests/ is still a committed key and stays high,
+// and a weak-hash assertion line is still worth review at medium.
+const TEST_PATH_NOISE = new Set([
+  "code.weak-crypto",
+  "code.debug-leftover",
+  "secret.debug-leftover",
+  "code.sql-pattern",
+  "secret.sql-pattern",
+]);
+
 export function severityForFinding(ruleId: string, path: string): Severity {
   const base = severityFor(ruleId);
   const testLike =
     /(^|\/)(test|tests|__tests__|fixtures|testdata|examples)(\/|$)/i.test(path) ||
     /\.(test|spec)\.[a-z0-9]+$/i.test(path);
-  if (testLike && base === "high") return "info";
+  if (testLike && TEST_PATH_NOISE.has(ruleId)) return "info";
   return base;
 }
 

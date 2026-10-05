@@ -171,16 +171,43 @@ function ttlMatchesCopy(copiedNumber, copiedUnit) {
   return false;
 }
 
-// A retention claim needs both a matching TTL and something that deletes.
-function retentionIsEnforced() {
-  return /\b(delete|purge|remove)\w*\s*\(/i.test(readAllSource()) &&
-    /\b(TTL|RETENTION|MAX_AGE)\w*/i.test(readAllSource());
+// A retention claim is enforced only when a real purge is bound to the
+// stated window. Three things must all exist in the source: a named
+// purge or sweep that deletes rows, a call to it with a cutoff computed
+// from a TTL constant, and that constant's value matching the claim. The
+// old check was a tautology: any `delete(` anywhere plus any `TTL`
+// anywhere passed, so copy with no purge behind it still went green.
+// This fails closed: no bound purge means the claim is unsupported.
+function retentionIsEnforced(copiedNumber, copiedUnit) {
+  const source = readAllSource();
+  const wanted = Number(copiedNumber) * (TTL_UNITS[copiedUnit.toLowerCase()] ?? 0);
+  if (wanted === 0) return false;
+  // A purge, sweep, or expire routine that deletes rows by age.
+  if (!/export const \w*(?:purge|sweep|expire)\w*[\s\S]*?\.db\.delete\(/i.test(source)) {
+    return false;
+  }
+  // That purge is invoked with a cutoff derived from a named TTL
+  // constant, so the window the copy states is the window the code
+  // enforces. The constant name is captured so its value can be
+  // resolved and compared with the claim.
+  const call = source.match(
+    /(?:purge|sweep|expire)\w*,\s*\{[\s\S]{0,400}?(?:beforeMs|sinceMs|olderThan):\s*Date\.now\(\)\s*-\s*([A-Z_]*(?:TTL|RETENTION|MAX_AGE)[A-Z_]*)[\s\S]{0,200}?\}/i,
+  );
+  if (call === null) return false;
+  const def = source.match(new RegExp(`${call[1]}\\s*=\\s*([0-9_]+(?:\\s*[*+]\\s*[0-9_]+)*)`));
+  if (def === null) return false;
+  const expr = def[1];
+  if (!/^[0-9_]+(?:\s*[*+]\s*[0-9_]+)*$/.test(expr)) return false;
+  const value = expr.split(/\s*[*+]\s*/).reduce((acc, part) => acc * Number(part.replace(/_/g, "")), 1);
+  return value === wanted || value * 1000 === wanted;
 }
 
 // shared/reports holds the mission, achievement, standards, and export strings
 // that render verbatim in the UI. Without it the guard passed while
 // "Shared Safely" and "carried no secrets" sat in missions.ts.
-const COPY_GLOBS = ["README.md", "CHANGELOG.md", "docs", "src", "shared/reports"];
+// llms.txt is the agent file a harness reads before touching the
+// product, so a stale claim there is as live as one in a doc.
+const COPY_GLOBS = ["README.md", "CHANGELOG.md", "docs", "src", "shared/reports", "llms.txt"];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".progress", "_generated"]);
 
 function walk(dir, out = []) {
@@ -246,6 +273,12 @@ function copyFiles() {
     if (statSync(full).isDirectory()) walk(full, out);
     else out.push(full);
   }
+  // Opt-in for the test suite: one extra path appended to the scanned
+  // set. A synthetic violation in a temp file then fails the guard the
+  // same way a real violation in llms.txt would. The default run sets
+  // nothing, so `npm run check:claims` is unchanged.
+  const extra = process.env.CLAIM_GUARD_EXTRA_FILE;
+  if (extra !== undefined && extra.length > 0) out.push(join(ROOT, extra));
   return out;
 }
 
@@ -300,7 +333,7 @@ for (const file of copyFiles()) {
         // and by code that deletes. Either alone is not enough: a TTL with no
         // purge, or a purge with no stated window, is what the audit caught.
         const ttlOk = ttlMatchesCopy(number, unit);
-        const purgeOk = retentionIsEnforced();
+        const purgeOk = retentionIsEnforced(number, unit);
         if (ttlOk && purgeOk) continue;
         const why = !ttlOk
           ? `copy says ${number} ${unit}(s) but no TTL constant matches`
@@ -321,4 +354,6 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Claim guard passed. ${checked} claim phrase(s) checked.`);
+const RULE_COUNT = POSITIVE_CLAIMS.length + NEGATIVE_CLAIMS.length + RETENTION_CLAIMS.length;
+
+console.log(`Claim guard passed. ${RULE_COUNT} rules, ${checked} claim phrase(s) checked.`);

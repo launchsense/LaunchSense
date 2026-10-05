@@ -5,6 +5,8 @@ import { toShareCard } from "../shared/reports/shareCard.ts";
 import { nextHopUrl } from "../convex/adapters/live.ts";
 import { isPublicIdShape, newPublicId } from "../convex/adapters/share.ts";
 import { buildTopPrompt, liveActionItems } from "../shared/reports/topPrompt.ts";
+import { createServer } from "node:http";
+import { pinnedFetch } from "../convex/adapters/live.ts";
 
 describe("validateLiveUrl", () => {
   it("blocks local, private, and disguised addresses", () => {
@@ -43,6 +45,86 @@ describe("nextHopUrl", () => {
     assert.equal(nextHopUrl("https://example.com/a", null), null);
     const ok = nextHopUrl("https://example.com/a", "/b");
     assert.equal(ok, "https://example.com/b");
+  });
+});
+
+describe("pinnedFetch", () => {
+  it("connects to the pinned address, not to a second lookup of the hostname", async () => {
+    // The DNS guard resolves the host, then the request must go to the address it
+    // approved. .invalid can never resolve, so if the request reached the pinned
+    // address at all it cannot have been re-resolved.
+    const body = "pinned-body-marker";
+    const server = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(body);
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = server.address().port;
+    try {
+      const response = await pinnedFetch(
+        `http://does-not-resolve.invalid:${port}/path?q=1`,
+        "127.0.0.1",
+        2000,
+      );
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), body);
+      assert.equal(response.headers.get("content-type"), "text/html");
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it("sends the original hostname in the Host header", async () => {
+    let host;
+    const server = createServer((req, res) => {
+      host = req.headers.host;
+      res.writeHead(200);
+      res.end("ok");
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = server.address().port;
+    try {
+      const response = await pinnedFetch(
+        `http://example.com:${port}/`,
+        "127.0.0.1",
+        2000,
+      );
+      assert.equal(response.status, 200);
+      assert.equal(host, `example.com:${port}`);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it("does not follow redirects on its own", async () => {
+    const server = createServer((req, res) => {
+      if (req.url === "/") {
+        res.writeHead(302, { location: "http://127.0.0.1:1/next" });
+        res.end();
+        return;
+      }
+      res.writeHead(200);
+      res.end("followed");
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = server.address().port;
+    try {
+      const response = await pinnedFetch(`http://example.com:${port}/`, "127.0.0.1", 2000);
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get("location"), "http://127.0.0.1:1/next");
+      assert.notEqual(await response.text(), "followed");
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it("rejects when the pinned address is refused instead of falling back to a lookup", async () => {
+    // Port 1 on loopback is closed. The point is that this fails rather than
+    // silently re-resolving the hostname, which is what made the guard a TOCTOU.
+    await assert.rejects(
+      () => pinnedFetch("http://does-not-resolve.invalid:1/", "127.0.0.1", 2000),
+      /.*/,
+    );
   });
 });
 

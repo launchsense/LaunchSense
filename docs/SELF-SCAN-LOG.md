@@ -26,6 +26,10 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
+> Stale at HEAD: the newest entry below is commit `31a37aa`; HEAD is
+> `1a0e40e`. No scan has run on the commits between, so this log does not
+> cover them. The loop is behind, not clean.
+
 ### Stage full-review guardrails
 
 Scanned pushed commit `31a37aa050a41706dd4369a9483ad4a7c8a6a30d` via an offline local review of a git archive of that commit, so ignored folders were not included. Status: partial. 175 files read, 0 files skipped by the walk. Order source: table (offline run does not call the decision lane).

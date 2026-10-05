@@ -56,11 +56,9 @@ export const explainScan = action({
         scanId: args.scanId,
         kind: "explain",
         source,
-        model: source === "gemini"
-          ? "gemini-2.0-flash"
-          : source === "ollama"
-            ? call.model ?? undefined
-            : undefined,
+        // The model the lane actually called, never a name typed here. A model
+        // that was never reached (no provider answered) stores nothing.
+        model: call.model ?? undefined,
         latencyMs: call.latencyMs,
         promptHash,
         inputTokens: call.usage.inputTokens ?? undefined,

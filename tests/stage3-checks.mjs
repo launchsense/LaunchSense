@@ -7,6 +7,7 @@ import {
 } from "../shared/redaction.ts";
 import { ANALYZER_VERSION } from "../shared/analyzers/version.ts";
 import { scanSecrets } from "../shared/analyzers/secrets.ts";
+import { PROVIDER_SHAPES } from "../shared/analyzers/secretValue.ts";
 import * as F from "./fixtures.mjs";
 import { parseManifests } from "../shared/analyzers/deps.ts";
 import { analyzeLicenses } from "../shared/analyzers/licenses.ts";
@@ -49,6 +50,55 @@ describe("sharedRedact", () => {
     const out = redactedSnippet(`token ${GHP_EXAMPLE} ${"x".repeat(500)}`, 200);
     assert.ok(out.length <= 201);
     assert.ok(!out.includes(GHP_EXAMPLE));
+  });
+});
+
+// U1: redaction must be a superset of detection. A value the detector accepts
+// must never survive redaction, or it can be stored as a raw secret.
+describe("sharedRedact covers every provider shape the detector accepts", () => {
+  // One representative value per PROVIDER_SHAPES entry, in the same order. If a
+  // shape is added to the detector without a matching redaction rule, this list
+  // and the shape list fall out of step and the test fails.
+  const SAMPLES = [
+    F.FAKE_AWS,
+    F.FAKE_GITHUB_CLASSIC,
+    F.FAKE_GITHUB_PAT,
+    F.FAKE_SLACK,
+    F.FAKE_STRIPE,
+    F.FAKE_ANTHROPIC,
+    F.FAKE_OPENROUTER,
+    F.FAKE_OPENAI,
+    F.FAKE_GOOGLE_API,
+    F.FAKE_GOOGLE_OAUTH,
+    F.FAKE_SENDGRID,
+    F.FAKE_TWILIO_KEY,
+    F.FAKE_GITLAB,
+    F.FAKE_DIGITALOCEAN,
+    F.FAKE_NPM,
+    F.FAKE_WEBHOOK,
+    F.FAKE_PEM,
+  ];
+
+  it("has one sample per detector shape", () => {
+    assert.equal(SAMPLES.length, PROVIDER_SHAPES.length);
+  });
+
+  for (let i = 0; i < PROVIDER_SHAPES.length; i++) {
+    const sample = SAMPLES[i];
+    it(`redacts detector shape ${i}: ${sample.slice(0, 13)}...`, () => {
+      assert.ok(
+        PROVIDER_SHAPES[i].test(sample),
+        `sample ${i} does not match its own detector shape`,
+      );
+      const out = sharedRedact(`prefix ${sample} suffix`);
+      assert.ok(!out.includes(sample), `raw value survived redaction: ${sample}`);
+      assert.ok(out.includes("[REDACTED]"), "no redaction marker was written");
+    });
+  }
+
+  it("redacts a GitLab token even with no credential name on the line", () => {
+    const line = `const list = ["${F.FAKE_GITLAB}"];`;
+    assert.ok(!sharedRedact(line).includes(F.FAKE_GITLAB));
   });
 });
 
@@ -101,12 +151,14 @@ describe("scanSecrets", () => {
     assert.equal(twoFiles.filter((m) => m.ruleId === "code.debug-leftover").length, 2);
   });
 
-  it("keeps secrets high outside tests and informational inside fixtures", () => {
+  it("keeps secrets high everywhere, including test paths", () => {
     assert.equal(severityForFinding("secret.credential-pattern", "src/auth.ts"), "high");
-    assert.equal(severityForFinding("secret.credential-pattern", "tests/stage3-checks.mjs"), "info");
-    assert.equal(severityForFinding("code.eval-use", "tests/stage3-checks.mjs"), "info");
+    assert.equal(severityForFinding("secret.credential-pattern", "tests/stage3-checks.mjs"), "high");
+    assert.equal(severityForFinding("code.eval-use", "tests/stage3-checks.mjs"), "high");
     assert.equal(severityFor("secret.eval-use"), "high");
-    assert.equal(severityForFinding("secret.credential-pattern", "fixtures/example.json"), "info");
+    assert.equal(severityForFinding("secret.credential-pattern", "fixtures/example.json"), "high");
+    // Only the known noise rules are demoted on a test path now (U4).
+    assert.equal(severityForFinding("code.weak-crypto", "tests/old.test.js"), "info");
   });
 
   it("keeps a debugger statement separate from console noise", () => {

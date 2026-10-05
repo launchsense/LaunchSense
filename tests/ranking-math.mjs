@@ -15,6 +15,7 @@ import {
   topKHits,
   zeroMissViolations,
 } from "../shared/reports/ranking.ts";
+import { questionIdFor, rankFromAnswers, tableOrder } from "../shared/reports/priority.ts";
 
 const f = (fingerprint, severity, ruleId = "code.sql-pattern") => ({ fingerprint, severity, ruleId, title: fingerprint });
 
@@ -95,4 +96,42 @@ test("orderByWorth reorders inside the band and keeps unknown rows on the floor"
   const out = orderByWorth(band, worth);
   // a3 outranks a1 by worth, a2 and a4 keep nothing and stay on the floor index.
   assert.ok(out.indexOf("a3") < out.indexOf("a1"));
+});
+
+// U6: the floor must never invert severity. A low secret is still a low finding,
+// and a high code finding is still a high one.
+test("table order compares severity before credential, so a low secret stays under a high eval", () => {
+  const lowSecret = f("s1", "low", "secret.sql-pattern");
+  const highEval = f("e1", "high", "code.eval-use");
+  assert.deepEqual(tableOrder([lowSecret, highEval]), ["e1", "s1"]);
+  // Credential still breaks a tie inside one band.
+  const credHigh = f("c1", "high", "secret.credential-pattern");
+  const execHigh = f("x1", "high", "code.eval-use");
+  assert.deepEqual(tableOrder([execHigh, credHigh]), ["c1", "x1"]);
+});
+
+// U8: two findings in one file carry different fingerprint hashes at the END, so a
+// truncated id silently merges them into one question.
+const weakA = "code.weak-crypto:3:src/crypto/deriveKey.ts:0f3a91c2";
+const weakB = "code.weak-crypto:3:src/crypto/deriveKey.ts:77b1e4d0";
+
+test("two findings in one file get two question ids, never one shared id", () => {
+  assert.notEqual(questionIdFor(weakA), questionIdFor(weakB));
+  assert.equal(questionIdFor(weakA), questionIdFor(weakA), "the id is deterministic");
+  assert.match(questionIdFor(weakA), /^w[0-9a-f]+$/);
+});
+
+test("a higher answer moves only the twin it names, not both twins", () => {
+  const twinA = f(weakA, "medium", "code.weak-crypto");
+  const twinB = f(weakB, "medium", "code.weak-crypto");
+  const answers = {
+    [questionIdFor(weakA)]: { type: "noul", noul: 0.05 },
+    [questionIdFor(weakB)]: { type: "noul", noul: 0.95 },
+  };
+  const result = rankFromAnswers([twinA, twinB], answers, "jev");
+  // The floor puts weakA first by fingerprint. The higher answer lifts weakB alone.
+  assert.deepEqual(tableOrder([twinA, twinB]), [weakA, weakB]);
+  assert.equal(result.order[0], weakB, "only the named twin moves");
+  assert.equal(result.order[1], weakA);
+  assert.match(result.note, /inside one severity band/);
 });

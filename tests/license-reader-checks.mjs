@@ -38,3 +38,21 @@ test("no licence file and no manifest field stays Unknown, honestly", () => {
   assert.equal(r.policy, "Unknown");
   assert.deepEqual(r.detected, []);
 });
+
+test("a root proprietary licence is not washed out by a nested MIT file", () => {
+  const r = analyzeLicenses(
+    ["LICENSE", "vendor/thing/LICENSE"],
+    [
+      F("LICENSE",
+        "All rights reserved. This software is proprietary and may not be copied, used, " +
+        "or distributed without a written grant from the owner."),
+      F("vendor/thing/LICENSE",
+        "MIT License\n\nPermission is hereby granted, free of charge, to any person obtaining a copy"),
+    ],
+    true,
+  );
+  assert.equal(r.policy, "Unknown");
+  assert.match(r.note, /root/i, "the note must name the root licence");
+  assert.match(r.note, /unrecognised/, "the note must say the root licence is unrecognised");
+  assert.match(r.note, /MIT/, "the nested MIT stays a separate fact in the note");
+});

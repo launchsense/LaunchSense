@@ -7,7 +7,14 @@ import { buildVerdict, buildNotCheckedList, SCOPE_LABEL } from "../shared/report
 // a clean bill of health, while the qualifying scope sat about 60 lines below it,
 // after the report, the rescan block, four signal tabs, and the compare view.
 
-const BASE = { fetched: 12, skipped: 0, total: 340, findingCount: 0, status: "completed" };
+const BASE = {
+  fetched: 12,
+  skipped: 0,
+  total: 340,
+  findingCount: 0,
+  actionableCount: 0,
+  status: "completed",
+};
 
 describe("buildVerdict", () => {
   it("never lets a clean result read as safe on its own", () => {
@@ -29,13 +36,45 @@ describe("buildVerdict", () => {
   });
 
   it("calls a skipped-file scan partial and still gives the counts", () => {
-    const v = buildVerdict({ ...BASE, fetched: 200, skipped: 140, status: "partial", findingCount: 3 });
+    const v = buildVerdict({
+      ...BASE,
+      fetched: 200,
+      skipped: 140,
+      status: "partial",
+      findingCount: 3,
+      actionableCount: 3,
+    });
     assert.equal(v.state, "partial");
     assert.match(v.headline, /partial/i);
-    assert.match(v.headline, /3 things to fix/i);
+    assert.match(v.headline, /3 to fix/i);
     const contents = v.stages.find((s) => s.label === "File contents");
     assert.equal(contents?.state, "partial");
     assert.match(contents?.detail ?? "", /Read 200, skipped 140/);
+  });
+
+  it("counts info findings as notes, not things to fix", () => {
+    const mixed = buildVerdict({ ...BASE, findingCount: 4, actionableCount: 3 });
+    assert.match(mixed.headline, /3 to fix/);
+    assert.match(mixed.headline, /1 note/);
+    assert.doesNotMatch(mixed.headline, /4 (thing|to fix)/);
+
+    const allNotes = buildVerdict({ ...BASE, findingCount: 2, actionableCount: 0 });
+    assert.match(allNotes.headline, /2 notes/);
+    assert.doesNotMatch(allNotes.headline, /to fix/);
+
+    const oneNote = buildVerdict({ ...BASE, findingCount: 1, actionableCount: 0 });
+    assert.match(oneNote.headline, /1 note/);
+    assert.doesNotMatch(oneNote.headline, /\bnotes\b/);
+
+    const partialMixed = buildVerdict({
+      ...BASE,
+      status: "partial",
+      skipped: 5,
+      findingCount: 3,
+      actionableCount: 1,
+    });
+    assert.match(partialMixed.headline, /1 to fix/);
+    assert.match(partialMixed.headline, /2 notes/);
   });
 
   it("marks file contents not checked when the scan failed before reading them", () => {
@@ -60,12 +99,12 @@ describe("buildVerdict", () => {
   });
 
   it("never uses singular or plural wrongly", () => {
-    const one = buildVerdict({ ...BASE, fetched: 1, total: 1, findingCount: 1 });
+    const one = buildVerdict({ ...BASE, fetched: 1, total: 1, findingCount: 1, actionableCount: 1 });
     assert.match(one.scope, /read all 1 file/i);
-    assert.match(one.headline, /1 thing to fix/i);
+    assert.match(one.headline, /1 to fix/i);
 
-    const many = buildVerdict({ ...BASE, findingCount: 4 });
-    assert.match(many.headline, /4 things to fix/i);
+    const many = buildVerdict({ ...BASE, findingCount: 4, actionableCount: 4 });
+    assert.match(many.headline, /4 to fix/i);
   });
 
   it("uses only the four defined states", () => {
@@ -90,7 +129,7 @@ describe("buildVerdict", () => {
     for (const status of ["validating", "fetching", "completed", "partial", "failed"]) {
       for (const total of [undefined, 0, 340]) {
         for (const findingCount of [0, 1, 9]) {
-          const v = buildVerdict({ ...BASE, status, total, findingCount });
+          const v = buildVerdict({ ...BASE, status, total, findingCount, actionableCount: findingCount });
           assert.ok(v.scope.length > 0, `empty scope for ${status}/${total}/${findingCount}`);
           assert.ok(v.headline.length > 0, `empty headline for ${status}/${total}/${findingCount}`);
         }
@@ -100,9 +139,21 @@ describe("buildVerdict", () => {
 });
 
 describe("buildNotCheckedList", () => {
-  it("always names the read caps", () => {
+  it("names the guest read caps by default", () => {
     const list = buildNotCheckedList({ aiConfigured: false, liveProvided: false });
     assert.ok(list.some((l) => /200 file and 2MB/.test(l)));
+    assert.ok(!list.some((l) => /1,000/.test(l)));
+  });
+
+  it("names the signed-in read caps when the scan used them", () => {
+    const list = buildNotCheckedList({
+      aiConfigured: true,
+      liveProvided: true,
+      maxFiles: 1000,
+      maxBytes: 8_000_000,
+    });
+    assert.ok(list.some((l) => /1,000 file and 8MB/.test(l)));
+    assert.ok(!list.some((l) => /200 file/.test(l)));
   });
 
   it("says the live app was skipped only when no URL was given", () => {
@@ -182,8 +233,20 @@ describe("verdict and scope are rendered together", () => {
       "treeTruncated=",
       "liveProvided=",
       "aiConfigured=",
+      "signedIn=",
     ]) {
       assert.ok(guest.includes(prop), `ScanReport call site is missing ${prop}`);
     }
+  });
+
+  it("derives the actionable count from finding severities, not the raw total", () => {
+    assert.match(report, /actionableCount:/);
+    assert.match(report, /severity !== "info"/);
+  });
+
+  it("passes the scan caps to the not-checked line", () => {
+    assert.match(report, /maxFiles:/);
+    assert.match(report, /maxBytes:/);
+    assert.ok(guest.includes("signedIn="));
   });
 });

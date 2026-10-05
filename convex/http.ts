@@ -4,6 +4,18 @@ import { components, api, internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { formatPublicScan, formatReport, handleMcpMessage, wantsEventStream, type ToolName } from "./mcpHttp";
+import { USAGE_KEY_HEADER, usageKeyMatches } from "./mcpLimit";
+
+// The Convex runtime exposes environment variables here; Convex TypeScript does
+// not declare it. Same declaration as the server adapters use.
+declare const process: { env: Record<string, string | undefined> };
+
+// The usage route is an open write without a credential, so it takes a shared
+// key header compared to a server-side env value. Unset means closed. The
+// expected value is only ever read here, never returned or logged.
+function usageAuthorized(request: Request): boolean {
+  return usageKeyMatches(request.headers.get(USAGE_KEY_HEADER), process.env["USAGE_ROUTE_KEY"]);
+}
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
@@ -18,22 +30,17 @@ const json = (value: unknown, status = 200) =>
 
 const tools = [
   {
-    name: "launchsense_scan_public_repo",
-    description: "Run a guest scan on one public GitHub repository. No account required.",
+    name: "launchsense_scan_public",
+    description:
+      "Read one public GitHub repository on the LaunchSense server. Same caps as the website paste: 200 files and about 2MB. Does not read a repo that exists only on the caller laptop. Alpha has no login.",
     inputSchema: {
       repoUrl: "https://github.com/owner/repo",
     },
   },
   {
     name: "launchsense_get_report",
-    description: "Read a redacted LaunchSense report by scan id.",
-    inputSchema: {
-      scanId: "convex scan id",
-    },
-  },
-  {
-    name: "launchsense_explain_findings",
-    description: "Explain existing findings in plain words using the validated AI lane or fixed wording.",
+    description:
+      "Read a LaunchSense report by scan id. A partial result is not a pass. The coverage line says what was not read.",
     inputSchema: {
       scanId: "convex scan id",
     },
@@ -88,6 +95,16 @@ http.route({
   path: "/api/mcp/usage",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    // Credential first, before the body is read, so an unauthorised caller can
+    // neither write a row nor learn anything about the payload shape.
+    if (!usageAuthorized(request)) {
+      return json({ error: "This route needs the usage key." }, 401);
+    }
+    const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const usageGate = await ctx.runMutation(internal.mcpLimit.consumeUsageWrite, { caller: forwarded });
+    if (!usageGate.allowed) {
+      return json({ error: "This route is paused until the quota window resets." }, 429);
+    }
     let body: unknown;
     try {
       body = await request.json();
@@ -109,7 +126,9 @@ http.route({
       harness: typeof record["harness"] === "string" ? record["harness"] : "local",
       version: typeof record["version"] === "string" ? record["version"] : "alpha",
       durationMs: typeof record["durationMs"] === "number" ? record["durationMs"] : 0,
-      orderSource: typeof record["orderSource"] === "string" ? record["orderSource"] : "table",
+      // A caller that sends no source is not counted as a table answer. The row
+      // stores "unspecified" so a missing value cannot inflate the table count.
+      orderSource: typeof record["orderSource"] === "string" ? record["orderSource"] : "unspecified",
       ruleCounts,
     });
     return json({ stored: true });
