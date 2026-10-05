@@ -162,13 +162,15 @@ function makeRateCtx() {
 }
 
 // A fake action ctx: a scan that is already analyzed, a findings list, a gate
-// answer, and a record of every mutation the lane tried to make.
+// answer, and a record of every query and mutation the lane made.
 function makeCtx(options = {}) {
   const mutations = [];
+  const queries = [];
   const ctx = {
     auth: options.auth,
     async runQuery(ref) {
-      if (ref === "fetchScan") return { analyzedAt: 1, status: "completed" };
+      queries.push(ref);
+      if (ref === "fetchScan") return options.scan ?? { analyzedAt: 1, status: "completed" };
       if (ref === "listFindings") return options.findings ?? [];
       throw new Error(`unexpected query ${ref}`);
     },
@@ -182,7 +184,7 @@ function makeCtx(options = {}) {
       throw new Error(`unexpected mutation ${ref}`);
     },
   };
-  return { ctx, mutations };
+  return { ctx, mutations, queries };
 }
 
 async function loadExplain(apiStub = API_STUB) {
@@ -484,5 +486,180 @@ describe("the writing lane refuses key-shaped finding text", () => {
     const deterministic = readRepo("shared/ai/deterministic.ts");
     assert.match(deterministic, /\$\{f\.title\}\. \$\{f\.why\}/);
     assert.match(deterministic, /Informational only\. No action needed before you share\./);
+  });
+});
+
+// The lane reads the scan row, so it owes the reader the same ownership rule the
+// report queries run. A scan id alone is not proof of a right to read a signed-in
+// scan, and this lane posts the finding text off that row to a provider.
+describe("the explain lane checks ownership", () => {
+  const ownedScan = { analyzedAt: 1, status: "completed", signedIn: true, userId: "user-a" };
+  const asUser = (subject) => ({ getUserIdentity: async () => ({ subject }) });
+
+  it("refuses a signed-in scan the caller does not own, and posts nothing", async () => {
+    const mod = await loadExplain();
+    const finding = findingWith("A credential is hardcoded in the file.");
+    const provider = useProvider(coveringAnswer([finding.fingerprint]));
+    const { ctx } = makeCtx({
+      scan: ownedScan,
+      findings: [finding],
+      auth: asUser("user-b"),
+    });
+    const result = await mod.explainScan.handler(ctx, { scanId: "scan-of-user-a" });
+
+    assert.equal(provider.calls, 0, "another account's finding text must never be posted");
+    assert.equal(provider.prompts.length, 0);
+    assert.equal(result.source, "deterministic", "the refusal shows our wording");
+    assert.equal(result.providerCalled, false, "so the not-checked disclosure stays in place");
+    assert.match(result.note, /not available|sign in|your account/i);
+    assert.equal(
+      result.explanations.length,
+      0,
+      "a refused scan carries no explanations, so nothing of the scan reaches the screen",
+    );
+    assert.ok(
+      !result.note.includes("A credential is hardcoded"),
+      "the refusal must not quote the finding text it refused",
+    );
+  });
+
+  it("explains the caller's own signed-in scan, so the check is a rule and not a switch", async () => {
+    const mod = await loadExplain();
+    const finding = findingWith("A credential is hardcoded in the file.");
+    const provider = useProvider(coveringAnswer([finding.fingerprint]));
+    const { ctx } = makeCtx({ scan: ownedScan, findings: [finding], auth: asUser("user-a") });
+    const result = await mod.explainScan.handler(ctx, { scanId: "scan-of-user-a" });
+
+    assert.equal(provider.calls, 1, "the owner still gets the wording the lane exists for");
+    assert.equal(result.providerCalled, true);
+    assert.equal(result.source, "gemini");
+  });
+
+  it("keeps a guest scan of a public repo readable by its id, with no identity at all", async () => {
+    const mod = await loadExplain();
+    const finding = findingWith("A credential is hardcoded in the file.");
+    const provider = useProvider(coveringAnswer([finding.fingerprint]));
+    // A guest scan carries no owner, so it is the shareable case by design.
+    const { ctx } = makeCtx({ scan: { analyzedAt: 1, status: "completed" }, findings: [finding] });
+    const result = await mod.explainScan.handler(ctx, { scanId: "guest-scan" });
+
+    assert.equal(provider.calls, 1, "a guest scan of a public repo stays id-addressed");
+    assert.equal(result.providerCalled, true);
+  });
+
+  it("refuses a signed-in scan with no identity at all, rather than treating it as a guest", async () => {
+    const mod = await loadExplain();
+    const provider = useProvider(okAnswer());
+    const { ctx } = makeCtx({ scan: ownedScan, findings: [findingWith("A credential is hardcoded in the file.")] });
+    const result = await mod.explainScan.handler(ctx, { scanId: "scan-of-user-a" });
+    assert.equal(provider.calls, 0, "no identity is not a pass");
+    assert.equal(result.providerCalled, false);
+  });
+
+  it("reads the one shared ownership helper, the same one the report queries read", () => {
+    assert.match(
+      explainSource,
+      /from\s+"\.\.\/\.\.\/shared\/reports\/scanAccess"/,
+      "the lane must import the rule the report queries already enforce",
+    );
+    assert.match(explainSource, /canReadScan\(/);
+    const queries = readRepo("convex/scans/queries.ts");
+    assert.match(queries, /canReadScan\(/, "the rule exists on the read path already");
+    // Both paths must derive the viewer the same way, or the ownership rule
+    // compares two different values and refuses its own owner's scan. Convex
+    // Auth reads the user id as the part of the subject before the "|".
+    assert.match(
+      explainSource,
+      /getUserIdentity\(\)[\s\S]{0,400}subject\.split\("\|"\)\[0\]/,
+      "the lane must read the user id out of the identity subject, the way getAuthUserId does",
+    );
+  });
+});
+
+// The caps have to bind a caller who holds many scan ids, and they have to bind
+// the lane in total. Measured with the real handler against a real rateLimits
+// table, not read out of the source.
+describe("the explain lane has a ceiling a scan id cannot buy past", () => {
+  it("stops a caller with no identity at one shared bucket, so many scan ids stop helping", async () => {
+    const mod = await loadWithStubs("convex/mcpLimit.ts");
+    assert.ok(
+      Number.isInteger(mod.EXPLAIN_GUEST_CALLER_LIMIT) && mod.EXPLAIN_GUEST_CALLER_LIMIT > 0,
+      "the lane must name a cap for a caller with no identity",
+    );
+    const { ctx } = makeRateCtx();
+    const attempts = 40;
+    let allowed = 0;
+    for (let i = 0; i < attempts; i += 1) {
+      for (let press = 0; press < mod.EXPLAIN_SCAN_LIMIT; press += 1) {
+        const result = await mod.consumeExplain.handler(ctx, { scanId: `scan-${i}` });
+        if (result.allowed) allowed += 1;
+      }
+    }
+    assert.equal(
+      allowed,
+      mod.EXPLAIN_GUEST_CALLER_LIMIT,
+      `${attempts} fresh scan ids must stop at the named cap, not at ${attempts * mod.EXPLAIN_SCAN_LIMIT}`,
+    );
+    assert.equal(
+      mod.explainCallerKey(null),
+      "guest",
+      "the shared bucket must not be derived from the scan, or a new scan id is a new budget",
+    );
+  });
+
+  it("still gives every scan its own small budget inside the shared guest bucket", async () => {
+    const mod = await loadWithStubs("convex/mcpLimit.ts");
+    const { ctx } = makeRateCtx();
+    for (let i = 0; i < mod.EXPLAIN_SCAN_LIMIT; i += 1) {
+      const press = await mod.consumeExplain.handler(ctx, { scanId: "scan-a" });
+      assert.equal(press.allowed, true, `the first press of a guest's scan must work (press ${i + 1})`);
+    }
+    assert.equal(
+      (await mod.consumeExplain.handler(ctx, { scanId: "scan-a" })).allowed,
+      false,
+      "one scan id must not buy repeated calls",
+    );
+    assert.equal(
+      (await mod.consumeExplain.handler(ctx, { scanId: "scan-b" })).allowed,
+      true,
+      "a second scan is a second press for the same visitor, which the shared bucket still allows",
+    );
+  });
+
+  it("caps the lane in total, above the scan and caller caps", async () => {
+    const mod = await loadWithStubs("convex/mcpLimit.ts");
+    assert.ok(
+      Number.isInteger(mod.EXPLAIN_GLOBAL_LIMIT) && mod.EXPLAIN_GLOBAL_LIMIT > mod.EXPLAIN_CALLER_LIMIT,
+      "the lane must name a total cap, and it must sit above the per-caller one",
+    );
+    const { ctx, rows } = makeRateCtx();
+    let allowed = 0;
+    // One fresh scan and one fresh account per press, so neither of the caps
+    // below can be what stops this: only the total can.
+    for (let i = 0; i < mod.EXPLAIN_GLOBAL_LIMIT + 20; i += 1) {
+      const press = await mod.consumeExplain.handler(ctx, { scanId: `scan-${i}`, caller: `user-${i}` });
+      if (press.allowed) allowed += 1;
+    }
+    assert.equal(allowed, mod.EXPLAIN_GLOBAL_LIMIT, "the lane must stop at its named total");
+    assert.ok(
+      [...rows.keys()].some((key) => key.includes("explain-scan-global")),
+      "the total has to be a bucket in the same table, so it is read and enforced for real",
+    );
+  });
+
+  it("claims the limit before it reads the scan or the findings, so a denied press does no work", async () => {
+    const mod = await loadExplain();
+    const provider = useProvider(okAnswer());
+    const { ctx, queries } = makeCtx({ gate: { allowed: false, reason: "scan_limit" } });
+    const result = await mod.explainScan.handler(ctx, { scanId: "scan1" });
+
+    assert.equal(provider.calls, 0);
+    assert.equal(result.providerCalled, false);
+    assert.match(result.note, /limit/i);
+    assert.deepEqual(
+      queries,
+      [],
+      "a denied press must not read the scan row or the findings, so it costs a caller with many ids nothing",
+    );
   });
 });
