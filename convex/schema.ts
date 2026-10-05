@@ -64,6 +64,8 @@ export default defineSchema({
     rescanOf: v.optional(v.id("scans")),
     /** True when this scan used the signed-in GitHub token and the higher file cap. */
     signedIn: v.optional(v.boolean()),
+    /** Owner of a signed-in scan. Absent on guest scans of public repos. */
+    userId: v.optional(v.id("users")),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -82,6 +82,14 @@ function isLicenseFile(path: string): boolean {
   );
 }
 
+/** A licence file at the repo root. NOTICE is a companion file, not the licence. */
+function isRootLicenseFile(path: string): boolean {
+  if (path.includes("/")) return false;
+  const base = path.toUpperCase();
+  if (base === "NOTICE" || base.startsWith("NOTICE.")) return false;
+  return isLicenseFile(path);
+}
+
 export function analyzeLicenses(
   treeBlobs: string[],
   files: Array<{ path: string; content: string }>,
@@ -90,14 +98,19 @@ export function analyzeLicenses(
   const licenseFiles = treeBlobs.filter(isLicenseFile);
   const detected = new Set<string>();
   const fileDetected = new Set<string>();
+  let rootLicenseRead = false;
+  let rootLicenseMatched = false;
 
   for (const file of files) {
     if (!isLicenseFile(file.path)) continue;
+    const fromRoot = isRootLicenseFile(file.path);
+    if (fromRoot) rootLicenseRead = true;
     const head = file.content.slice(0, 4000);
     for (const marker of LICENSE_MARKERS) {
       if (marker.pattern.test(head)) {
         detected.add(marker.id);
         fileDetected.add(marker.id);
+        if (fromRoot) rootLicenseMatched = true;
       }
     }
   }
@@ -205,6 +218,24 @@ export function analyzeLicenses(
       packageLicense,
       policy: "Review required",
       note: `An OR expression is a choice, not both licenses at once.${suffix} ${SIGNAL}`,
+    };
+  }
+  // The root licence file is this repository's own terms. When it was read and no
+  // marker matched it, the root licence is unrecognised, so a nested permissive
+  // file or a manifest field must not set Allowed. Stricter verdicts above (source
+  // available, copyleft, AGPL) still stand, and the other ids are listed as their
+  // own facts in the note.
+  if (rootLicenseRead && !rootLicenseMatched) {
+    const otherIds =
+      found.length > 0
+        ? ` Other licence ids in this read, each its own fact: ${found.join(", ")}.`
+        : " No other licence id was in this read.";
+    return {
+      detected: found,
+      files: licenseFiles,
+      packageLicense,
+      policy: "Unknown",
+      note: `The root licence file was read and no licence marker matched it, so the root licence is unrecognised.${otherIds}${suffix} ${SIGNAL}`,
     };
   }
   if (found.length > 0) {

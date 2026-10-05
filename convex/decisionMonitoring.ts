@@ -4,14 +4,19 @@ import { v } from "convex/values";
 // Decision-source monitoring. One read over stored fields, no new tracker.
 //
 // What this answers, and what it deliberately does not: it reports how often each
-// rung of the decision lane answered, how often the lane fell back to the rule
-// table, and how long the call took. It does not score any rung, does not compare
+// rung of the decision lane answered, how often the rule table answered instead,
+// and how long the call took. It does not score any rung, does not compare
 // a rung to the table's own order, and does not promote or retire a rung. Those
 // need owner labels this table does not hold. A rung with zero rows here is
 // unobserved, which is not the same as bad and not the same as good.
 //
 // The rows are usage diagnostics. They hold counts and a source name, never file
 // text, so this query can be read without any disclosure rule.
+
+// Hard ceiling on rows read in one call. The window and the day index already
+// bound the read; this bounds the single worst case, a day index with a very
+// large number of rows inside the window.
+const MAX_ROWS = 5000;
 
 const sourceCounts = v.object({
   source: v.string(),
@@ -26,28 +31,36 @@ export const decisionSourceDistribution = internalQuery({
       day: v.string(),
       total: v.number(),
       bySource: v.array(sourceCounts),
-      // Rungs that were configured for a key but did not answer, counted from the
-      // attempts the adapter recorded. Zero is a real zero, not a missing value.
-      fallbackToTable: v.number(),
+      // Stored rows whose orderSource is "table". This is a row count, not a
+      // fallback rate: it includes scans where no rung was configured or called at
+      // all, so it cannot say a rung tried and lost. Named for what it counts.
+      tableOrderRows: v.number(),
       medianDurationMs: v.number(),
       maxDurationMs: v.number(),
     })),
     // The whole window in one place, so a reader does not add up the days by hand.
     total: v.number(),
     totalsBySource: v.array(sourceCounts),
-    fallbackToTable: v.number(),
+    // Rows where the table supplied the order. Not a rung failure count.
+    tableOrderRows: v.number(),
     // Fields this table does not store, named so a reader does not go looking.
     notMeasured: v.array(v.string()),
   }),
   handler: async (ctx, args) => {
     const days = Math.min(Math.max(args.days ?? 7, 1), 90);
     const since = Date.now() - days * 24 * 60 * 60 * 1000;
+    // The index key is the stored day string, so the window becomes a range on
+    // that string instead of a whole-table collect. Rows outside it are never read.
+    const sinceDay = new Date(since).toISOString().slice(0, 10);
 
     const rows = await ctx.db
       .query("usageDiagnostics")
-      .withIndex("by_day")
-      .collect();
+      .withIndex("by_day", (q) => q.gte("day", sinceDay))
+      .order("desc")
+      .take(MAX_ROWS);
 
+    // The index range is day-granular, so a day on the boundary can hold rows
+    // from just before the window. This keeps the exact cutoff.
     const inWindow = rows.filter((row) => row.createdAt >= since);
     const byDay = new Map<string, typeof inWindow>();
     for (const row of inWindow) {
@@ -74,7 +87,7 @@ export const decisionSourceDistribution = internalQuery({
         bySource: [...sources.entries()]
           .map(([source, scans]) => ({ source, scans }))
           .sort((a, b) => b.scans - a.scans),
-        fallbackToTable: table,
+        tableOrderRows: table,
         medianDurationMs: durations.length % 2 === 0
           ? (durations[middle - 1] ?? 0) / 2 + (durations[middle] ?? 0) / 2
           : durations[middle] ?? 0,
@@ -95,12 +108,14 @@ export const decisionSourceDistribution = internalQuery({
       totalsBySource: [...totalSources.entries()]
         .map(([source, scans]) => ({ source, scans }))
         .sort((a, b) => b.scans - a.scans),
-      fallbackToTable: totalTable,
+      tableOrderRows: totalTable,
       notMeasured: [
         "Rung accuracy against the rule table. No owner labels are stored, so there is nothing to score against.",
         "Reorder counts. How many findings a rung actually moved is not stored.",
         "Swap consistency. Both presentation orders are not run yet, so there is no rate to report.",
         "Which rung failed and why per call. Attempts are logged per call but not persisted here.",
+        "Whether a table row means a rung lost. A stored table row can also be a scan where no rung ran, so tableOrderRows is a count of rows and not a failure count.",
+        "Rows past the per-call cap. A single call reads at most 5000 rows in the window, newest first, and does not report how many it left out.",
       ],
     };
   },

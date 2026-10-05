@@ -5,6 +5,7 @@ import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { parseGitHubRepoUrl } from "../../shared/githubUrl";
 import { readSessionToken } from "../github/readToken";
 import {
@@ -64,6 +65,7 @@ export const runScan = action({
     const now = Date.now();
     const token = await readSessionToken(ctx);
     const signedIn = token !== null;
+    const userId = await getAuthUserId(ctx);
 
     const inFlight = await ctx.runQuery(internal.scans.internal.findInFlight, {
       owner,
@@ -83,6 +85,7 @@ export const runScan = action({
       repo,
       repoUrl: normalizedUrl,
       signedIn,
+      userId: userId ?? undefined,
       now,
     });
     await ctx.runMutation(internal.scans.internal.markFetching, { scanId, now });

@@ -127,6 +127,19 @@ export function looksLikeSecretValue(value: string, wasQuoted = true): boolean {
   // address in a crypto backend was flagged.
   if (/^0x[0-9a-fA-F]{40}$/.test(t)) return false;
 
+  // A lowercase snake identifier is a name, not a secret. `rendered_phone_check`
+  // as a value is the feature it names, the same way `token_address` is. A real
+  // credential is a hash, a base64 run, or a prefixed key, never a clean snake name.
+  if (/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(t)) return false;
+
+  // A relative path is a file location, not a secret. `dist/bin.cjs` in a lockfile
+  // is a build output path. But the base64 alphabet includes `/`, so a base64
+  // secret can look path-shaped (a 64-char `secret_key_base` with one `/`). Only
+  // reject a path when the value is not a mixed-case base64 run, or a real key is
+  // lost. Provider shapes bypass all of this above.
+  const base64Shaped = /^[A-Za-z0-9+/]{20,}={0,2}$/.test(t) && /[A-Z]/.test(t);
+  if (!base64Shaped && /^[A-Za-z0-9_.@-]+(\/[A-Za-z0-9_.@-]+)+$/.test(t)) return false;
+
   // A bare value that is a valid identifier is a name, not a secret.
   // `token_address`, `encrypted_secret`, `SARA_MODEL` are all references or config
   // names. A credential written without quotes is a hash, a base64 run, a prefixed

@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   hasCIIn,
   hasLicenseIn,
@@ -10,6 +11,7 @@ import {
   hasTestsIn,
 } from "../../shared/analyzers/projectSignals";
 import { codingToolsIn } from "../../shared/reports/codingTool";
+import { canReadScan } from "../../shared/reports/scanAccess";
 
 const scanStatus = v.union(
   v.literal("validating"),
@@ -65,6 +67,7 @@ const scanFields = {
   mainAction: v.optional(v.string()),
   rescanOf: v.optional(v.id("scans")),
   signedIn: v.optional(v.boolean()),
+  userId: v.optional(v.id("users")),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
@@ -104,6 +107,10 @@ export const getScan = query({
   handler: async (ctx, args) => {
     const scan = await ctx.db.get("scans", args.scanId);
     if (scan === null) {
+      return { scan: null, samplePaths: [], storedEntries: 0, codingTools: [] };
+    }
+    const viewerId = await getAuthUserId(ctx);
+    if (!canReadScan(scan, viewerId)) {
       return { scan: null, samplePaths: [], storedEntries: 0, codingTools: [] };
     }
     if (scan.sha === undefined) {
@@ -153,6 +160,10 @@ export const getResults = query({
   handler: async (ctx, args) => {
     const scan = await ctx.db.get("scans", args.scanId);
     if (scan === null) return { scan: null, findings: [], analyzed: false, live: null };
+    const viewerId = await getAuthUserId(ctx);
+    if (!canReadScan(scan, viewerId)) {
+      return { scan: null, findings: [], analyzed: false, live: null };
+    }
     if (scan.analyzedAt === undefined) {
       return { scan, findings: [], analyzed: false, live: null };
     }
@@ -342,7 +353,8 @@ export const getAnalysisFacts = query({
   }),
   handler: async (ctx, args) => {
     const scan = await ctx.db.get("scans", args.scanId);
-    if (scan === null || scan.sha === undefined) {
+    const viewerId = await getAuthUserId(ctx);
+    if (scan === null || !canReadScan(scan, viewerId) || scan.sha === undefined) {
       return {
         treePaths: [],
         analyzedPaths: [],
@@ -543,6 +555,8 @@ export const getCompare = query({
     const from = await ctx.db.get("scans", args.fromScanId);
     const to = await ctx.db.get("scans", args.toScanId);
     if (from === null || to === null) return null;
+    const viewerId = await getAuthUserId(ctx);
+    if (!canReadScan(from, viewerId) || !canReadScan(to, viewerId)) return null;
     if (from.analyzedAt === undefined || to.analyzedAt === undefined) return null;
     const rows = await ctx.db
       .query("findingTransitions")

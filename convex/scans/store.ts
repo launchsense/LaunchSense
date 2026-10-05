@@ -528,6 +528,7 @@ export const createRescan = internalMutation({
     repoUrl: v.string(),
     rescanOf: v.id("scans"),
     signedIn: v.boolean(),
+    userId: v.optional(v.id("users")),
     now: v.number(),
   },
   returns: v.id("scans"),
@@ -539,6 +540,7 @@ export const createRescan = internalMutation({
       status: "validating",
       rescanOf: args.rescanOf,
       signedIn: args.signedIn,
+      userId: args.userId,
       createdAt: args.now,
       updatedAt: args.now,
     });

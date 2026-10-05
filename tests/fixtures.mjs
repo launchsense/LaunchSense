@@ -54,6 +54,9 @@ export const FAKE_SENDGRID = join("SG.", "abcdefghij1234567890", ".", "ABCDEFGHI
 /** Twilio key. */
 export const FAKE_TWILIO = join("SK", "abcdef1234567890", "abcdef1234567890ab");
 
+/** Twilio key in the exact shape the detector's `{32}` rule requires. */
+export const FAKE_TWILIO_KEY = join("SK", "0123456789abcdef", "0123456789abcdef");
+
 /** A JWT, three dot-separated base64url parts. */
 export const FAKE_JWT = join(
   "eyJhbGciOiJIUzI1NiJ9",
@@ -75,6 +78,16 @@ export const FAKE_HEX40 = join("da39a3ee5e6b4b0d", "3255bfef95601890afd80709");
 /** A base64 secret. */
 export const FAKE_BASE64 = join("wJalrXUtnFEMI/K7MDENG", "/bPxRfiCYzK8w5Dg=");
 
+/** A 40-character base64 secret with a slash and no padding.
+ *  Reproduces the class where the path-shape gate swallowed a real key. */
+export const FAKE_BASE64_SLASH = join(
+  "AkBmCnDoEpFqGrHs",
+  "ItJuKvLwMxNyOzP0",
+  "/",
+  "Q1R2S3T4U5V6W7X8",
+  "Y9ZaBcDeFgHi",
+);
+
 /** A 16 character mixed alphanumeric value. */
 export const FAKE_MIXED16 = join("a1b2c3d4", "e5f6g7h8");
 
@@ -86,6 +99,22 @@ export const FAKE_EVM_ADDRESS = join("0x28b5a0e9c621a5badaa536219b3a", "228c8168
 
 /** A UUID, an identifier rather than a secret. */
 export const FAKE_UUID = join("550e8400-e29b-41d4-a716-", "446655440000");
+
+/** GitLab personal access token. */
+export const FAKE_GITLAB = join("glpat-", "abcdefghij1234567890");
+
+/** DigitalOcean personal access token, 64 hex characters. */
+export const FAKE_DIGITALOCEAN = join(
+  "dop_v1_",
+  "0123456789abcdef0123456789abcdef",
+  "0123456789abcdef0123456789abcdef",
+);
+
+/** npm automation token. */
+export const FAKE_NPM = join("npm_", "abcdefghij1234567890abcdefghij1234567890");
+
+/** Stripe webhook signing secret. */
+export const FAKE_WEBHOOK = join("whsec_", "abcdefghij1234567890abcd");
 
 /** Build a full assignment line for a provider fixture. */
 export function line(name, value) {
