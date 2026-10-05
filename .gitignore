@@ -1,6 +1,8 @@
 # Internal documentation and planning folders.
 /.agents
 /.progress/
+# Local run notes for the audit-fix wave. Never publish.
+/state/
 
 # Dependencies, build output, and private machine configuration.
 node_modules/

@@ -142,6 +142,62 @@ describe("looksLikeSecretValue directly", () => {
   }
 });
 
+// WS-1. The receiver gate is scoped to source files. A config-style file names a
+// credential with a dotted key, so the dot must not read as a member access there.
+// The value is assembled from parts in tests/fixtures.mjs.
+describe("a dotted name is a member access in source, an assignment in config", () => {
+  const dotted = `jwt.secret=${F.FAKE_BASE64_SLASH}`;
+
+  const CONFIG_STYLE = [
+    "application.properties",
+    "config/application.properties",
+    "settings.ini",
+    "settings.cfg",
+    "nginx.conf",
+    "pyproject.toml",
+    "config/.env",
+  ];
+  for (const path of CONFIG_STYLE) {
+    it(`fires: dotted key in ${path}`, () => {
+      assert.equal(isHardcodedCredential(dotted, path), true, `was missed in ${path}`);
+    });
+  }
+
+  const SOURCE_STYLE = [
+    "src/config.ts",
+    "app/main.py",
+    "MainActivity.kt",
+    "src/routes/index.svelte",
+    "lib/secrets.rb",
+    "index.html",
+  ];
+  for (const path of SOURCE_STYLE) {
+    it(`does not fire: dotted key in ${path}`, () => {
+      assert.equal(isHardcodedCredential(dotted, path), false, `false positive in ${path}`);
+    });
+  }
+
+  it("does not fire with no path, because no path means source", () => {
+    assert.equal(isHardcodedCredential(dotted), false);
+    assert.equal(isHardcodedCredential(dotted, ""), false);
+  });
+
+  it("still does not fire on an env read or a placeholder in a config file", () => {
+    for (const line of [
+      "jwt.secret=${JWT_SECRET}",
+      "jwt.secret=$JWT_SECRET",
+      'jwt.secret="{{ jwt_secret }}"',
+      "jwt.secret=changeme",
+    ]) {
+      assert.equal(isHardcodedCredential(line, "application.properties"), false, line);
+    }
+  });
+
+  it("fires on a provider-shaped value under a dotted name in a config file", () => {
+    assert.equal(isHardcodedCredential(`stripe.key=${F.FAKE_STRIPE}`, "application.properties"), true);
+  });
+});
+
 describe("a tracked env TEMPLATE is not a leak", () => {
   it("does not flag a template with empty values", () => {
     const template = [
