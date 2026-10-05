@@ -14,6 +14,7 @@ import type { Severity } from "../../shared/policies/severity";
 import {
   fingerprintFinding,
   fnv1aHex,
+  occurrenceFor,
   redactedSnippet,
 } from "../../shared/redaction";
 import { fetchBlobContent } from "../adapters/github";
@@ -202,7 +203,23 @@ function pushEvidence(
   },
 ): void {
   const snippet = redactedSnippet(item.rawSnippet);
-  const fingerprint = fingerprintFinding(item.ruleId, ANALYZER_VERSION, item.path, snippet);
+  // The same rule, path and snippet can appear more than once in a run, for
+  // example two identical console.log lines in one file. Without an occurrence
+  // number both would hash to one fingerprint and the dedupe at the end of the
+  // run would drop the second, so the count is taken here and carried in the
+  // fingerprint. The first occurrence keeps the fingerprint it always had.
+  const occurrence = occurrenceFor(findings, {
+    ruleId: item.ruleId,
+    path: item.path,
+    redactedSnippet: snippet,
+  });
+  const fingerprint = fingerprintFinding(
+    item.ruleId,
+    ANALYZER_VERSION,
+    item.path,
+    snippet,
+    occurrence,
+  );
   const full: FindingItem = {
     ruleId: item.ruleId,
     path: item.path,

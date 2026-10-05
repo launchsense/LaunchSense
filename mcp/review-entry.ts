@@ -20,8 +20,16 @@ import { lookupPackages, scorecardFact } from "../shared/review/registry.ts";
 import { quoteForChoice, suggestionOptions } from "../shared/review/unknownQuote.ts";
 import { parseManifests } from "../shared/analyzers/deps.ts";
 
+// Vendored trees. Skipping them keeps thousands of third-party lines out of a
+// review that is about this repo's own code, and every skip is disclosed in the
+// not-checked list, so the report never hides the gap.
+const VENDORED = new Set(["vendor", "third_party", "3rdparty", "deps"]);
+
 const SKIP = new Set([
   "node_modules", "dist", "build", ".git", "coverage", ".next", "vendor", "target", "__pycache__", "third_party",
+  // The other names third-party code arrives under. Same rule as vendor and
+  // third_party: not read, and named in the not-checked list when skipped.
+  ...VENDORED,
   // The agent working folder. It holds personal and planning material that is
   // nobody's to review, and a review of this repo must never walk into it. Skipped
   // by name, the same as any other unread directory, and disclosed when skipped.
@@ -83,7 +91,7 @@ function walk(root: string): { files: ReviewFile[]; skipped: NotChecked[] } {
     for (const name of names) {
       if (SKIP.has(name)) {
         const scope = relative(root, join(dir, name)).split("\\").join("/");
-        if (name === "vendor" || name === "third_party") {
+        if (VENDORED.has(name)) {
           skipped.push({ scope, reason: "Vendored tree was not read, so its notices were not checked." });
         } else if (name === ".progress") {
           skipped.push({ scope, reason: "Working notes folder. Not read, and its contents are not the repo owner's to review." });
@@ -339,10 +347,12 @@ async function main(): Promise<void> {
   const quoted = offline ? null : await maybeQuote(report);
   const sent = await sendDiagnostics(report, config, started, quoted?.id ?? null);
   if (process.argv.includes("--json")) {
-    process.stdout.write(JSON.stringify({ ...report, diagnosticsSent: sent, modelQuote: quoted?.quote ?? null }));
+    // One JSON document per line, terminated. Piping this into jq or a file
+    // needs the last line to have a terminator like any other line.
+    process.stdout.write(`${JSON.stringify({ ...report, diagnosticsSent: sent, modelQuote: quoted?.quote ?? null })}\n`);
     return;
   }
-  process.stdout.write(render(report, sent, quoted?.quote ?? null));
+  process.stdout.write(`${render(report, sent, quoted?.quote ?? null)}\n`);
 }
 
 main().catch((error: unknown) => {

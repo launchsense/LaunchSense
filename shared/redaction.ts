@@ -70,12 +70,37 @@ export function fnv1aHex(text: string): string {
 }
 
 // Stable across line shifts: line numbers are never part of a fingerprint,
-// and only the redacted snippet hash is used, never raw values.
+// and only the redacted snippet hash is used, never raw values. Two identical
+// lines in one file would hash to one fingerprint and a dedupe would then drop
+// the second, so each repeat after the first carries its own occurrence number.
+// Occurrence 0 returns the fingerprint exactly as it always has, so stored
+// fingerprints never change.
 export function fingerprintFinding(
   ruleId: string,
   analyzerVersion: string,
   path: string,
   snippet: string,
+  occurrence = 0,
 ): string {
-  return `${ruleId}:${analyzerVersion}:${path}:${fnv1aHex(snippet)}`;
+  const base = `${ruleId}:${analyzerVersion}:${path}:${fnv1aHex(snippet)}`;
+  return occurrence > 0 ? `${base}:${occurrence}` : base;
+}
+
+// How many findings already in this run carry the same rule, path and redacted
+// snippet. That count is the occurrence number the next identical finding takes.
+export function occurrenceFor(
+  earlier: Array<{ ruleId: string; path: string; redactedSnippet: string }>,
+  current: { ruleId: string; path: string; redactedSnippet: string },
+): number {
+  let occurrence = 0;
+  for (const seen of earlier) {
+    if (
+      seen.ruleId === current.ruleId &&
+      seen.path === current.path &&
+      seen.redactedSnippet === current.redactedSnippet
+    ) {
+      occurrence += 1;
+    }
+  }
+  return occurrence;
 }

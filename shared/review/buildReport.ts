@@ -15,7 +15,7 @@ import type { RankableFinding } from "../reports/priority.ts";
 import { buildTopPrompt } from "../reports/topPrompt.ts";
 import type { PromptFinding } from "../reports/topPrompt.ts";
 import { clashSignal } from "./clash.ts";
-import { deadCopies, generatedMarkers, modelCards, networkHints, repeatedFunctions } from "./extraChecks.ts";
+import { countNamedHosts, deadCopies, generatedMarkers, modelCards, networkHints, repeatedFunctions, NETWORK_HINT_CAP } from "./extraChecks.ts";
 import { inventoryNpmLock } from "./lockfile.ts";
 
 export interface ReviewFile {
@@ -178,6 +178,19 @@ function finding(
   };
 }
 
+/** Lockfiles this review reads but cannot inventory. Naming them beats claiming none was read. */
+const OTHER_LOCKFILES = new Set([
+  "cargo.lock", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "gemfile.lock",
+  "composer.lock", "packages.lock.json", "pipfile.lock", "mix.lock", "pubspec.lock",
+  "gradle.lockfile", "go.sum",
+]);
+
+function listNames(paths: string[]): string {
+  const named = paths.map((path) => path.split("/").pop() ?? path);
+  if (named.length === 1) return named[0] ?? "";
+  return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+}
+
 export function buildLocalReport(
   files: ReviewFile[],
   skipped: NotChecked[],
@@ -224,8 +237,20 @@ export function buildLocalReport(
 
   const lockFile = files.find((file) => (file.path.split("/").pop() ?? "") === "package-lock.json");
   const direct = new Set(deps.deps.filter((dep) => dep.ecosystem === "npm").map((dep) => dep.name));
+  // Only the npm lockfile is inventoried here. A Cargo.lock or a yarn.lock was
+  // still a lockfile in the read, so it must not be reported as "no lockfile
+  // was in hand". It is named, and named as not read for versions.
+  const otherLocks = files
+    .map((file) => file.path)
+    .filter((path) => OTHER_LOCKFILES.has((path.split("/").pop() ?? "").toLowerCase()));
   const inventory = lockFile === undefined
-    ? { packages: [], complete: false, note: "No npm lockfile was in the files read. The dependency inventory is incomplete." }
+    ? {
+        packages: [],
+        complete: false,
+        note: otherLocks.length === 0
+          ? "No npm lockfile was in the files read. The dependency inventory is incomplete."
+          : `No npm lockfile was in the files read. ${listNames(otherLocks)} was in the files read and was not read for versions. The dependency inventory is incomplete.`,
+      }
     : inventoryNpmLock(lockFile.content, direct);
 
   const notChecked = [...skipped];
@@ -272,9 +297,11 @@ export function buildLocalReport(
     // and checked none of them" can never read as "there was nothing to check".
     notChecked.push({
       scope: "OSV",
-      reason: lockFileInHand === undefined
-        ? "No lockfile was in the files read, so no version could be queried. Unknown stays unknown."
-        : `${lockFileInHand.path} was in the files read and its versions were not queried. Unknown stays unknown.`,
+      reason: lockFileInHand !== undefined
+        ? `${lockFileInHand.path} was in the files read and its versions were not queried. Unknown stays unknown.`
+        : otherLocks.length > 0
+          ? `No npm lockfile was in the files read, so no npm version could be queried. ${listNames(otherLocks)} was in the files read and was not queried either. Unknown stays unknown.`
+          : "No lockfile was in the files read, so no version could be queried. Unknown stays unknown.",
     });
   } else if (advisories.timedOut) {
     notChecked.push({
@@ -313,14 +340,26 @@ export function buildLocalReport(
     }
   }
 
+  const hostHits = networkHints(files);
   for (const hit of [
     ...repeatedFunctions(files),
     ...deadCopies(files),
-    ...networkHints(files),
+    ...hostHits,
     ...modelCards(files),
     ...generatedMarkers(files),
   ]) {
     findings.push(finding(hit.ruleId, hit.path, hit.line, hit.title, hit.why, hit.title));
+  }
+  // A cap that is not named reads as a complete list. The check stops at the
+  // cap, so the report says how many naming files were left out.
+  if (hostHits.length >= NETWORK_HINT_CAP) {
+    const leftOut = countNamedHosts(files) - hostHits.length;
+    if (leftOut > 0) {
+      notChecked.push({
+        scope: "named hosts",
+        reason: `The named-host list stops at ${NETWORK_HINT_CAP} files per run. ${leftOut} more file${leftOut === 1 ? "" : "s"} that name a host were not listed.`,
+      });
+    }
   }
 
   const hygiene = analyzeHygiene(
