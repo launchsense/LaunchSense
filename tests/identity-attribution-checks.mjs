@@ -618,6 +618,23 @@ describe("3. the audience claim is checked and a 401 carries WWW-Authenticate", 
     assert.equal(minted.row.revoked, false);
   });
 
+  it("reads only a Bearer scheme, and a non-Bearer header is refused, not anonymous", () => {
+    assert.equal(cred.bearerTokenFromHeader("Bearer ls_live_abc_def"), "ls_live_abc_def");
+    assert.equal(cred.bearerTokenFromHeader("bearer\ttok"), "tok");
+    for (const raw of ["Basic abc", "ls_live_abc_def", "Token abc", "", "   ", "BearerNoSpace abc"]) {
+      assert.equal(
+        cred.bearerTokenFromHeader(raw),
+        null,
+        `${JSON.stringify(raw)} must not parse as a Bearer token`,
+      );
+    }
+    // The route refuses a present-but-non-Bearer header, so it cannot be
+    // silently treated as no credential at all.
+    const http = readRepo("convex/http.ts");
+    assert.match(http, /header\.trim\(\)\.length > 0/);
+    assert.match(http, /unauthorizedResponse\("invalid"\)/);
+  });
+
   it("puts WWW-Authenticate on every 401, naming the protected resource metadata", () => {
     for (const reason of ["missing", "invalid"]) {
       const { status, headers, body } = cred.unauthorizedResponse(reason);
@@ -655,8 +672,14 @@ describe("3. the audience claim is checked and a 401 carries WWW-Authenticate", 
     assert.notEqual(fn, null, "bearerTokenFromHeader must exist to be checked");
     assert.doesNotMatch(fn[0], /session/i, "bearerTokenFromHeader must not know about a session header");
     assert.match(fn[0], /\^Bearer\[ \\t\]\+\(\\S\+\)/, "it reads a Bearer scheme and nothing else");
-    // And the routes pass exactly the Authorization header to it.
-    assert.match(http, /bearerTokenFromHeader\(request\.headers\.get\("authorization"\)\)/);
+    // And the routes read exactly the Authorization header and hand it to that
+    // function. A header that is present but is not a Bearer token is refused
+    // rather than treated as anonymous, so a credential pasted without its
+    // scheme cannot fall through and keep working.
+    assert.match(http, /request\.headers\.get\("authorization"\)/);
+    assert.match(http, /bearerTokenFromHeader\(header\)/);
+    assert.match(http, /header\.trim\(\)\.length > 0/);
+    assert.match(http, /unauthorizedResponse\("invalid"\)/);
   });
 
   it("checks the credential before reading the body on every MCP route", () => {
@@ -1144,6 +1167,16 @@ describe("7. commitSha and treeSha are both recorded and never assumed equal", (
     assert.equal(snapshot.isPinnedCommitSha(COMMIT), true);
     assert.match(snapshot.treeRequestUrl("acme", "widget", COMMIT), /git\/trees\/a{40}\?recursive=1$/);
     assert.equal(snapshot.blobRefQuery(COMMIT), `?ref=${COMMIT}`);
+  });
+
+  it("pins the real blob read through that function, not an inline ref", () => {
+    // The claim is only true if the code that fetches file bodies uses it.
+    // Before this, blobRefQuery had no caller outside the module and the adapter
+    // built ?ref=<sha> inline with no validation.
+    const github = readRepo("convex/adapters/github.ts");
+    assert.match(github, /import \{ blobRefQuery \} from "\.\.\/scans\/snapshot"/);
+    assert.match(github, /const ref = blobRefQuery\(sha\)/);
+    assert.doesNotMatch(github, /\?ref=\$\{sha\}/, "the blob ref must not be built inline");
   });
 
   it("reads the two shas off the responses the code actually gets", () => {
