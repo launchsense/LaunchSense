@@ -340,3 +340,56 @@ describe("the AI path is refused unless a lane is configured", () => {
     );
   });
 });
+// The red/blue pass found the new-row cause was decided from a peer at the same
+// rule and path without checking the coordinate, so an added dependency read as a
+// licence change, and a non-dependency peer replacement read as a silent advisory
+// update. Both are the same event as a code change.
+describe("the new-row cause follows the coordinate, not just the path", () => {
+  it("labels a dependency added next to an existing one as a code change", () => {
+    const existing = {
+      ruleId: "license.dependency",
+      fingerprint: "fp-x",
+      path: "package-lock.json",
+      line: 1,
+      severity: "medium",
+      title: "x@1.0.0 is AGPL-3.0-only",
+      why: "Because.",
+    };
+    const added = { ...existing, fingerprint: "fp-y", title: "y@1.0.0 is AGPL-3.0-only" };
+    const transitions = compareFindings([existing], [existing, added], compareOpts());
+    const arrived = transitions.find((t) => t.newFingerprint === "fp-y");
+    assert.equal(arrived.state, "new");
+    assert.equal(
+      arrived.cause,
+      "code_change",
+      "an added dependency sits at a different coordinate, so nothing moved and it is not a licence change",
+    );
+  });
+
+  it("keeps a replaced non-dependency row a code change, not an advisory update", () => {
+    const before = {
+      ruleId: "secret.tracked-env",
+      fingerprint: "fp-old",
+      path: ".env",
+      line: 3,
+      severity: "high",
+      title: "Tracked environment file",
+      why: "Because.",
+    };
+    const after = { ...before, fingerprint: "fp-new" };
+    const opts = compareOpts({
+      oldFetched: new Set([".env"]),
+      newFetched: new Set([".env"]),
+      oldContents: new Map([[".env", "same"]]),
+      newContents: new Map([[".env", "same"]]),
+    });
+    const transitions = compareFindings([before], [after], opts);
+    const arrived = transitions.find((t) => t.newFingerprint === "fp-new");
+    assert.equal(arrived.state, "new");
+    assert.equal(
+      arrived.cause,
+      "code_change",
+      "a peer replaced at the same rule and path is a code change, not a silent advisory update",
+    );
+  });
+});
