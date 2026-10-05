@@ -31,6 +31,7 @@ const severity = v.union(
 // Stage 3: bounded file contents, OSV cache, evidence ledger, findings.
 // Stage 4: live checks, share/passport artifacts, first-party analytics.
 // Rescan: compare pairs, transitions, guest decisions.
+// Wave 6: hosted MCP usage events and the daily rollup, no scan surface split yet.
 export default defineSchema({
   ...authTables,
   scans: defineTable({
@@ -62,6 +63,9 @@ export default defineSchema({
     liveUrl: v.optional(v.string()),
     mainAction: v.optional(v.string()),
     rescanOf: v.optional(v.id("scans")),
+    /** Which surface accepted the repo. Optional: nothing wrote it before the
+     * analytics lane existed, and a scan is a scan either way. */
+    surface: v.optional(v.union(v.literal("web"), v.literal("mcp_hosted"))),
     /** True when this scan used the signed-in GitHub token and the higher file cap. */
     signedIn: v.optional(v.boolean()),
     /** Owner of a signed-in scan. Absent on guest scans of public repos. */
@@ -224,6 +228,65 @@ export default defineSchema({
     refShareId: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_day", ["day"]),
+  // Analytics for the hosted MCP surface only. One row per protocol action, so
+  // the question "which harness calls us, which tool, how often" has an answer.
+  // Twelve of the sixteen product events are derived from scans and
+  // findingTransitions instead of written here; only the three MCP rows need a
+  // write, and the nightly rollup deletes these after 30 days.
+  //
+  // Two fields are deliberate refusals rather than gaps:
+  //   repoKey is HMAC(secret, day + "owner/repo"), never the literal. A raw
+  //     private repo name beside a stable caller id is an inventory of whose
+  //     code you read, and the day inside the signed message means the hash
+  //     cannot be joined across days.
+  //   clientName is client-declared, so it is mapped through a fixed allowlist
+  //     before it lands. Storing it raw lets one caller mint a new dimension per
+  //     request and make the table impossible to aggregate.
+  usageEvents: defineTable({
+    day: v.string(),
+    kind: v.union(
+      v.literal("mcp_session_initialized"),
+      v.literal("mcp_tools_listed"),
+      v.literal("mcp_tool_called"),
+    ),
+    surface: v.literal("mcp_hosted"),
+    /** Allowlisted, so this column holds at most eight distinct values. */
+    clientName: v.string(),
+    clientVersion: v.optional(v.string()),
+    /** OpenTelemetry mcp.protocol.version. */
+    protocolVersion: v.optional(v.string()),
+    /** OpenTelemetry mcp.method.name: initialize, tools/list, tools/call. */
+    mcpMethodName: v.optional(v.string()),
+    /** OpenTelemetry gen_ai.tool.name. Never the tool arguments. */
+    toolName: v.optional(v.string()),
+    /** ok, tool_error, protocol_error, quota_denied. Checked at the write path. */
+    outcome: v.string(),
+    /** OpenTelemetry error.type. A low-cardinality enum, never raw error text. */
+    errorType: v.optional(v.string()),
+    /** OpenTelemetry rpc.response.status.code, so -32600 and -32602 stay countable. */
+    rpcResponseStatusCode: v.optional(v.number()),
+    durationMs: v.optional(v.number()),
+    scanId: v.optional(v.id("scans")),
+    repoKey: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_day", ["day"])
+    .index("by_kind_day", ["kind", "day"]),
+  // The only table a reader touches. The nightly rollup folds yesterday's raw
+  // rows and yesterday's scan and transition facts into a few hundred rows here,
+  // so dashboard cost stays flat while raw volume grows. dims is a low-cardinality
+  // JSON object (client, tool, outcome, surface, status, cause) and never holds
+  // a repo name, a path, a title, or free text of any kind.
+  dailyMetrics: defineTable({
+    day: v.string(),
+    metric: v.string(),
+    dims: v.string(),
+    count: v.number(),
+    ratio: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_day", ["day"])
+    .index("by_metric_day", ["metric", "day"]),
   findingTransitions: defineTable({
     fromScanId: v.id("scans"),
     toScanId: v.id("scans"),

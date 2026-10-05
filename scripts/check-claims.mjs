@@ -178,6 +178,13 @@ function ttlMatchesCopy(copiedNumber, copiedUnit) {
 // old check was a tautology: any `delete(` anywhere plus any `TTL`
 // anywhere passed, so copy with no purge behind it still went green.
 // This fails closed: no bound purge means the claim is unsupported.
+//
+// EVERY candidate call site is checked, not just the first one found. This
+// repo has more than one retention window (cached file metadata at 24 hours,
+// MCP usage rows at 30 days), and reading only the first match made every
+// other retention claim fail on whichever constant happened to come first in
+// file order. The claim is still only satisfied by a real purge bound to a
+// constant with the matching value; it just stops depending on source order.
 function retentionIsEnforced(copiedNumber, copiedUnit) {
   const source = readAllSource();
   const wanted = Number(copiedNumber) * (TTL_UNITS[copiedUnit.toLowerCase()] ?? 0);
@@ -186,20 +193,23 @@ function retentionIsEnforced(copiedNumber, copiedUnit) {
   if (!/export const \w*(?:purge|sweep|expire)\w*[\s\S]*?\.db\.delete\(/i.test(source)) {
     return false;
   }
-  // That purge is invoked with a cutoff derived from a named TTL
-  // constant, so the window the copy states is the window the code
-  // enforces. The constant name is captured so its value can be
-  // resolved and compared with the claim.
-  const call = source.match(
-    /(?:purge|sweep|expire)\w*,\s*\{[\s\S]{0,400}?(?:beforeMs|sinceMs|olderThan):\s*Date\.now\(\)\s*-\s*([A-Z_]*(?:TTL|RETENTION|MAX_AGE)[A-Z_]*)[\s\S]{0,200}?\}/i,
-  );
-  if (call === null) return false;
-  const def = source.match(new RegExp(`${call[1]}\\s*=\\s*([0-9_]+(?:\\s*[*+]\\s*[0-9_]+)*)`));
-  if (def === null) return false;
-  const expr = def[1];
-  if (!/^[0-9_]+(?:\s*[*+]\s*[0-9_]+)*$/.test(expr)) return false;
-  const value = expr.split(/\s*[*+]\s*/).reduce((acc, part) => acc * Number(part.replace(/_/g, "")), 1);
-  return value === wanted || value * 1000 === wanted;
+  // Each purge invoked with a cutoff derived from a named TTL constant. The
+  // constant name is captured so its value can be resolved and compared with
+  // the claim.
+  const callPattern =
+    /(?:purge|sweep|expire)\w*,\s*\{[\s\S]{0,400}?(?:beforeMs|sinceMs|olderThan):\s*Date\.now\(\)\s*-\s*([A-Z_]*(?:TTL|RETENTION|MAX_AGE)[A-Z_]*)[\s\S]{0,200}?\}/gi;
+  let call;
+  while ((call = callPattern.exec(source)) !== null) {
+    const constant = call[1];
+    if (constant === undefined) continue;
+    const def = source.match(new RegExp(`${constant}\\s*=\\s*([0-9_]+(?:\\s*[*+]\\s*[0-9_]+)*)`));
+    if (def === null) continue;
+    const expr = def[1];
+    if (expr === undefined || !/^[0-9_]+(?:\s*[*+]\s*[0-9_]+)*$/.test(expr)) continue;
+    const value = expr.split(/\s*[*+]\s*/).reduce((acc, part) => acc * Number(part.replace(/_/g, "")), 1);
+    if (value === wanted || value * 1000 === wanted) return true;
+  }
+  return false;
 }
 
 // shared/reports holds the mission, achievement, standards, and export strings
