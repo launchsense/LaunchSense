@@ -455,6 +455,50 @@ describe("install.sh asks before it records an agreement", () => {
     });
   });
 
+  it("writes a new line when the answer changes, under the same wording", () => {
+    // The dedupe must key on the answer, not only the wording. A no followed by
+    // a yes is two decisions, and dropping either is dropping evidence.
+    withHome((home) => {
+      run(home, { answer: "no" });
+      rmSync(join(home, CONFIG_PATH));
+      run(home, { answer: "yes" });
+      const lines = readLog(home);
+      assert.equal(
+        lines.length,
+        2,
+        `a changed answer is a new decision, so it adds a line; the log held ${lines.length}`,
+      );
+      assert.deepEqual(
+        lines.map((line) => line.granted),
+        [false, true],
+        "both decisions must be on record, in the order they were given",
+      );
+    });
+  });
+
+  it("does not lend one forced decision's time to a different one", () => {
+    // Two forced switches both refuse, but they are different decisions. The
+    // second must not inherit the first one's time from the log.
+    withHome((home) => {
+      mkdirSync(join(home, ".config", "launchsense"), { recursive: true });
+      writeFileSync(
+        join(home, LOG_PATH),
+        '{"noticeVersion":"2026-10-05","granted":false,"decidedAt":"2020-01-01T00:00:00Z","source":"enterprise tier"}\n',
+      );
+      run(home, { env: { LAUNCHSENSE_DIAGNOSTICS: "off" } });
+      const lines = readLog(home);
+      assert.equal(lines.length, 2, "a different forced switch is a new decision");
+      const mine = lines.find((line) => line.source === "LAUNCHSENSE_DIAGNOSTICS=off");
+      assert.ok(mine, "the new switch must write its own line");
+      assert.notEqual(
+        mine.decidedAt,
+        "2020-01-01T00:00:00Z",
+        "a different decision cannot inherit an older decision's time",
+      );
+      assert.match(mine.decidedAt, /^\d{4}-\d{2}-\d{2}T/, "the time must be this run's own");
+    });
+  });
+
   it("still finishes when standard input ends immediately, because the default is no", () => {
     withHome((home) => {
       const result = spawnSync("/bin/sh", [INSTALL], {
@@ -475,6 +519,48 @@ describe("install.sh asks before it records an agreement", () => {
     assert.ok(
       /config\.agreed !== true/.test(diagnostics) && /config\.diagnostics === "off"/.test(diagnostics),
       "the reader reads agreed and diagnostics; install.sh must keep writing those two names",
+    );
+  });
+});
+
+// llms.txt is the file a harness reads first, and the rate caps it states are a
+// claim about convex/mcpLimit.ts. The wave that raised those caps updated the
+// sentence, but nothing stopped the next edit from drifting it again, while the
+// privacy notice got a pin and this did not. These rules pin the numbers to the
+// constants, so a wrong number fails the gate.
+describe("llms.txt states the caps the code sets", () => {
+  function limitConstant(name) {
+    const source = readFileSync(join(ROOT, "convex", "mcpLimit.ts"), "utf8");
+    const match = source.match(new RegExp(`${name}\\s*=\\s*([0-9_]+)`));
+    assert.ok(match, `${name} must exist in convex/mcpLimit.ts`);
+    return Number(match[1].replace(/_/g, ""));
+  }
+
+  const text = readFileSync(LLMS, "utf8");
+
+  it("names the shared hosted cap and the lane cap the code sets", () => {
+    const shared = limitConstant("CALLER_LIMIT");
+    const lane = limitConstant("GLOBAL_LIMIT");
+    assert.ok(
+      text.includes(`${shared} scans an hour for the shared hosted bucket`),
+      `llms.txt must state the shared hosted cap as ${shared}, the value the code sets`,
+    );
+    assert.ok(
+      text.includes(`${lane} in total across the hosted lane`),
+      `llms.txt must state the hosted lane cap as ${lane}, the value the code sets`,
+    );
+  });
+
+  it("no longer names the retired per-caller caps", () => {
+    assert.doesNotMatch(
+      text,
+      /Two scans an hour from one caller/,
+      "the per-caller hosted cap is retired; the counter holds no caller",
+    );
+    assert.doesNotMatch(
+      text,
+      /eight an hour in total/i,
+      "the old lane total is retired; llms.txt must state the current one",
     );
   });
 });
