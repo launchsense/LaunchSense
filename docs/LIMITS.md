@@ -48,6 +48,8 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 - Explanations use Google AI Studio / Gemini when a server key is configured. If Gemini does not answer, the server tries Ollama Cloud with a small model. If neither is configured or neither answers, plain deterministic wording is shown instead.
 - AI output is rejected when it references an unknown finding, drops an actionable finding, or claims a check we did not run. Rejected output falls back to plain wording.
 - AI never decides what is a finding. Only the fixed checks decide that.
+- It never decides a severity, a licence fact, consent, who a caller is, or whether a request is allowed. Those are fixed code, and each one names the file that does it in `shared/copy/aiDisclosure.ts`.
+- Human oversight level, `humanOversightLevel` in C2PA Technical Specification 2.4: `prompt_guided`, the term for a person who asked for the output and nobody who approved it afterwards. Every AI path here is that one. None is `fully_autonomous`, because no model writes anything without a person having asked for it first, and none is `human_validated`, because no path in this repository records a person approving a model's output. We borrow the three words. We are not a C2PA claim generator, we hold no certificate chain, and this is not a conformance claim.
 - Bring your own AI key stays out of this release.
 
 ## Not built yet

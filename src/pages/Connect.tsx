@@ -41,6 +41,15 @@ export default function Connect() {
           <li>A private repo uses Sign in with GitHub on the sample. This address does not read a repo that exists only on your laptop.</li>
         </ul>
         <p>A partial result is not a pass. License lines are signals, not legal advice.</p>
+<p>
+          A model may reorder the findings inside one severity band, and only when a
+          server key for one is configured. It never decides a finding, a severity, a
+          licence fact, consent, who a caller is, or whether a request is allowed. Its
+          <code>humanOversightLevel</code> is <code>prompt_guided</code> in the C2PA Technical
+          Specification 2.4 vocabulary: you asked for the scan and nobody approved the
+          order afterwards. We borrow that one word. It is not a C2PA conformance
+          claim.
+        </p>
       </section>
 
       <section className="check-section" aria-labelledby="before-title">

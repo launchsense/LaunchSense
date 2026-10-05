@@ -30,6 +30,14 @@ For an npm project with a committed `package-lock.json`, the review reads the li
 
 `tests/corpus-harness.ts` is a secrets-only precision tool. It counts credential-pattern hits so a rule can be judged true or false. It is never a full review and its output is never a pass. A run sheet counts as a check only when it carries the coverage line, the not-checked list quoted as-is, the caps, and the decision source.
 
+## What the AI is allowed to do
+
+Three things, and nothing else. It rewrites a finding in plainer language. It can reorder findings inside one severity band, and only when a lane is configured. It can suggest a licence id for an Unknown one, and only through the guarded lookup, where the answer stays a suggestion.
+
+Human oversight level, `humanOversightLevel` in C2PA Technical Specification 2.4, is `prompt_guided`: a person asked for the output and nobody approved it afterwards. No path in this product is `fully_autonomous` and none is `human_validated`. We borrow the vocabulary. We are not a C2PA claim generator.
+
+The AI never decides a finding, a severity, a licence fact, consent, who a caller is, or whether a request is allowed. Each of those is fixed code: `shared/analyzers`, `shared/policies/severity.ts`, `shared/licensing`, `install.sh`, `convex/identity`, `convex/mcpLimit.ts`. If a line suggests a model settled one of those, it is wrong.
+
 ## What you may say
 
 - Repeat the findings, the coverage line, and the not-checked list.
