@@ -136,6 +136,15 @@ export default function Privacy() {
           so the service stays available. It is not linked to an account, and the counter holds
           no part of your network address. Those rows are not deleted automatically today.
         </p>
+        <p>
+          You can send an optional LaunchSense credential in an Authorization header. We keep
+          a lookup id in the clear and a SHA-256 hash of the credential, never the credential
+          itself, so a copy of our database cannot be replayed against the server. The rate
+          limit counter then holds that credential&apos;s own id, which is why one tool cannot
+          spend another tool&apos;s budget. Revoking a credential takes effect on the next
+          request. A credential that is presented and refused gets no scan, rather than being
+          quietly treated as anonymous.
+        </p>
       </section>
 
       <section className="check-section" aria-labelledby="fonts-and-browser">

@@ -2,7 +2,7 @@
 
 LaunchSense checks the codebase, not the business. The website is the public read: paste a GitHub URL, get a plain report. A coding tool calls the same public read at the hosted MCP address. You do not clone this repo to use it.
 
-This stage is alpha. Alpha has no login. An auth slot exists and is not enforced.
+This stage is alpha. Alpha has no login for the public read: the hosted MCP address works with no credential. An auth slot exists and is not enforced. A LaunchSense credential is optional and is how the hosted read is attributed.
 
 ## Connect
 
@@ -20,7 +20,7 @@ The client POSTs one JSON-RPC message. The server returns one JSON answer, or a 
 
 ## Tools
 
-`launchsense_scan_public` takes `repoUrl` like `https://github.com/owner/repo`. It reads that public repo on our server. Guest limits of 200 files and about 2MB apply. OSV covers up to 50 packages. deps.dev is not asked. The hosted read shares one hourly budget: 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then the route pauses. The counter holds no part of your network address.
+`launchsense_scan_public` takes `repoUrl` like `https://github.com/owner/repo`. It reads that public repo on our server. Guest limits of 200 files and about 2MB apply. OSV covers up to 50 packages. deps.dev is not asked. The hosted read keeps 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then the route pauses. The counter holds no part of your network address. Sending a LaunchSense credential in an `Authorization` header is optional. When one resolves, the per-tool caps are 20 scans an hour and 120 in a day, counted against that credential's own bucket. Those per-tool numbers are a policy choice with no traffic measurement behind them. A credential that is presented and refused gets no scan, rather than being treated as anonymous.
 
 `launchsense_get_report` takes `scanId` and returns the coverage line and the findings.
 
@@ -49,6 +49,50 @@ Three notes on surfaces. The first two are not the hosted address:
 - The hosted usage route (`POST /api/mcp/usage`) writes counts only. It needs a deployment secret header, `x-launchsense-usage-key`. When `USAGE_ROUTE_KEY` is unset, it rejects every caller.
 
 Two tables, `usageMeters` and `connectedInstallations`, are defined in the schema but have no reader yet. No query returns them.
+
+## Credentials
+
+The hosted routes accept an optional LaunchSense credential in `Authorization: Bearer <token>`. A token is `ls_live_<publicId>_<secret>`. The server keeps the `publicId` in the clear as the lookup prefix and a SHA-256 hash of the whole token, never the token. Resolution is one indexed read on the `publicId`, then a constant-time compare of the hash. `revoked` and `revokedAt` are read on every resolve, so a revoke is immediate.
+
+Three layers, kept apart in the code and in the schema:
+
+- `callerId` is the `credentials` row id, server-minted from the token. It is the only layer with authority: quota, attribution, and scan ownership read it.
+- `declaredHarness` is a label an operator records at issuance. It is a claim. It never enters a rate limit key, an ownership check, or an access decision.
+- `verifiedBinding` is a server-observed fact tying a credential to a person or an installation. It is absent on every row today and that is honest, not a gap being papered over: a scan reads the public repository with our own GitHub credential, so nothing about the call identifies a person. A GitHub App installation path would produce one. Until then every harness-level number is a caller claim.
+
+The token carries an audience, the canonical MCP server URI `https://harmless-chihuahua-667.convex.site/mcp`, and the server checks it, so a credential minted elsewhere is refused. A 401 carries `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource/mcp"`. That metadata document is not served yet, and the header names no issuer, because there is no authorization server behind this. Nothing authenticates on `Mcp-Session-Id`, and no session id is issued. `Authorization` is in `Access-Control-Allow-Headers` so a browser client can send one.
+
+Issuance is a server or admin step with no UI: `internal.identity.store.mintCredential` is an internal mutation, there is no public function that mints a credential, and no route accepts one. The token is returned exactly once and cannot be recovered afterwards.
+
+The migration path changes only where the token comes from: OAuth 2.1 with this server as the resource server, RFC 9728 discovery, RFC 8707 audience binding, and the token's `sub` becomes `callerId`. Every downstream part is already in the shape that migration needs.
+
+## Attribution
+
+`scans` records `attributedCallerId`, `channel` (`web`, `mcp`, `api`), `surface` (`web`, `mcp_hosted`), `commitSha`, and `treeSha`. `attributed` is written `false` on a scan with no or refused credential rather than left off, so attributed over total is a real ratio and dropping an unscanned row cannot inflate it. `runScan` is the browser door and takes `repoUrl` and nothing else; `runHostedScan` is the internal door the hosted routes call and adds only identity. Both call one implementation, so there is one enforcement point, not two.
+
+`commitSha` and `treeSha` are separate because they are different values: `GET /git/trees/{sha}` returns the tree object sha, not the commit sha. The commit response already carries `commit.tree.sha`, so the tree response is compared against it at no extra request, and a disagreement fails the scan instead of recording a snapshot neither response supports. The tree URL and every blob ref are built through functions that refuse anything that is not a full 40-character commit sha, so a branch name cannot reach a read.
+
+`findInFlight` used to match on (owner, repo) with no sha and no identity, and `runScan` handed that row back once a sha was pinned, so two callers scanning the same public repository shared one row and the second received a scan belonging to the first. It now only reuses a row that belongs to the caller. Anything else is skipped, the caller mints its own row, and the 24h sha-keyed tree cache copies the tree into it, so the work is not repeated.
+
+The headline metric is distinct `callerId` values with at least one scan in the trailing 7 days, counted only over scans where a credential resolved. The rescan rate is attributed callers with 2 or more distinct shas for the same repo within 28 days, over attributed callers with at least one scan in that window. The fields both metrics need are recorded on `scans`; no rollup emits these two metric rows yet, so neither number exists as data today. The hourly cap is 20 and the per-day cap is 120, a starting policy with no traffic measurement behind them; whether they are the right numbers is unknown until measured.
+
+## Analytics
+
+Two tables, and one nightly fold.
+
+- `usageEvents` holds one row per MCP protocol action on the hosted address: `initialize`, `tools/list`, `tools/call`. It is the only table this lane writes per call.
+- `dailyMetrics` is the rollup. One row per (day, metric, low-cardinality dims). There is no dashboard yet; when one exists it reads this table and nothing else.
+- `rollupDaily` runs at 03:20 UTC and folds yesterday. It replaces the day rather than appending, so a retried cron cannot double count.
+- `purgeExpiredUsageEvents` runs at 03:40 UTC and deletes `usageEvents` rows past 30 days, bounded at 500 rows a run and reporting when it hits that bound. Separate from the fold because a Convex mutation cannot call another mutation.
+- `scans.surface` is written on both paths: `web` for the browser flow, `mcp_hosted` for the hosted MCP route and the JSON API. `scans.channel` separates the two hosted doors, `mcp` for `/mcp` and `api` for `/api/mcp/scan`.
+
+The north star is `repos_with_proven_fix`: distinct repositories where a `findingTransitions` row says `state=fixed` and `cause=code_change` and both endpoint scans reached `status=completed`. A fix counted as `advisory_update` or `analyzer_update` is this product shipping a rule pack, so those are three separate metrics from day one and never folded in.
+
+Two guardrails. `partial_coverage_rate` is partial over all analyzed, split by `truncated`, `tree_truncated`, and `errorKind`. `regression_after_fix_rate` is the share of proven fixes whose `ruleId` came back in the next completed scan of the same repo. Both are lower bounds where the read window runs out, and the code says so.
+
+What is never collected, enforced in code by `convex/analytics/privacy.ts`: file content, paths, findings titles, snippets, raw error text, secrets, IP addresses, model names, prompt text, and the OTel Opt-In attributes `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, `gen_ai.prompt.variable.*`, and `mcp.resource.uri`. The argument to a scan tool is a repository URL, which is the reason the Opt-In is refused rather than merely not required. `repoKey` is `HMAC(deployment salt, day + "owner/repo")` or absent; the salt comes from `ANALYTICS_DAY_SALT`, so same-day joins work and nothing joins across days. `clientName` goes through a fixed eight-value allowlist, because `clientInfo.name` is client-declared and storing it raw would let one caller mint a new dimension per request.
+
+Names it will not segment on: a repository. The rollup counts distinct repos while it runs and stores only the count, so a stored day cannot be joined back to a repo. Per-rule and per-severity fix breakdowns are not on `dailyMetrics`: `findingTransitions` holds them, and a per-rule dimension would multiply rows for a few hundred numbers.
 
 ## Do not claim
 
