@@ -197,6 +197,16 @@ function valueAtIsCredential(line: string, at: number, opLen: number): boolean {
   // common forms in Python, JS/TS, Go, Ruby, PHP, C#, and shell.
   if (/^(process\.env|os\.getenv|os\.environ|sys\.environ|ENV\[|getenv|_ENV\[|\$env:|configuration\[|System\.getenv|\$\{\{|\$\{|\$\(|%\w+%|\$[A-Za-z_])/i.test(rest)) return false;
 
+  // An element of a container literal is not an assignment to the name.
+  // `FEATURE_KEYS = ["rendered_phone_check"]` names the feature, it does not
+  // store a credential under it. A provider-shaped value inside the container
+  // still fires through `containsProviderKey` before this point.
+  if (/^\s*[([{]/.test(rest)) return false;
+
+  // An optional-chain read is a reference to another value, not a literal.
+  // `tokens?.access_token` reads the field, it does not write a secret.
+  if (rest.includes("?.")) return false;
+
   // Take the value: a quoted string anywhere at the start of the remainder, or the
   // first bare token. Leading punctuation such as `(` from `keys = ("NAME",)` is
   // stripped first, so the quote is found rather than producing a mangled token.

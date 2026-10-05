@@ -84,18 +84,18 @@ export function project(features: Features, weights: Weights): number {
 }
 
 /**
- * The table's own order over a band, matching priority.ts exactly: credential
- * first, then severity, then fingerprint. Expressed here as a total order so the
- * math layer and the product layer agree by construction.
+ * The table's own order over a band, matching priority.ts: severity first, then
+ * credential risk inside one band, then fingerprint. Expressed here as a total
+ * order so the math layer and the product layer agree by construction.
  */
 export function tableOrderOf(findings: RankableFinding[]): string[] {
   return [...findings]
     .sort((a, b) => {
+      const sev = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+      if (sev !== 0) return sev;
       const aCred = isCredential(a.ruleId) ? 1 : 0;
       const bCred = isCredential(b.ruleId) ? 1 : 0;
       if (aCred !== bCred) return bCred - aCred;
-      const sev = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
-      if (sev !== 0) return sev;
       return a.fingerprint.localeCompare(b.fingerprint);
     })
     .map((f) => f.fingerprint);

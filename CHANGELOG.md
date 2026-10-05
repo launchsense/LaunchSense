@@ -26,7 +26,7 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 - OWASP ASVS 5.0.0 subset mappings with coverage, caveat, and evidence counts. Signals only, no certification claim.
 - Seven serial missions and six achievements, verified from scan state only. No points and no leaderboard.
 - Plain text handoff for a developer friend with no coding agent.
-- Plain words explanations with an AI lane (Gemini, then OpenRouter free, then fixed wording) and output validation that rejects unknown finding ids, dropped findings, and invented claims.
+- Plain words explanations with an AI lane (Gemini, then Ollama Cloud, then fixed wording) and output validation that rejects unknown finding ids, dropped findings, and invented claims.
 - Plain-language docs set: how a scan works, how to read your report, about, privacy, limits, glossary.
 
 ### Security
@@ -50,6 +50,7 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 
 - npm dependency records use exact installed versions from `package-lock.json` when that file is present.
 - OpenRouter fallback now uses the real free model id `openrouter/stealth/space-bunny-alpha`.
+- Correction: the AI lane's second rung is Ollama Cloud, an OpenAI-compatible endpoint reached over `OLLAMA_BASE_URL`, not OpenRouter. The OpenRouter rung named above was removed; that model id is no longer in the code.
 - First-party analytics writes are throttled by event kind and day.
 - Claim guard now checks two more things: any sentence claiming there is no stored copy of your code, and any stated cache or retention window. A window must match a TTL constant in the code and be backed by code that deletes. This is why the three defects above cannot come back silently.
 - Repo renamed to LaunchSense.

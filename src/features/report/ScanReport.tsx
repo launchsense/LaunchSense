@@ -3,6 +3,12 @@ import type { FixPlan } from "../../../shared/reports/fixPlan";
 import { buildTopPrompt, liveActionItems } from "../../../shared/reports/topPrompt.ts";
 import { buildVerdict, buildNotCheckedList, SCOPE_LABEL } from "../../../shared/reports/scope";
 import type { ScanStatus } from "../../../shared/reports/scope";
+import {
+  GUEST_MAX_BYTES,
+  GUEST_MAX_FILES,
+  SIGNED_MAX_BYTES,
+  SIGNED_MAX_FILES,
+} from "../../../shared/scanCaps";
 
 export interface ReportFinding {
   ruleId: string;
@@ -62,6 +68,8 @@ export default function ScanReport(props: {
   treeTruncated: boolean;
   liveProvided: boolean;
   aiConfigured: boolean;
+  /** Whether the scan read with the signed-in caps. Defaults to the guest caps. */
+  signedIn?: boolean;
   /** Fingerprints in stored priority order. Empty when the lane never ran. */
   priorityOrder?: string[];
   /** Which rung produced the order, for the plain-words line under the report. */
@@ -126,6 +134,7 @@ export default function ScanReport(props: {
         skipped: props.skippedFileCount,
         total: props.fileCount,
         findingCount: props.findings.length,
+        actionableCount: props.findings.filter((f) => f.severity !== "info").length,
         truncatedTree: props.treeTruncated,
       }),
     [
@@ -134,12 +143,18 @@ export default function ScanReport(props: {
       props.skippedFileCount,
       props.fileCount,
       props.treeTruncated,
-      props.findings.length,
+      props.findings,
     ],
   );
   const notChecked = useMemo(
-    () => buildNotCheckedList({ aiConfigured: props.aiConfigured, liveProvided: props.liveProvided }),
-    [props.aiConfigured, props.liveProvided],
+    () =>
+      buildNotCheckedList({
+        aiConfigured: props.aiConfigured,
+        liveProvided: props.liveProvided,
+        maxFiles: props.signedIn === true ? SIGNED_MAX_FILES : GUEST_MAX_FILES,
+        maxBytes: props.signedIn === true ? SIGNED_MAX_BYTES : GUEST_MAX_BYTES,
+      }),
+    [props.aiConfigured, props.liveProvided, props.signedIn],
   );
   const nextPrompts = top.prompts.filter((item) => item.ruleId !== top.lead?.ruleId).slice(0, 2);
   const promptHeading = nextPrompts.length === 1 ? "One more thing to fix" : "Two more things to fix";

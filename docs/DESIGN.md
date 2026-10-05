@@ -45,7 +45,8 @@ alone, about to hit publish, cannot be misled.
 
 Every colour, text size, page width, and corner roundness is set once at the top of
 `src/index.css` and reused everywhere. Change it in one place and the whole product
-follows. A test checks that no colour is written anywhere else.
+follows. `tests/contrast-checks.mjs` recomputes each ratio from these tokens on
+every run, so a value that drifts from this table fails the suite.
 
 Spacing is the one exception. Padding and margin are written where they are used,
 because the layout is simple and inventing a spacing scale now would be tidier on
@@ -79,7 +80,8 @@ Two pairs were failing, and both were caught by working out the ratio instead of
 trusting how they looked:
 
 - Input borders were `#9aa79e`, which came out at **2.50:1** on white. A border you
-  have to see needs at least 3:1. Now `#6b7a71` at **4.52:1**.
+  have to see needs at least 3:1. Now the shipped `--line-strong` token
+  `#4a5968`, which is **7.19:1** on white.
 - The focus ring was `#57966c`, which came out at **2.74:1** against the dark green
   button it was outlining. That is fixed below.
 
@@ -260,7 +262,8 @@ Good intentions do not survive a deadline. These are build failures:
 | No raw error message shown to a user | `tests/language-checks.mjs` |
 
 The copy guard matters because a rule that lives only in a document rots. It carries
-33 rules, and it reads these two documents like it reads the interface.
+38 rules, and it reads these two documents, the readme, the changelog, the interface,
+and `llms.txt` like it reads the interface.
 
 ## What has not been checked
 

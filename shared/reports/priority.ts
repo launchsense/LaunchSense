@@ -18,6 +18,7 @@
 // provider answers, tableOrder produces the order. The table is always present.
 
 import type { Severity } from "../policies/severity";
+import { fnv1aHex } from "../redaction.ts";
 
 export interface RankableFinding {
   fingerprint: string;
@@ -49,18 +50,20 @@ function isCredential(ruleId: string): boolean {
 /**
  * The floor. Deterministic, always available, never removed.
  *
- * Credential-shaped findings first, then by severity, then by fingerprint so the
- * order is stable across runs. The ruleIds are matched by pattern, not by a list, so
- * this does not need updating every time an analyzer adds a rule.
+ * Severity first, so a low finding can never outrank a high one, whatever the
+ * ruleId looks like. Credential-shaped findings break a tie inside one band, then
+ * the fingerprint so the order is stable across runs. The ruleIds are matched by
+ * pattern, not by a list, so this does not need updating every time an analyzer
+ * adds a rule.
  */
 export function tableOrder(findings: RankableFinding[]): string[] {
   return [...findings]
     .sort((a, b) => {
+      const sev = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+      if (sev !== 0) return sev;
       const aCred = isCredential(a.ruleId) ? 1 : 0;
       const bCred = isCredential(b.ruleId) ? 1 : 0;
       if (aCred !== bCred) return bCred - aCred;
-      const sev = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
-      if (sev !== 0) return sev;
       return a.fingerprint.localeCompare(b.fingerprint);
     })
     .map((f) => f.fingerprint);
@@ -99,9 +102,14 @@ export function laneCanReorder(findings: RankableFinding[]): boolean {
   return findingsToAsk(findings).length >= 2;
 }
 
-/** Stable question id for one finding. Must be deterministic or answers cannot map back. */
+/**
+ * Stable question id for one finding. Must be deterministic or answers cannot map
+ * back. The whole fingerprint is hashed, never sliced: a fingerprint ends in its
+ * hash, so keeping a fixed number of leading characters would give two findings in
+ * one file the same id and the answer would move both.
+ */
 export function questionIdFor(fingerprint: string): string {
-  return `w${fingerprint.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40)}`;
+  return `w${fnv1aHex(fingerprint)}`;
 }
 
 export interface NoulAnswerLike {

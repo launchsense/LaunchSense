@@ -5,6 +5,12 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { buildRepoDna, buildReadiness } from "../../../shared/reports/repoDna";
 import { buildStandards } from "../../../shared/reports/standards";
 import { buildMissions } from "../../../shared/reports/missions";
+import {
+  GUEST_MAX_BYTES,
+  GUEST_MAX_FILES,
+  SIGNED_MAX_BYTES,
+  SIGNED_MAX_FILES,
+} from "../../../shared/scanCaps";
 import { DnaPanel, MissionsPanel, NoAgentPanel, StandardsPanel } from "./SignalPanels";
 import type { FixPlan } from "../../../shared/reports/fixPlan";
 
@@ -17,13 +23,19 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "handoff", label: "Handoff" },
 ];
 
-const NOT_CHECKED = [
-  "File contents beyond the 200 file and 2MB caps",
-  "Binary files and generated folders",
-  "Dependency freshness and deps.dev metadata",
-  "Rendered layout on a real phone (fetch only)",
-  "Authentication and runtime behaviour",
-];
+// The read caps this scan actually used, so the handoff list cannot claim the
+// guest cap on a signed-in scan (the same defect U10 fixed in the verdict).
+function notCheckedList(signedIn: boolean): string[] {
+  const maxFiles = signedIn ? SIGNED_MAX_FILES : GUEST_MAX_FILES;
+  const maxBytes = signedIn ? SIGNED_MAX_BYTES : GUEST_MAX_BYTES;
+  return [
+    `File contents beyond the ${maxFiles.toLocaleString("en-US")} file and ${Math.round(maxBytes / 1_000_000)}MB caps`,
+    "Binary files and generated folders",
+    "Dependency freshness and deps.dev metadata",
+    "Rendered layout on a real phone (fetch only)",
+    "Authentication and runtime behaviour",
+  ];
+}
 
 export default function Stage5Panels(props: {
   scanId: Id<"scans">;
@@ -48,6 +60,7 @@ export default function Stage5Panels(props: {
   live: { reaches: boolean } | null;
   partial: boolean;
   coverageNote?: string | null;
+  signedIn?: boolean;
 }) {
   const [tab, setTab] = useState<TabId>("dna");
   const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
@@ -185,7 +198,7 @@ export default function Stage5Panels(props: {
           sha={props.sha}
           findings={props.findings}
           plan={props.plan}
-          notChecked={NOT_CHECKED}
+          notChecked={notCheckedList(props.signedIn === true)}
         />
       )}
       </div>

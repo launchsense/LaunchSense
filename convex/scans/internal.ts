@@ -48,6 +48,7 @@ const scanDoc = v.object({
   mainAction: v.optional(v.string()),
   rescanOf: v.optional(v.id("scans")),
   signedIn: v.optional(v.boolean()),
+  userId: v.optional(v.id("users")),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -131,6 +132,7 @@ export const createScan = internalMutation({
     repo: v.string(),
     repoUrl: v.string(),
     signedIn: v.boolean(),
+    userId: v.optional(v.id("users")),
     now: v.number(),
   },
   returns: v.id("scans"),
@@ -141,6 +143,7 @@ export const createScan = internalMutation({
       repoUrl: args.repoUrl,
       status: "validating",
       signedIn: args.signedIn,
+      userId: args.userId,
       createdAt: args.now,
       updatedAt: args.now,
     });

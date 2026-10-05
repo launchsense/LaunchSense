@@ -15,6 +15,7 @@ import {
 import type { ActionCtx } from "../_generated/server";
 import { compareFindings, depOfVuln } from "../../shared/reports/compare.ts";
 import { readSessionToken } from "../github/readToken";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import type { ComparedFinding } from "../../shared/reports/compare.ts";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -48,6 +49,9 @@ export const rescanScan = action({
     const { owner, repo } = base;
     const token = await readSessionToken(ctx);
     const signedIn = token !== null;
+    // The identity is recorded so a signed-in rescan stays readable by its owner
+    // under the same ownership rule the report queries use.
+    const userId = await getAuthUserId(ctx);
 
     const meta = await fetchGitHubJson(`https://api.github.com/repos/${owner}/${repo}`, token);
     if (isRateLimitStatus(meta.status, meta.rate)) {
@@ -85,6 +89,7 @@ export const rescanScan = action({
       repoUrl: base.repoUrl,
       rescanOf: args.scanId,
       signedIn,
+      userId: userId ?? undefined,
       now,
     });
     await ctx.runMutation(internal.scans.internal.markFetching, {

@@ -21,8 +21,21 @@ export interface DepsResult {
   byName: Map<string, DepEntry>;
 }
 
+const EXACT_NPM = /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/;
+
 function isPinnedNpm(version: string): boolean {
-  return /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/.test(version.trim());
+  const v = version.trim();
+  if (EXACT_NPM.test(v)) return true;
+  // An alias specifier `npm:<pkg>@<version>` is pinned exactly when its inner
+  // version is exact. The alias itself is not a range; only the tail after the
+  // last `@` is. `npm:@scope/pkg@^1.2.3` is still floating.
+  const alias = /^npm:(?:@[^/@]+\/)?[^@/]+@(.+)$/.exec(v);
+  if (alias !== null) return EXACT_NPM.test(alias[1].trim());
+  // Workspace protocol refs (`workspace:1.2.3`, `workspace:^1.2.3`, `workspace:*`)
+  // follow the same exact-versions rule as a plain specifier.
+  const workspace = /^workspace:(.+)$/.exec(v);
+  if (workspace !== null) return EXACT_NPM.test(workspace[1].trim());
+  return false;
 }
 
 function parsePackageJson(path: string, text: string, out: DepsResult): void {
@@ -161,7 +174,14 @@ export function parseManifests(
     manifests: [],
     byName: new Map(),
   };
-  for (const file of files) {
+  // Parse order matters: parsePackageLock only rewrites deps that already exist, so
+  // a lockfile parsed before its package.json is ignored. The hosted path sorts
+  // package.json first; the local review parses in caller order. Ordering here makes
+  // both paths agree and keeps a lockfile-first caller correct.
+  const isLock = (file: { path: string }): boolean =>
+    (file.path.split("/").pop() ?? file.path) === "package-lock.json";
+  const ordered = [...files.filter((file) => !isLock(file)), ...files.filter(isLock)];
+  for (const file of ordered) {
     const base = file.path.split("/").pop() ?? file.path;
     if (base === "package.json") {
       out.manifests.push(file.path);

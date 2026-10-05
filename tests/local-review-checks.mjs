@@ -176,4 +176,29 @@ describe("lockfile and clash", () => {
     const signal = clashSignal("GPL-2.0-only", "Apache-2.0");
     assert.match(signal ?? "", /Signal, not legal advice/);
   });
+
+  it("does not flag ordinary prose as a sql pattern", () => {
+    assert.equal(matchCodePattern("Please select an option from the menu."), null);
+    assert.equal(
+      matchCodePattern('why: "The line matches SELECT ... FROM. That does not prove injection.",'),
+      null,
+    );
+  });
+
+  it("still flags uppercase sql with a table name", () => {
+    assert.equal(
+      matchCodePattern('const q = "SELECT id FROM users";')?.ruleId,
+      "code.sql-pattern",
+    );
+  });
+
+  it("flags a quoted or escaped table name, not only a bare identifier", () => {
+    // A real query in a Grafana dashboard JSON is escaped: FROM \"table\". The
+    // earlier rule required [A-Za-z_] straight after FROM and missed it (regression
+    // found by corpus wave B9).
+    assert.equal(matchCodePattern('SELECT a FROM "tbl"')?.ruleId, "code.sql-pattern");
+    assert.equal(matchCodePattern('SELECT a FROM \\"tbl\\"')?.ruleId, "code.sql-pattern");
+    assert.equal(matchCodePattern("SELECT a FROM `tbl`")?.ruleId, "code.sql-pattern");
+    assert.equal(matchCodePattern("SELECT a FROM [tbl]")?.ruleId, "code.sql-pattern");
+  });
 });

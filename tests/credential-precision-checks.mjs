@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isHardcodedCredential } from "../shared/analyzers/secrets.ts";
+import * as F from "./fixtures.mjs";
 
 // Real lines from the 100-repo corpus. These must stay quiet: they are the
 // dominant false positives (dotted package paths, dotted member chains, UI
@@ -40,4 +41,20 @@ test("true positives and provider shapes still fire", () => {
   for (const line of MUST_FIRE) {
     assert.equal(isHardcodedCredential(line), true, `should fire: ${line}`);
   }
+});
+
+test("entitlement, type, optional-chain, and lockfile lines stay quiet", () => {
+  const QUIET = [
+    'export const FEATURE_KEYS = ["rendered_phone_check"] as const;',
+    "type TokenBundle = { access_token?: string };",
+    "const accessToken = tokens?.access_token;",
+    '"auth": "dist/bin.cjs",',
+  ];
+  for (const line of QUIET) {
+    assert.equal(isHardcodedCredential(line), false, `should be quiet: ${line}`);
+  }
+});
+
+test("a quoted provider-shaped value assigned to FEATURE_KEYS still fires", () => {
+  assert.equal(isHardcodedCredential(F.line("FEATURE_KEYS", F.FAKE_OPENAI)), true);
 });

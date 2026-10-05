@@ -84,6 +84,46 @@ export interface ReviewReport {
 }
 
 const TEXT: Record<string, { title: string; why: string }> = {
+  "secret.tracked-env": {
+    title: "Environment file is tracked in git",
+    why: "Anyone with repo access can read everything in a tracked env file.",
+  },
+  "secret.private-key": {
+    title: "Private key material in a tracked file",
+    why: "A committed private key must be treated as public from that moment on.",
+  },
+  "secret.github-token": {
+    title: "GitHub token in a tracked file",
+    why: "Tokens in tracked files can be used by anyone who can read the repo.",
+  },
+  "secret.aws-key": {
+    title: "Cloud access key in a tracked file",
+    why: "Committed cloud keys are harvested by automated scanners within minutes.",
+  },
+  "secret.credential-pattern": {
+    title: "Hardcoded credential in source",
+    why: "Passwords and API keys in source travel everywhere the code goes.",
+  },
+  "secret.client-exposure": {
+    title: "Secret shipped in a public file",
+    why: "Anything in public files or pages is visible to every visitor.",
+  },
+  "secret.eval-use": {
+    title: "Eval runs strings as code",
+    why: "Eval turns small injection flaws into full control of the page or server.",
+  },
+  "secret.debugger-statement": {
+    title: "Debugger statement left in code",
+    why: "A debugger statement freezes the app for anyone who opens it.",
+  },
+  "secret.debug-leftover": {
+    title: "Debug output left in source",
+    why: "Console noise leaks internals and looks unfinished to anyone reviewing.",
+  },
+  "secret.sql-pattern": {
+    title: "This line looks like a database query",
+    why: "The line matches SELECT ... FROM. That does not prove injection.",
+  },
   "code.eval-use": {
     title: "Eval runs strings as code",
     why: "Eval turns text into code. This is the shape of a call, not proof it is reachable.",

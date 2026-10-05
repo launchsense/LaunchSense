@@ -16,8 +16,21 @@ export function matchCodePattern(line: string): CodeHit | null {
   if (/console\.(log|debug|trace)\s*\(/.test(line)) {
     return { ruleId: "code.debug-leftover", oncePerFile: true };
   }
-  if (line.length <= 300 && /\bSELECT\b.+?\bFROM\b/i.test(line)) {
-    return { ruleId: "code.sql-pattern", oncePerFile: false };
+  if (line.length <= 300) {
+    // A comment describes code, it is not code. The analyzer's own explanation
+    // text ("The line matches SELECT ... FROM.") lives in a string, and prose
+    // like "Please select an option from the menu." is not a query.
+    const trimmedSql = line.trim();
+    const isComment = trimmedSql.startsWith("//") || trimmedSql.startsWith("#") ||
+      trimmedSql.startsWith("/*") || trimmedSql.startsWith("*") || trimmedSql.startsWith("--");
+    // Uppercase only, with a table-ish token after FROM. Lowercase prose
+    // ("select an option from the menu") and a bare "FROM." with no table
+    // do not match. A table can be quoted, bracketed, or backtick-wrapped, and in
+    // JSON-escaped text a backslash sits before the quote, so allow a short run of
+    // those characters before the identifier. One hit per file: a review note.
+    if (!isComment && /\bSELECT\b[^;'"]{1,200}?\bFROM\s+[\\"'`[]*[A-Za-z_][A-Za-z0-9_.]*/.test(line)) {
+      return { ruleId: "code.sql-pattern", oncePerFile: true };
+    }
   }
   if (/\.innerHTML\s*=/.test(line)) return { ruleId: "code.inner-html", oncePerFile: false };
   if (/(?:require\(\s*['"](?:node:)?child_process['"]|from\s+['"](?:node:)?child_process['"])|\bexecSync\s*\(|\bexecFile(?:Sync)?\s*\(/.test(line)) {

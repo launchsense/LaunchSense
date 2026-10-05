@@ -12,6 +12,11 @@ The hosted MCP reads a public GitHub repo on our server, the same way the paste 
 - Finding records: rule, file, line, and a redacted snippet, capped at 200 characters.
 - Per file: its path, size, and a content hash. Nothing more.
 - Scan results, so a re-scan of the same commit can be compared against the last one.
+- Your GitHub token, when you sign in to read a private repo or more of a public one. See the next section.
+
+## Your GitHub token
+
+The scan uses your GitHub token on our server, and we store it. It is stored as a plaintext string at rest. It is not encrypted. The token is readable only by our server's internal functions. The functions a signed-in user can call return a boolean or nothing, never the token. Signing out from the menu deletes it. The token is not deleted when a session expires on its own, so it stays until you sign out.
 
 ## What we never save
 
@@ -24,10 +29,11 @@ The hosted MCP reads a public GitHub repo on our server, the same way the paste 
 - Cached file metadata: deleted 24 hours after it was written, by a later scan of that repository.
 - Findings and evidence: kept so a re-scan can tell you what you fixed. There is no automatic deletion today.
 - Quota counters: a single row, overwritten.
+- Your GitHub token: kept until you sign out from the menu. It is not deleted when the session expires.
 
 ## A note on deleted schemas
 
-Convex does not drop fields from records that already exist. When we removed the file-content column, every row written before that change still carried a copy of the file text. We deleted all 164 of those rows before this deployment, and verified that none remain. If we ever remove a field like that again, the same deletion runs before the change ships.
+Convex does not drop fields from records that already exist. When we removed the file-content column, rows written before that change could still carry a copy of the file text. The schema no longer has that column, and the purge that deletes stale file-content rows runs at the start of every analyze. If we ever remove a field like that again, the same purge runs before the change ships.
 
 ## Who fetches the code
 

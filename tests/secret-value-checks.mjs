@@ -108,7 +108,7 @@ describe("KNOWN-FAKE values must not fire", () => {
 describe("looksLikeSecretValue directly", () => {
   const mustFire = [
     F.FAKE_OPENROUTER, F.FAKE_AWS, F.FAKE_GITHUB_CLASSIC, F.FAKE_MIXED16,
-    F.FAKE_LONG, F.FAKE_BASE64,
+    F.FAKE_LONG, F.FAKE_BASE64, F.FAKE_BASE64_SLASH,
   ];
   for (const value of mustFire) {
     it(`value fires: ${value.slice(0, 12)}...`, () => {
@@ -129,6 +129,8 @@ describe("looksLikeSecretValue directly", () => {
     ["2026-10-04", "an ISO date"],
     ["1.2.3", "a version"],
     ["/etc/secret-store/key", "a path"],
+    ["dist/bin.cjs", "a build output path"],
+    ["rendered_phone_check", "lowercase snake identifier is a name"],
     ["postgresql://localhost:5432/db", "a URL"],
     ["self.secret", "a reference"],
     ["<your-key-here>", "a template slot"],

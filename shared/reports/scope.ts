@@ -12,6 +12,8 @@
 //
 // Nothing here decides a finding. It only describes what was examined.
 
+import { GUEST_MAX_BYTES, GUEST_MAX_FILES } from "../scanCaps.ts";
+
 export type ScopeState = "checked" | "partial" | "notChecked" | "unknown";
 
 export const SCOPE_LABEL: Record<ScopeState, string> = {
@@ -33,6 +35,8 @@ export interface VerdictInput {
   total: number | undefined;
   /** Findings the analyzers produced. Info findings count as findings. */
   findingCount: number;
+  /** Findings a reader must act on. Info findings are notes, not actions. */
+  actionableCount: number;
   /** True when the scan ended in the partial state. */
   truncatedTree?: boolean;
 }
@@ -68,9 +72,21 @@ function readScope(fetched: number, total: number | undefined, skipped: number):
   return `We read ${fetched} of ${total} ${plural(total, "file", "files")}. The other ${unread} ${plural(unread, "was", "were")} not read.`;
 }
 
+// "We found 3 to fix, 2 notes in the files we read." Info findings are notes,
+// so the two counts are always shown apart. A zero count drops its clause
+// rather than printing "0 notes".
+function foundPhrase(actionableCount: number, noteCount: number, where: string): string {
+  const fix = `${actionableCount} to fix`;
+  const notes = `${noteCount} ${plural(noteCount, "note", "notes")}`;
+  if (actionableCount === 0) return `We found ${notes} in the ${where}.`;
+  if (noteCount === 0) return `We found ${fix} in the ${where}.`;
+  return `We found ${fix}, ${notes} in the ${where}.`;
+}
+
 export function buildVerdict(input: VerdictInput): Verdict {
-  const { status, fetched, skipped, total, findingCount } = input;
+  const { status, fetched, skipped, total, findingCount, actionableCount } = input;
   const scope = readScope(fetched, total, skipped);
+  const noteCount = Math.max(0, findingCount - actionableCount);
 
   const stages: StageLine[] = [];
 
@@ -120,13 +136,13 @@ export function buildVerdict(input: VerdictInput): Verdict {
     headline =
       findingCount === 0
         ? "This result is partial. Nothing was flagged in the files we did read."
-        : `This result is partial. We found ${findingCount} ${plural(findingCount, "thing", "things")} to fix in the files we did read.`;
+        : `This result is partial. ${foundPhrase(actionableCount, noteCount, "files we did read")}`;
   } else if (findingCount === 0) {
     state = "checked";
     headline = "Nothing was flagged in the files we read. This is not a clean bill of health.";
   } else {
     state = "checked";
-    headline = `We found ${findingCount} ${plural(findingCount, "thing", "things")} to fix in the files we read.`;
+    headline = foundPhrase(actionableCount, noteCount, "files we read");
   }
 
   return { headline, scope, state, stages };
@@ -134,9 +150,17 @@ export function buildVerdict(input: VerdictInput): Verdict {
 
 // The fixed list of checks this product does not run. Kept next to the verdict
 // so the two can never drift apart.
-export function buildNotCheckedList(options: { aiConfigured: boolean; liveProvided: boolean }): string[] {
+export function buildNotCheckedList(options: {
+  aiConfigured: boolean;
+  liveProvided: boolean;
+  /** Read caps this scan used. Defaults to the guest caps. */
+  maxFiles?: number;
+  maxBytes?: number;
+}): string[] {
+  const maxFiles = options.maxFiles ?? GUEST_MAX_FILES;
+  const maxBytes = options.maxBytes ?? GUEST_MAX_BYTES;
   const list = [
-    "Files past the 200 file and 2MB read caps.",
+    `Files past the ${maxFiles.toLocaleString("en-US")} file and ${Math.round(maxBytes / 1_000_000)}MB read caps.`,
     "Binary and generated files.",
     "Whether dependency advisories are current.",
     "How the app looks in a real browser. We read served HTML, not a rendered phone screen.",

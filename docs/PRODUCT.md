@@ -260,8 +260,11 @@ builder is about to hit publish.
   sends the visitor's IP address to Google. The scan does not.
 - No raw file contents are stored, ever. Only owner, repo, commit SHA, file paths,
   sizes, hashes, and redacted finding snippets.
-- No raw secret values, anywhere. One redaction function covers every output path:
-  findings, evidence, share payloads, AI prompts, logs.
+- No raw secret values, anywhere. One redaction function covers every path that
+  writes a snippet: findings and evidence are redacted before storage. Share
+  pages carry counts, titles, and short explanations only, never snippets. The
+  AI explain prompt receives the stored title and why; it does not run
+  redaction itself.
 - Share and passport pages carry counts, titles, and short explanations only. No
   paths, no line numbers, no code, no secret values.
 - AI providers receive redacted summaries and evidence IDs only, never file bodies.
@@ -467,12 +470,13 @@ React and Vite on the front end. Convex for database, backend, and hosting. GitH
 holds the source. `npm run check` runs the tests and a claim guard on every change.
 The guard fails the build on copy that asserts something the code cannot back.
 
-The guard is not decoration. It carries 33 rules across three classes: unsupported
+The guard is not decoration. It carries 38 rules across three classes: unsupported
 claims, safety promises that must be backed by the code, and retention numbers that
-must match a real cache constant. Each rule was written against a string that was
-genuinely in this product. During this build the guard caught three of our own new
-strings, including two that were honest but phrased in a way the guard could not yet
-understand. It now scans this document too.
+must match a real cache constant and a purge bound to that window. Each rule was
+written against a string that was genuinely in this product. During this build the
+guard caught three of our own new strings, including two that were honest but phrased
+in a way the guard could not yet understand. It scans this document, the readme, the
+changelog, the interface, and `llms.txt`.
 
 ## What is not built, plainly
 

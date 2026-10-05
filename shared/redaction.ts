@@ -2,6 +2,8 @@
 // share cards, logs) passes through sharedRedact. Raw secrets are never stored
 // or returned. Over-redaction is preferred over a leak.
 
+import { PROVIDER_SHAPES } from "./analyzers/secretValue.ts";
+
 export const REDACTED = "[REDACTED]";
 export const MAX_SNIPPET_CHARS = 200;
 
@@ -11,9 +13,18 @@ const SECRET_PATTERNS: RegExp[] = [
   /github_pat_[A-Za-z0-9_]{20,}/g,
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
   /xox[bpas]-[A-Za-z0-9-]{10,}/g,
-  /sk-(live|test)-[A-Za-z0-9]{10,}/g,
+  /sk[-_](live|test)[-_][A-Za-z0-9]{10,}/g,
   /AIza[0-9A-Za-z_-]{35}/g,
 ];
+
+// Redaction must be a SUPERSET of detection. The secret detector
+// (shared/analyzers/secretValue.ts) accepts any PROVIDER_SHAPES match and raises a
+// finding, so every one of those shapes must also be removed here, or a raw value
+// could be stored. The two lists cannot drift: this is built from the same source.
+// A non-global shape is re-flagged global so every occurrence on a line is replaced.
+const PROVIDER_PATTERNS: RegExp[] = PROVIDER_SHAPES.map(
+  (shape) => new RegExp(shape.source, shape.flags.includes("g") ? shape.flags : `${shape.flags}g`),
+);
 
 const ASSIGNMENT_PATTERN =
   /((?:password|passwd|pwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret)\s*[:=]\s*)(['"]?)([^\s'";,]{3,})/gi;
@@ -23,6 +34,10 @@ const URL_CREDENTIALS_PATTERN = /(https?:\/\/)([^/\s:@]+):([^/\s@]+)@/g;
 export function sharedRedact(text: string): string {
   let out = text;
   for (const pattern of SECRET_PATTERNS) {
+    pattern.lastIndex = 0;
+    out = out.replace(pattern, REDACTED);
+  }
+  for (const pattern of PROVIDER_PATTERNS) {
     pattern.lastIndex = 0;
     out = out.replace(pattern, REDACTED);
   }

@@ -468,6 +468,7 @@ export default function GuestScan() {
               treeTruncated={scan.truncated === true}
               liveProvided={liveUrl.trim().length > 0}
               aiConfigured={explainNote.length > 0 && !/No AI provider/i.test(explainNote)}
+              signedIn={scan.signedIn === true}
               priorityOrder={scan.priorityOrder ?? []}
               priorityNote={scan.priorityNote}
             />
@@ -568,6 +569,7 @@ export default function GuestScan() {
               live={resultsState.live}
               partial={scan.status === "partial"}
               coverageNote={scan.coverageNote}
+              signedIn={scan.signedIn === true}
             />
           )}
           {compareState !== undefined && compareState !== null && comparePair !== null && (

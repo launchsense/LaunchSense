@@ -23,6 +23,17 @@ import { GUEST_MAX_BYTES, GUEST_MAX_FILES, SIGNED_MAX_BYTES, SIGNED_MAX_FILES } 
 import { isLockfilePath } from "../../shared/tar";
 import { queryOsvBatch } from "../adapters/osv";
 
+// Convex Node actions have crypto available; the convex tsconfig
+// has no ambient node module types, so the import is declared locally.
+type HashBuilder = {
+  update(data: string): HashBuilder;
+  digest(encoding: string): string;
+};
+declare function require(name: string): {
+  createHash: (algorithm: string) => HashBuilder;
+};
+const { createHash } = require("node:crypto");
+
 // Convex actions time out at 10 minutes. Stop well before that so a slow
 // upstream produces an honest partial result instead of a dropped action.
 const ANALYZE_DEADLINE_MS = 150000;
@@ -151,6 +162,11 @@ function skipReason(path: string): string | null {
   for (const dir of SKIP_DIRS) {
     if (path.startsWith(dir)) return "generated/dependency directory";
   }
+  // Lockfiles are manifests, not binary data. The per-file
+  // path already reads them with a larger size cap, so a
+  // yarn.lock or pnpm-lock.yaml is a candidate on every
+  // path, like package-lock.json.
+  if (isLockfilePath(path)) return null;
   const base = path.split("/").pop() ?? path;
   const dot = base.lastIndexOf(".");
   if (dot > 0) {
@@ -158,6 +174,16 @@ function skipReason(path: string): string | null {
     if (BINARY_EXTENSIONS.has(ext)) return "binary or media file";
   }
   return null;
+}
+
+// The git blob sha is the content identity the per-file
+// fallback records: GitHub reports it as the blob's sha.
+// Computing it locally from the same bytes keeps contentSha
+// identical on the tarball path, so a rescan compares a
+// file against itself whichever path fetched it. A tar
+// entry size is the byte length of its decoded content.
+function gitBlobSha(size: number, content: string): string {
+  return createHash("sha1").update(`blob ${size}\0`).update(content).digest("hex");
 }
 
 function manifestLine(content: string, name: string): number {
@@ -352,10 +378,24 @@ export const analyzeScan = action({
     let processed = 0;
 
     if (tarball.status === "ok") {
+      // The tarball holds every tracked file at the commit, including
+      // files the candidate walk already excluded. Apply the same skip
+      // rule here so both paths analyze the same set, and record any
+      // skip the tree walk did not see (a truncated tree can omit
+      // paths the tarball still delivers).
+      const recorded = new Set(skipped.map((s) => s.path));
       for (const entry of tarball.entries) {
         if (Date.now() > deadline) break;
         if (files.length >= maxFiles || bytesUsed >= maxBytes) break;
         if (bytesUsed + entry.size > maxBytes) break;
+        const reason = skipReason(entry.path);
+        if (reason !== null) {
+          if (!recorded.has(entry.path)) {
+            skipped.push({ path: entry.path, reason });
+            recorded.add(entry.path);
+          }
+          continue;
+        }
         files.push({ path: entry.path, content: entry.content, size: entry.size });
         bytesUsed += entry.size;
         processed += 1;
@@ -364,7 +404,7 @@ export const analyzeScan = action({
           repo,
           sha,
           path: entry.path,
-          contentSha: "",
+          contentSha: gitBlobSha(entry.size, entry.content),
           size: entry.size,
           truncated: false,
           fetchedAt: Date.now(),
@@ -699,8 +739,19 @@ export const analyzeScan = action({
         const key = `${dep.name}@${dep.version}:${vuln.id}`;
         vulnCounts.set(key, (vulnCounts.get(key) ?? 0) + 1);
         if ((vulnCounts.get(key) ?? 0) > 1) continue;
+        // OSV severity is high, medium, low, or unknown. An
+        // unknown advisory is real but unranked: it must not
+        // outrank a known medium finding, so it lands at info
+        // instead of a guessed medium, and it stays visible
+        // as an info note rather than being dropped.
         const sev: Severity =
-          vuln.severity === "high" ? "high" : vuln.severity === "low" ? "low" : "medium";
+          vuln.severity === "high"
+            ? "high"
+            : vuln.severity === "medium"
+              ? "medium"
+              : vuln.severity === "low"
+                ? "low"
+                : "info";
         pushEvidence(evidence, findings, {
           ruleId: "deps.vulnerability",
           path: dep.manifest,
@@ -708,7 +759,7 @@ export const analyzeScan = action({
           severity: sev,
           title: `${vuln.id} affects ${dep.name}@${dep.version}`,
           why: `${vuln.id} is a public advisory record for this exact version. This is not a statement that the app is exploitable.`,
-          bucket: "actionable",
+          bucket: sev === "info" ? "info" : "actionable",
           rawSnippet: `${vuln.id} ${dep.name} ${dep.version} ${vuln.summary}`,
         });
       }
