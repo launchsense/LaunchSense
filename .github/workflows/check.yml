@@ -12,5 +12,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      # The MCP red-checks build the Go server with GOPROXY=off, so its modules
+      # must already be in the module cache. A fresh runner starts with an empty
+      # cache, which is why this job was red on every run while it passed on a
+      # developer machine that had built the server before. Populate the cache
+      # first, using the version the module asks for.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: mcp/go.mod
+          cache-dependency-path: mcp/go.sum
+      - run: cd mcp && go mod download
       - run: npm ci
       - run: npm run check
