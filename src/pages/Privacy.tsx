@@ -1,4 +1,5 @@
 import { SiteFrame } from "../features/site/SiteFrame";
+import { AI_DISCLOSURE_SHORT } from "../../shared/copy/aiDisclosure";
 
 // The privacy policy, at a route a visitor can open. It used to exist only as
 // docs/PRIVACY.md in the repository, which no visitor ever reaches, so the
@@ -121,6 +122,13 @@ export default function Privacy() {
           Gemini first, then to Ollama Cloud if Gemini does not answer. If both fail, a fixed
           built-in wording is used and no provider is asked.
         </p>
+        <p>{AI_DISCLOSURE_SHORT}</p>
+        <p>
+          The <code>humanOversightLevel</code> for that call is <code>prompt_guided</code>{" "}
+          in the vocabulary of C2PA Technical Specification 2.4: a person pressed the button,{" "}
+          and nobody approved the answer afterwards. We borrow that one word. We are not a C2PA
+          claim generator, we hold no certificate chain, and this is not a conformance claim.
+        </p>
       </section>
 
       <section className="check-section" aria-labelledby="what-the-connection-sends">
@@ -162,23 +170,59 @@ export default function Privacy() {
 
       <section className="check-section" aria-labelledby="how-long-we-keep">
         <h2 id="how-long-we-keep">8. How long we keep each thing</h2>
+        <p>
+          Every line below names the code that deletes the thing, or says that nothing does. A
+          window with no job behind it is stated as a gap rather than as a promise.
+        </p>
         <ul className="check-list">
           <li>
-            Cached file metadata: deleted 24 hours after it was written, by a later scan of that
-            repository.
+            Cached file metadata: deleted after 24 hours by a later scan of that repository.
+            The window is <code>CONTENT_CACHE_TTL_MS</code> in <code>convex/scans/analyze.ts</code>,
+            and the deletion is <code>purgeStaleContents</code> in <code>convex/scans/store.ts</code>,
+            bounded at 500 rows a run.
           </li>
-          <li>OSV vulnerability answers are reused for 7 days and then looked up again.</li>
+          <li>
+            OSV vulnerability answers are reused for 7 days and then looked up again. That is a
+            read window, not a purge: nothing deletes the <code>osvCache</code> table.
+          </li>
           <li>
             Findings and evidence: kept so a re-scan can tell you what you fixed. There is no
             automatic deletion today.
           </li>
           <li>Quota counters: a single row, overwritten.</li>
-          <li>Rate limit counters: no automatic deletion today, and no network address in them.</li>
           <li>
-            Your GitHub token: kept until you sign out from the menu. It is not deleted when the
-            session expires.
+            Rate limit counters: no automatic deletion today, and no network address in them.
+            When a credential resolved, the key holds that credential&apos;s own id.
+          </li>
+          <li>
+            Coding tool usage rows on the hosted address: deleted after 30 days by a later
+            nightly job. The window is <code>USAGE_EVENT_TTL_MS</code> in{" "}
+            <code>convex/analytics/retention.ts</code> and the job is the{" "}
+            <code>purge expired usage events</code> cron at 03:40 UTC, bounded at 500 rows a
+            run. The daily counts folded from them are kept, and hold no repository name.
+          </li>
+          <li>
+            Usage counts from the local installer: written to <code>usageDiagnostics</code>{" "}
+            only after you answer yes at the install question. That table has no deletion
+            window today. Nothing in this repository deletes it.
+          </li>
+          <li>
+            Your GitHub token: kept until you sign out from the menu. It is not deleted when
+            the session expires.
+          </li>
+          <li>
+            Provider call rows from Explain in plain words: kept. Nothing deletes{" "}
+            <code>providerCalls</code>.
+          </li>
+          <li>
+            Server request logs: kept by the host, on the host&apos;s own schedule, which we
+            neither control nor state.
           </li>
         </ul>
+        <p>
+          The full list, with the tables and the columns behind each line, is the register in{" "}
+          <code>docs/PROCESSING-REGISTER.md</code>.
+        </p>
       </section>
 
       <section className="check-section" aria-labelledby="who-can-see">

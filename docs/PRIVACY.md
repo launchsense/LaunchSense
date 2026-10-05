@@ -77,6 +77,14 @@ does not carry the file path and it does not carry file contents. It goes to Goo
 Gemini first, then to Ollama Cloud if Gemini does not answer. If both fail, a fixed
 built-in wording is used and no provider is asked.
 
+The provider rewrites a finding in plainer language. It never decides a finding, a
+severity, a licence fact, consent, who a caller is, or whether a request is allowed.
+Those come from fixed code. The `humanOversightLevel` for that call is
+`prompt_guided` in the vocabulary of C2PA Technical Specification 2.4: a person
+pressed the button, and nobody approved the answer afterwards. We borrow that one
+word. We are not a C2PA claim generator, we hold no certificate chain, and this is
+not a conformance claim. The same three words are in `docs/CONSENT-RECORD.md`.
+
 ## 6. What the coding tool connection sends
 
 The repository URL your tool passes, and nothing from your machine. The tool runs on
@@ -135,18 +143,35 @@ stays in the server logs.
 
 ## 8. How long we keep each thing
 
+Every line below names the code that deletes the thing, or says that nothing does.
+A window with no job behind it is stated as a gap rather than as a promise.
+
 - Cached file metadata: deleted 24 hours after it was written, by a later scan of that
-  repository.
-- OSV vulnerability answers are reused for 7 days and then looked up again.
+  repository. The window is `CONTENT_CACHE_TTL_MS` in `convex/scans/analyze.ts`, and
+  the deletion is `purgeStaleContents` in `convex/scans/store.ts`, bounded at 500 rows
+  a run.
+- OSV vulnerability answers are reused for 7 days and then looked up again. That is a
+  read window, not a purge: nothing deletes the `osvCache` table.
 - Findings and evidence: kept so a re-scan can tell you what you fixed. There is no
   automatic deletion today.
 - Quota counters: a single row, overwritten.
 - Rate limit counters: no automatic deletion today, and no network address in them. When a
   credential resolved, the key holds that credential's own id.
-- Coding tool usage rows: deleted after 30 days by a later nightly job. The daily counts
-  folded from them are kept, and hold no repository name.
+- Coding tool usage rows on the hosted address: deleted after 30 days by a later nightly
+  job. The window is `USAGE_EVENT_TTL_MS` in `convex/analytics/retention.ts` and the job
+  is the `purge expired usage events` cron at 03:40 UTC, bounded at 500 rows a run. The
+  daily counts folded from them are kept, and hold no repository name.
+- Usage counts from the local installer: written to `usageDiagnostics` only after you
+  answer yes at the install question. That table has no deletion window today. Nothing in
+  this repository deletes it.
 - Your GitHub token: kept until you sign out from the menu. It is not deleted when the
   session expires.
+- Provider call rows from Explain in plain words: kept. Nothing deletes `providerCalls`.
+- Server request logs: kept by the host, on the host's own schedule, which we neither
+  control nor state.
+
+The full list, with the tables and the columns behind each line, is the register in
+`docs/PROCESSING-REGISTER.md`.
 
 ## 9. Who can see it
 
