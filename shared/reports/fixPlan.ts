@@ -177,6 +177,15 @@ const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[
       "If a license file was found, check that the package field matches it. This is not legal advice.",
     ],
   },
+  "license.dependency": {
+    title: "Confirm each dependency's declared terms",
+    why: "A dependency you ship brings its licence's conditions with it.",
+    checklist: [
+      "Read the obligation quoted on each row. It is what that licence text asks for, not a clearance.",
+      "Add the notices this product can generate to the distribution, then have a person read the copyleft rows.",
+      "If a dependency moved licence since the last scan, read that row first: the change is on the rescan, not only here.",
+    ],
+  },
 };
 
 const STEP_ORDER = [
@@ -202,6 +211,7 @@ const STEP_ORDER = [
   "deps.install-script",
   "deps.unpinned-version",
   "deps.duplicate",
+  "license.dependency",
   "license.policy",
 ];
 

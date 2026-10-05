@@ -19,6 +19,15 @@ The local server speaks MCP over stdio as newline-delimited JSON: one JSON messa
 
 The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB per file, and it does not read vendored trees, `.progress`, or binary files. Anything past a cap is listed as not checked. It runs every check: secrets, risky code, deps, licenses, hygiene, duplicates, large files, plus OSV, registry facts, ordering, one fix prompt, coverage, and the not-checked list.
 
+## Licences, and the file you can commit
+
+For an npm project with a committed `package-lock.json`, the review reads the licence every installed package declares, direct and transitive, and writes a third-party notice file from it. That file is deterministic: the same lockfile gives the same bytes. It names each component with its licence, states what that licence text asks for with the clause it came from, and lists what was not read. It is a declaration, not legal advice.
+
+- An Unknown licence stays Unknown. It is never a finding, never a severity, and never folded into a permissive group.
+- An OR expression stays a choice. Ask which one was chosen.
+- yarn.lock, pnpm-lock.yaml, Cargo, Go and PyPI dependency licences, vendored trees and per-file SPDX headers are not read.
+- The guarded AI lookup for an Unknown licence exists, and is refused unless a lane is configured. A lane answer is a suggestion, not a licence fact.
+
 `tests/corpus-harness.ts` is a secrets-only precision tool. It counts credential-pattern hits so a rule can be judged true or false. It is never a full review and its output is never a pass. A run sheet counts as a check only when it carries the coverage line, the not-checked list quoted as-is, the caps, and the decision source.
 
 ## What you may say
@@ -31,6 +40,7 @@ The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB p
 
 - Do not add a finding, drop one, or call a partial result a pass.
 - Do not turn an unknown into a license name or a clearance.
+- Do not describe the third-party notice file as clearance. It says what each package declares and what that text asks for. A person decides whether any of it applies to how the project ships.
 - Do not send file text, function names, or the product idea anywhere.
 - Do not claim the review checked files it listed as not checked.
 - Alpha has no login. Do not ask for an API key.

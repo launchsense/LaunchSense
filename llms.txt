@@ -30,7 +30,23 @@ A partial result is not a pass. This address does not read a repo that exists on
 
 ## Checks
 
-Fixed checks cover secrets, code shapes, dependency names, license text, and project hygiene, plus duplicate files and large files.
+Fixed checks cover secrets, code shapes, dependency names, license text, dependency license terms, and project hygiene, plus duplicate files and large files.
+
+### The licence declaration
+
+For a project that commits an npm `package-lock.json` with a `packages` map, every installed package, direct and transitive, is read for the licence it declares. The lockfile is the declaration being read, so this costs no extra request and adds no new egress. Where the lockfile has no `license` field and an installed `package.json` is available to the caller, that manifest is the fallback, and a lockfile that disagrees with it reads as Unknown. A declaration that is not an SPDX expression, such as `MIT/X11`, reads as Unknown. `UNLICENSED` reads as `LicenseRef-Proprietary-UNLICENSED`, which is a proprietary claim and not the Unlicense dedication. An `OR` expression stays a choice and attaches no obligation from either id. A bare `GPL-2.0` is kept as declared and marked deprecated, because rewriting it into `-only` would assert an only-versus-or-later choice the string does not make. `GPL-2.0+` normalizes to `GPL-2.0-or-later`.
+
+`license.inventory` is an informational row carrying the per-id counts, the count of unknowns, and the named gaps. `license.declaration` is one informational row whose fingerprint is the licence mix itself, so a change between two permissive licences still moves a fingerprint and shows up on the rescan. `license.dependency` is one row per component whose terms a person must read, low for file-level copyleft and medium for library copyleft, strong copyleft, source-available, and proprietary terms. The per-component rows are capped at 25 per scan and the number left out is stated. An Unknown licence never produces a row and never carries a severity.
+
+`shared/licensing/obligations.ts` holds one cited row per licence family: licence text, copyright notice, a NOTICE file where the licence has one, state of changes, source disclosure for copyleft, and the distribution clash for strong copyleft. It is a table of what a licence text asks for. It is not a legal engine, it does not model linking or aggregation, and it does not decide whether an obligation applies to how you ship.
+
+`npm run notices` writes the third-party notice artifact from the committed lockfile. Same lockfile in, byte-identical file out. The local review carries the same text. It is a declaration of what each dependency says its licence is, and it names what it did not read.
+
+On a rescan, a dependency whose declared licence changed is reported through the existing transition machinery as `license_change`, so a re-licensed package shows up on the comparison rather than only when the tree was first read. A dependency that was added or removed is still a code change.
+
+The guarded AI lookup runs only for an Unknown licence, only when a lane is supplied, and only with the package name, the version, and fixed wording in the prompt. The result is a suggestion. It has no rule id, no fingerprint, and no severity, and it never writes into the component it came from. No lane is wired in this release, so the path is refused and unknown stays unknown.
+
+Not checked on any surface: yarn.lock, pnpm-lock.yaml, Cargo, Go and PyPI dependency licences, a vendored tree, a per-file SPDX header or REUSE.toml, and registry freshness. A lockfile with no `packages` map reads as incomplete, not as zero licences.
 
 License lines are signals, not legal advice. Unknown stays unknown. A model may quote one next look. That quote is not a finding. The priority table always orders the report. The decision API may reorder inside one severity band. The model does not choose which findings exist. Plain-word rewriting and that reorder are in the product and still evolving. No writing provider is configured in this release, so fixed wording is what ships. A reinforcement learning loop, based on what a later scan shows as fixed or still broken, is the next step. It is not a trained model, and it does not train on the code.
 
