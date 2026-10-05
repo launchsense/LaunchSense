@@ -61,25 +61,41 @@ function noticeSentence(found: string[], files: Array<{ path: string }>): string
     : " Apache-2.0 was found. No NOTICE file was in this read.";
 }
 
-function mismatchSentence(packageLicense: string | null, fileDetected: ReadonlySet<string>): string {
+/**
+ * State a declared licence and the licence files as two separate facts. The
+ * sentence names the manifest that was actually read. A Cargo-only repo has no
+ * package.json, so saying "package.json says ..." there is not a wording choice,
+ * it is a false source.
+ */
+function mismatchSentence(
+  manifestSource: string | null,
+  packageLicense: string | null,
+  fileDetected: ReadonlySet<string>,
+): string {
   if (packageLicense === null || fileDetected.size === 0) return "";
   const aligned = [...fileDetected].some((id) => id.toLowerCase() === packageLicense.toLowerCase());
   if (aligned) return "";
-  return ` Two facts: package.json says ${packageLicense}. The license files read say ${[...fileDetected].join(", ")}.`;
+  const source = manifestSource ?? "the manifest";
+  return ` Two facts: ${source} says ${packageLicense}. The license files read say ${[...fileDetected].join(", ")}.`;
 }
 
+/**
+ * A licence file basename. Repositories spell it every way: `LICENSE`,
+ * `LICENSE.md`, `LICENSE-MIT`, `MIT-LICENSE`, `LICENCE`, `COPYING.md`. A basename
+ * that is not matched here is read and then thrown away, which loses the licence
+ * signal and leaves the finding with no licence path at all.
+ * NOTICE is accepted because Apache-2.0 needs its companion file read too.
+ */
 function isLicenseFile(path: string): boolean {
   const base = (path.split("/").pop() ?? path).toUpperCase();
-  return (
-    base === "LICENSE" ||
-    base.startsWith("LICENSE.") ||
-    base.startsWith("LICENSE-") ||
-    base === "LICENCE" ||
-    base.startsWith("LICENCE.") ||
-    base === "NOTICE" ||
-    base.startsWith("NOTICE.") ||
-    base === "COPYING"
-  );
+  if (base === "NOTICE" || base.startsWith("NOTICE.")) return true;
+  if (base === "COPYING" || base.startsWith("COPYING.")) return true;
+  for (const word of ["LICENSE", "LICENCE"]) {
+    if (base === word) return true;
+    if (base.startsWith(`${word}.`) || base.startsWith(`${word}-`)) return true;
+    if (base.endsWith(`-${word}`)) return true;
+  }
+  return false;
 }
 
 /** A licence file at the repo root. NOTICE is a companion file, not the licence. */
@@ -123,13 +139,17 @@ export function analyzeLicenses(
   }
 
   let packageLicense: string | null = null;
+  let manifestSource: string | null = null;
   const pkg = files.find((f) => (f.path.split("/").pop() ?? "") === "package.json");
   if (pkg !== undefined) {
     try {
       const data = JSON.parse(pkg.content) as unknown;
       if (typeof data === "object" && data !== null) {
         const lic = (data as Record<string, unknown>)["license"];
-        if (typeof lic === "string" && lic.length > 0) packageLicense = lic;
+        if (typeof lic === "string" && lic.length > 0) {
+          packageLicense = lic;
+          manifestSource = "package.json";
+        }
       }
     } catch {
       // Unparseable manifest: no license signal from it.
@@ -143,14 +163,20 @@ export function analyzeLicenses(
     const cargo = files.find((f) => (f.path.split("/").pop() ?? "") === "Cargo.toml");
     if (cargo !== undefined) {
       const m = /^license\s*=\s*"([^"]+)"/m.exec(cargo.content);
-      if (m !== null && m[1] !== undefined) packageLicense = m[1];
+      if (m !== null && m[1] !== undefined) {
+        packageLicense = m[1];
+        manifestSource = "Cargo.toml";
+      }
     }
   }
   if (packageLicense === null) {
     const py = files.find((f) => (f.path.split("/").pop() ?? "") === "pyproject.toml");
     if (py !== undefined) {
       const m = /license\s*=\s*["']([^"']+)["']/.exec(py.content);
-      if (m !== null && m[1] !== undefined) packageLicense = m[1];
+      if (m !== null && m[1] !== undefined) {
+        packageLicense = m[1];
+        manifestSource = "pyproject.toml";
+      }
     }
   }
 
@@ -159,7 +185,7 @@ export function analyzeLicenses(
   }
 
   const found = [...detected];
-  const suffix = `${noticeSentence(found, files)}${mismatchSentence(packageLicense, fileDetected)}`;
+  const suffix = `${noticeSentence(found, files)}${mismatchSentence(manifestSource, packageLicense, fileDetected)}`;
   if (!filesFetched) {
     return {
       detected: found,
@@ -252,6 +278,6 @@ export function analyzeLicenses(
     files: licenseFiles,
     packageLicense,
     policy: "Unknown",
-    note: `No license signals in the license files and package.json field that were read. ${SIGNAL}`,
+    note: `No license signals in the license files and manifest field that were read. ${SIGNAL}`,
   };
 }

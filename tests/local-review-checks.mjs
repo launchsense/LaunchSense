@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { matchCodePattern } from "../shared/analyzers/codePatterns.ts";
 import { generatedMarkers } from "../shared/review/extraChecks.ts";
 import { analyzeLicenses } from "../shared/analyzers/licenses.ts";
@@ -8,6 +12,34 @@ import { buildLocalReport } from "../shared/review/buildReport.ts";
 import { quoteForChoice, suggestionOptions } from "../shared/review/unknownQuote.ts";
 import { inventoryNpmLock } from "../shared/review/lockfile.ts";
 import { clashSignal } from "../shared/review/clash.ts";
+
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+
+// Run the local review over a throwaway tree. Offline is forced and the
+// outbound base url is removed, so nothing leaves the machine.
+function runReview(root) {
+  const env = { ...process.env, LAUNCHSENSE_OFFLINE: "1" };
+  delete env.LAUNCHSENSE_API_URL;
+  return spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", join(ROOT, "mcp", "review-entry.ts"), "--root", root, "--json"],
+    { encoding: "utf8", cwd: ROOT, env },
+  );
+}
+
+function withTree(files, body) {
+  const root = mkdtempSync(join(tmpdir(), "ls-ws3-"));
+  try {
+    for (const [path, content] of Object.entries(files)) {
+      const full = join(root, path);
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, content, "utf8");
+    }
+    return body(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
 
 describe("local review", () => {
   it("reads license text and does not call a missing lockfile complete", () => {
@@ -64,6 +96,184 @@ describe("OSV honesty", () => {
     };
     const report = buildLocalReport([lock], [], null, null, lock);
     assert.equal(report.status, "partial");
+  });
+});
+
+// WAVE 2 / WS-3. The walk skips a vendored tree, and a skipped tree that is
+// not named in the report is a silent gap. The finding under the vendored
+// directory must not be reported, and the skip must be disclosed.
+describe("vendored tree skip", () => {
+  const EVAL = "export const value = eval(\"2 + 2\");\n";
+
+  it("does not report a finding under 3rdparty and discloses the skip", () => {
+    withTree(
+      {
+        "package.json": JSON.stringify({ name: "demo", license: "MIT" }),
+        README: "# demo\n",
+        "3rdparty/lib/vendored.ts": EVAL,
+        "src/app.ts": EVAL,
+      },
+      (root) => {
+        const run = runReview(root);
+        assert.equal(run.status, 0, run.stderr);
+        const report = JSON.parse(run.stdout);
+        const paths = report.findings.map((item) => item.path);
+        assert.ok(
+          !paths.some((path) => path.startsWith("3rdparty/")),
+          `a finding under a skipped vendored tree was reported: ${JSON.stringify(paths)}`,
+        );
+        assert.ok(
+          paths.includes("src/app.ts"),
+          `the same line outside the vendored tree must still be reported: ${JSON.stringify(paths)}`,
+        );
+        const skip = report.notChecked.find((item) => item.scope === "3rdparty");
+        assert.ok(skip !== undefined, `the 3rdparty skip was not disclosed: ${JSON.stringify(report.notChecked)}`);
+        assert.match(skip.reason, /Vendored tree was not read/);
+      },
+    );
+  });
+
+  it("skips deps and vendor by the same rule and discloses each one", () => {
+    withTree(
+      {
+        "package.json": JSON.stringify({ name: "demo", license: "MIT" }),
+        README: "# demo\n",
+        "deps/lib/a.ts": EVAL,
+        "vendor/lib/b.ts": EVAL,
+        "3rdparty/lib/c.ts": EVAL,
+      },
+      (root) => {
+        const report = JSON.parse(runReview(root).stdout);
+        for (const scope of ["deps", "vendor", "3rdparty"]) {
+          assert.ok(
+            report.notChecked.some((item) => item.scope === scope && /Vendored tree/.test(item.reason)),
+            `${scope} must be skipped and disclosed as a vendored tree`,
+          );
+        }
+        assert.equal(report.findings.some((item) => item.path.startsWith("deps/")), false);
+        assert.equal(report.findings.some((item) => item.path.startsWith("vendor/")), false);
+        assert.equal(report.findings.some((item) => item.path.startsWith("3rdparty/")), false);
+      },
+    );
+  });
+});
+
+// WS-3. The named-host list is capped. A cap that is not named reads as a
+// complete list, so the report has to say it.
+describe("named host cap disclosure", () => {
+  function hostFiles(count) {
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      out.push({ path: `src/h${i}.ts`, content: `export const url = "https://host${i}.example.com/x";\n` });
+    }
+    return out;
+  }
+
+  it("names the 10 per-run cap when more files name a host than are listed", () => {
+    const report = buildLocalReport(
+      [{ path: "package.json", content: JSON.stringify({ license: "MIT" }) }, { path: "README.md", content: "# demo\n" }, ...hostFiles(14)],
+      [],
+      null,
+    );
+    const listed = report.findings.filter((item) => item.ruleId === "code.network-hint");
+    assert.equal(listed.length, 10);
+    const cap = report.notChecked.find((item) => item.scope === "named hosts");
+    assert.ok(cap !== undefined, `the cap was not disclosed: ${JSON.stringify(report.notChecked)}`);
+    assert.match(cap.reason, /10/);
+    assert.match(cap.reason, /not listed|more files/i);
+  });
+
+  it("says nothing about a cap when every naming file was listed", () => {
+    const report = buildLocalReport(
+      [{ path: "package.json", content: JSON.stringify({ license: "MIT" }) }, { path: "README.md", content: "# demo\n" }, ...hostFiles(3)],
+      [],
+      null,
+    );
+    assert.equal(report.findings.filter((item) => item.ruleId === "code.network-hint").length, 3);
+    assert.equal(report.notChecked.some((item) => item.scope === "named hosts"), false);
+  });
+});
+
+// WS-3. --json output goes into a shell pipeline and a file. Without the
+// trailing newline the last line has no terminator.
+describe("local review cli output", () => {
+  it("ends the --json output with a newline", () => {
+    withTree(
+      { "package.json": JSON.stringify({ name: "demo", license: "MIT" }), README: "# demo\n" },
+      (root) => {
+        const run = runReview(root);
+        assert.equal(run.status, 0, run.stderr);
+        assert.ok(run.stdout.length > 0);
+        assert.ok(
+          run.stdout.endsWith("\n"),
+          `the --json output must end with a newline; last bytes were ${JSON.stringify(run.stdout.slice(-4))}`,
+        );
+        assert.doesNotThrow(() => JSON.parse(run.stdout));
+      },
+    );
+  });
+});
+
+// WS-3. The lockfile disclosure is npm-only today, so a repo with a Cargo.lock
+// is told no lockfile was in hand. That is a false statement about the read.
+describe("lockfile disclosure matches what was read", () => {
+  const CARGO_LOCK = [
+    "# This file is automatically @generated by Cargo.",
+    '[[package]]',
+    'name = "serde"',
+    'version = "1.0.0"',
+    "",
+  ].join("\n");
+
+  it("does not claim no lockfile was in hand when a Cargo.lock was read", () => {
+    const report = buildLocalReport(
+      [
+        { path: "Cargo.toml", content: '[package]\nname = "demo"\n' },
+        { path: "Cargo.lock", content: CARGO_LOCK },
+        { path: "README.md", content: "# demo\n" },
+      ],
+      [],
+      null,
+      null,
+      undefined,
+    );
+    const osv = report.notChecked.find((item) => item.scope === "OSV")?.reason ?? "";
+    assert.doesNotMatch(osv, /No lockfile was in the files read/);
+    assert.match(osv, /Cargo\.lock/);
+    assert.match(report.lockNote, /Cargo\.lock/);
+    assert.equal(report.status, "partial");
+  });
+
+  it("still says so plainly when no lockfile of any kind was read", () => {
+    const report = buildLocalReport(
+      [{ path: "README.md", content: "# demo\n" }],
+      [],
+      null,
+      null,
+      undefined,
+    );
+    const osv = report.notChecked.find((item) => item.scope === "OSV")?.reason ?? "";
+    assert.match(osv, /No lockfile was in the files read/);
+  });
+
+  it("names a checked npm lockfile as npm, not as the only lockfile", () => {
+    const lock = {
+      path: "package-lock.json",
+      content: JSON.stringify({ packages: { "": {}, "node_modules/leftpad": { version: "1.0.0" } } }),
+    };
+    const report = buildLocalReport(
+      [{ path: "package.json", content: JSON.stringify({ license: "MIT" }) }, { path: "README.md", content: "# demo\n" }, lock],
+      [],
+      [],
+      { hits: [], queried: 1, skipped: 0, timedOut: false },
+      lock,
+    );
+    assert.match(report.lockNote, /Lockfile lists 1 packages/);
+    assert.equal(
+      report.notChecked.some((item) => item.scope === "OSV"),
+      false,
+      "a queried lockfile is not an open gap",
+    );
   });
 });
 

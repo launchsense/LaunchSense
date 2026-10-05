@@ -32,6 +32,26 @@ function isClientPath(path: string): boolean {
   return path.startsWith("public/") || path.endsWith(".html");
 }
 
+/**
+ * Is this a config file, where a dotted name is a KEY NAMESPACE and not an object?
+ *
+ * The receiver gate below reads a name preceded by a dot as a member access. That is
+ * right in source code and wrong in a config file, where `jwt.secret=<value>` is the
+ * normal way to name a setting and is a real assignment. Corpus wave-05 measured the
+ * miss: a committed 64 character JWT signing key at `application.properties:9` was
+ * reported zero times, because `jwt.` read as a receiver.
+ *
+ * Deliberately an extension list, not a "looks like config" shape. A directory called
+ * `conf` or a file called `configure.ts` must not widen the gate.
+ */
+const CONFIG_STYLE_EXTENSIONS = [".properties", ".ini", ".cfg", ".conf", ".env", ".toml"];
+
+function isConfigStylePath(path: string): boolean {
+  if (path.length === 0) return false;
+  const base = basename(path).toLowerCase();
+  return CONFIG_STYLE_EXTENSIONS.some((ext) => base.endsWith(ext));
+}
+
 /** The credential words a variable name can be built from. */
 const CREDENTIAL_WORDS = new Set([
   "password", "passwd", "pwd", "pass",
@@ -100,8 +120,11 @@ function unwrapTypeCast(rest: string): string {
  *   cdp_key_secret=body.cdp_key_secret        a reference to another variable
  *   secret=chat_id                            a parameter reference
  *   secret: ${{ secrets.TOKEN }}              injected by CI
+ *
+ * `path` is the file the line came from. It is optional so every existing caller keeps
+ * working, and an absent path means source code, which is the conservative reading.
  */
-export function isHardcodedCredential(line: string): boolean {
+export function isHardcodedCredential(line: string, path = ""): boolean {
   // A comment mentions the word but assigns nothing.
   const trimmed = line.trim();
   if (trimmed.startsWith("#") || trimmed.startsWith("//") || trimmed.startsWith("*")) return false;
@@ -111,6 +134,10 @@ export function isHardcodedCredential(line: string): boolean {
   // list, or a token passed as a positional argument, has no variable name to match.
   // This runs before the name gate because the name gate cannot see those.
   if (containsProviderKey(line)) return true;
+
+  // In a config file a dotted name is the setting itself, so the receiver gate below
+  // does not apply. Everywhere else the dot is an object member and the gate stands.
+  const configStyle = isConfigStylePath(path);
 
   // Scan EVERY assignment on the line, not just the first. A line can hold an env
   // read and a real literal:
@@ -129,8 +156,13 @@ export function isHardcodedCredential(line: string): boolean {
     // dot is the receiver. A credential word used as a field or attribute of another
     // object (a UI binding, a config member, a framework field) is not a hardcoded
     // secret. Reject when the matched name is preceded by a dot or is a known member.
+    //
+    // A config-style file is the exception, and it is a real exception rather than a
+    // loosening. `jwt.secret=<key>` in a `.properties` file has no receiver: the dot
+    // is a key namespace and the whole dotted name is the setting. Treating it as a
+    // member access is what missed a committed signing key on the wave-05 corpus.
     const receiver = before.slice(0, before.length - nameMatch[1].length);
-    if (/[.]$/.test(receiver)) continue;
+    if (/[.]$/.test(receiver) && !configStyle) continue;
     if (/\b(?:viewBinding|databinding|binding|Binding)$/.test(receiver)) continue;
     // XML/HTML/IDE attributes: `key="..."` where the value is a path or a numeric
     // zoom. A framework attribute named `key` is not a credential assignment.
@@ -182,7 +214,15 @@ export function containsProviderKey(line: string): boolean {
     if (allLower) continue;
     if (hasUrlChar && mixedCase) return true;
     if (allLowerDotted) continue;
-    if (hasUrlChar) return true;
+    // The last shape that reaches here has uppercase and NO lowercase, because
+    // `mixedCase` needs both and `allLower` already excluded the no-uppercase case.
+    // That is an ALL_CAPS constant chain, not base64url:
+    //   __C.TRAINING.OPTIMIZER.WEIGHT_DECAY    a config constant in a Python repo
+    //   cfg.TRAINING.OPTIMIZER.USE_WEIGHTS      a flag read on the next line
+    // Base64url of JSON carries lowercase letters, so a real JWT cannot land here. The
+    // wave-08 corpus measured 8 high-severity `secret.credential-pattern` false
+    // positives from this one branch. Reject them.
+    if (hasUrlChar && /[a-z]/.test(token)) return true;
   }
   return false;
 }
@@ -336,7 +376,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
         }, fileCount);
         continue;
       }
-      if (isHardcodedCredential(line)) {
+      if (isHardcodedCredential(line, file.path)) {
         pushCapped(out, {
           ruleId: client ? "secret.client-exposure" : "secret.credential-pattern",
           path: file.path,

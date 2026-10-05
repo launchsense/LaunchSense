@@ -101,11 +101,20 @@ export function deadCopies(files: TextFile[]): ExtraHit[] {
   return hits.slice(0, 20);
 }
 
+/** How many files naming a host are listed per run. The rest are a gap, not a pass. */
+export const NETWORK_HINT_CAP = 10;
+
+const HOST = /https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/i;
+
+/** How many files in this read name a host, with no cap applied. */
+export function countNamedHosts(files: TextFile[]): number {
+  return files.reduce((count, file) => (file.content.match(HOST) === null ? count : count + 1), 0);
+}
+
 export function networkHints(files: TextFile[]): ExtraHit[] {
   const hits: ExtraHit[] = [];
-  const host = /https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/i;
   for (const file of files) {
-    const match = file.content.match(host);
+    const match = file.content.match(HOST);
     const name = match?.[1];
     if (name === undefined) continue;
     const line = file.content.split("\n").findIndex((row) => row.includes(name)) + 1;
@@ -116,7 +125,7 @@ export function networkHints(files: TextFile[]): ExtraHit[] {
       title: `This file names ${name}`,
       why: "The review did not contact that host. A named host is not proof of telemetry.",
     });
-    if (hits.length >= 10) break;
+    if (hits.length >= NETWORK_HINT_CAP) break;
   }
   return hits;
 }
