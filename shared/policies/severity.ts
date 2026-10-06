@@ -116,8 +116,9 @@ const TEST_PATH_NOISE = new Set([
 export function severityForFinding(ruleId: string, path: string): Severity {
   const base = severityFor(ruleId);
   const testLike =
-    /(^|\/)(test|tests|__tests__|fixtures|testdata|examples)(\/|$)/i.test(path) ||
-    /\.(test|spec)\.[a-z0-9]+$/i.test(path);
+    /(^|\/)(test|tests|__tests__|__mocks__|spec|specs|fixtures|testdata|e2e|cypress|examples)(\/|$)/i.test(path) ||
+    /\.(test|spec)\.[a-z0-9]+$/i.test(path) ||
+    /_spec\.[a-z0-9]+$/i.test(path);
   if (testLike && TEST_PATH_NOISE.has(ruleId)) return "info";
   return base;
 }
