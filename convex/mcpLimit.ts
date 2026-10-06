@@ -248,12 +248,42 @@ export const consumeExplain = internalMutation({
  * Everything the installer legitimately sends is a short token: stage "alpha",
  * tier "alpha", harness "local", version "alpha", orderSource "table".
  */
-const DECLARED_VALUE = /^[A-Za-z0-9._+-]{1,20}$/;
-const DECLARED_VALUE_LONG = /^[A-Za-z0-9._+-]{1,40}$/;
+// Closed sets, not a character shape. A shape that allows letters, dots and
+// dashes accepts "AdaLovelace", which is a person's name. These fields are tool
+// and build labels, so each is matched against the exact values the installer
+// sends, and anything else becomes the fallback label. A name is never stored raw.
+const ALLOWED_STAGE = new Set(["alpha"]);
+const ALLOWED_TIER = new Set(["alpha", "pro"]);
+const ALLOWED_HARNESS = new Set([
+  "local",
+  "cursor",
+  "claude_code",
+  "claude_desktop",
+  "codex",
+  "vscode",
+  "windsurf",
+  "other",
+  "unknown",
+]);
+const ALLOWED_ORDER_SOURCE = new Set(["local", "jev", "perplexity", "table", "unspecified"]);
+const VERSION_SHAPE = /^\d+\.\d+(\.\d+)?([-+][A-Za-z0-9.]+)?$/;
 
-/** True when a short declared token is one analytics is allowed to keep. */
+function declaredOr(value: string, allowed: Set<string>, fallback: string): string {
+  const trimmed = value.trim();
+  return allowed.has(trimmed) ? trimmed : fallback;
+}
+
+/** True when a value is one of the exact labels this lane is allowed to keep. */
 export function isDeclaredValue(value: string, longer = false): boolean {
-  return (longer ? DECLARED_VALUE_LONG : DECLARED_VALUE).test(value);
+  void longer;
+  const v = value.trim();
+  return (
+    ALLOWED_STAGE.has(v) ||
+    ALLOWED_TIER.has(v) ||
+    ALLOWED_HARNESS.has(v) ||
+    ALLOWED_ORDER_SOURCE.has(v) ||
+    VERSION_SHAPE.test(v)
+  );
 }
 
 export const recordUsage = internalMutation({
@@ -266,31 +296,33 @@ export const recordUsage = internalMutation({
     orderSource: v.string(),
     ruleCounts: v.string(),
   },
-  returns: v.null(),
+  returns: v.boolean(),
   handler: async (ctx, args) => {
-    if (args.tier === "enterprise") return null;
-    if (args.ruleCounts.length > 4000) return null;
-    if (/\/|function |eval\(|-----BEGIN/.test(args.ruleCounts)) return null;
-    // The four declared strings are caller-supplied, so they are checked rather
-    // than trimmed. Refusing the row is the honest answer here: a row that is
-    // missing is a visible gap, and a row holding somebody's name is not
-    // recoverable by anyone reading it later.
-    if (!isDeclaredValue(args.stage)) return null;
-    if (!isDeclaredValue(args.tier)) return null;
-    if (!isDeclaredValue(args.orderSource)) return null;
-    if (!isDeclaredValue(args.harness, true)) return null;
-    if (!isDeclaredValue(args.version, true)) return null;
+    if (args.tier === "enterprise") return false;
+    if (args.ruleCounts.length > 4000) return false;
+    if (/\/|function |eval\(|-----BEGIN/.test(args.ruleCounts)) return false;
+    // Each declared string is normalized to a closed label. A value outside the
+    // set becomes "other" (or "unspecified" for the order source), so a name or
+    // an address can never land in the row, and the row is still counted.
+    const stage = declaredOr(args.stage, ALLOWED_STAGE, "other");
+    const tier = declaredOr(args.tier, ALLOWED_TIER, "other");
+    const harness = declaredOr(args.harness, ALLOWED_HARNESS, "other");
+    const version =
+      args.version.trim() === "alpha" || VERSION_SHAPE.test(args.version.trim())
+        ? args.version.trim()
+        : "other";
+    const orderSource = declaredOr(args.orderSource, ALLOWED_ORDER_SOURCE, "unspecified");
     await ctx.db.insert("usageDiagnostics", {
       day: new Date().toISOString().slice(0, 10),
-      stage: args.stage,
-      tier: args.tier,
-      harness: args.harness,
-      version: args.version,
+      stage,
+      tier,
+      harness,
+      version,
       durationMs: args.durationMs,
-      orderSource: args.orderSource,
+      orderSource,
       ruleCounts: args.ruleCounts,
       createdAt: Date.now(),
     });
-    return null;
+    return true;
   },
 });

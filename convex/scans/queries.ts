@@ -522,9 +522,10 @@ export const logEvent = mutation({
     } else {
       await ctx.db.insert("rateLimits", { key: limitKey, day, count: 1, updatedAt: now });
     }
-    // Belt and braces. The two id columns are shape checked above, so a
-    // caller-supplied string that happens to be an email address cannot reach a
-    // stored row.
+    // The two id columns are shape checked here, at the write. publicIdOrNull
+    // keeps a value only at the 32-hex shape newPublicId mints, so a
+    // caller-supplied string that happens to be an email address is dropped
+    // while the event is still recorded.
     await ctx.db.insert("analyticsEvents", {
       day,
       kind: args.kind,
