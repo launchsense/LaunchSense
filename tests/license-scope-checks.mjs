@@ -52,6 +52,7 @@ const EXCLUDED = [
   "tests/livecheck-ownership-checks.mjs",
   "tests/mcp-remote-checks.mjs",
   "tests/red-team-checks.mjs",
+  "tests/signin-resume-checks.mjs",
 ];
 
 function listFiles(dir) {
