@@ -169,9 +169,13 @@ export const rescanScan = action({
       }
     }
 
-    // The tree URL is built from the pinned commit sha and refuses anything that
-    // is not one, so a moving ref cannot reach the request.
-    const treeUrl = treeRequestUrl(owner, repo, sha);
+    // The tree is requested by the TREE sha the commit promised, not the commit
+    // sha. GitHub echoes the requested value in the tree response's `sha`, so a
+    // request by commit sha returns the commit sha and the cross-check rejects
+    // every valid scan. Both are pinned 40-hex values, so a moving ref still
+    // cannot reach the request.
+    const treeRef = commitTreeSha ?? sha;
+    const treeUrl = treeRequestUrl(owner, repo, treeRef);
     if (treeUrl === null) throw new Error("The commit was not pinned to a single snapshot. Try again.");
     const tree = await fetchGitHubJson(treeUrl, token);
     if (isRateLimitStatus(tree.status, tree.rate)) {
