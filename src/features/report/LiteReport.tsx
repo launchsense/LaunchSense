@@ -12,6 +12,7 @@ export default function LiteReport(props: {
   plan: FixPlan;
   coverageNote: string | null | undefined;
   partial: boolean;
+  scanId: string | null;
 }) {
   const counts = { high: 0, medium: 0, low: 0, info: 0 };
   for (const finding of props.findings) {
@@ -43,7 +44,7 @@ export default function LiteReport(props: {
           in with GitHub to read all of it, keep rescan history, and scan bigger repos.
         </p>
       )}
-      <AuthPanel />
+      <AuthPanel scanId={props.scanId} />
     </div>
   );
 }
