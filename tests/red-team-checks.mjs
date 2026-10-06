@@ -107,45 +107,39 @@ const PROVIDER_SAMPLES = [
 // ---------------------------------------------------------------------------
 
 describe("target 1: the constant-style slug rule (W3-FIX)", () => {
-  it("[OPEN] silences a real passphrase under a constant-style name: MY_KEY = a hyphenated phrase", () => {
+  it("[DEFENDED] a real passphrase under a constant-style name is reported", () => {
+    // Fixed 2026-10-06. The exemption used to fire on any all-caps name, which
+    // silenced this. It now matches only a name whose last word is header,
+    // name, or label, so a constant holding a real passphrase is judged on its
+    // own shape again.
     const line = `const MY_KEY = "${SLUG}";`;
     assert.equal(
       looksLikeSecretValue(SLUG, true, "MY_KEY"),
-      false,
-      "a lowercase hyphenated passphrase under an all-caps name is exempted, which is the documented gap",
+      true,
+      "an all-caps name no longer exempts a hyphenated passphrase",
     );
     assert.equal(
       isHardcodedCredential(line, "src/a.ts"),
-      false,
-      "so the line does not raise secret.credential-pattern at all",
+      true,
+      "so the line raises secret.credential-pattern",
     );
-    assert.deepEqual(
+    assert.notDeepEqual(
       scanSecrets([{ path: "src/a.ts", content: `${line}\n` }]),
       [],
-      "the whole analyzer is silent on the line",
+      "the whole analyzer is no longer silent on the line",
     );
   });
 
-  it("[OPEN] the exemption, not some other rule, is what silences the mcpLimit header label", () => {
-    // The pre-fix call passes no name at all, which is the only difference the
-    // exemption makes. If this returns true, the value is a credential and the
-    // name-scoped rule is the only thing that stopped it.
-    assert.equal(
-      looksLikeSecretValue(HEADER_LABEL, true, ""),
-      true,
-      "with no name the same value is a credential, so the exemption is the cause",
-    );
+  it("[DEFENDED] the exemption still covers the header label it was written for", () => {
+    // The original false positive is still fixed: a name ending in header is
+    // exempt, so the HTTP header label is not mistaken for a credential.
     assert.equal(looksLikeSecretValue(HEADER_LABEL, true, "USAGE_KEY_HEADER"), false);
     const line = `export const USAGE_KEY_HEADER = "${HEADER_LABEL}";`;
     assert.equal(isHardcodedCredential(line, "convex/mcpLimit.ts"), false);
   });
 
-  it("[OPEN] the exempted name class is measured: all-caps names, or a last segment named header, name, or label", () => {
+  it("[DEFENDED] only a last segment named header, name, or label is exempt", () => {
     const exempted = [
-      "MY_KEY",
-      "SECRET",
-      "A",
-      "PASSWORD2",
       "USAGE_KEY_HEADER",
       "service_name",
       "service-name",
@@ -154,6 +148,10 @@ describe("target 1: the constant-style slug rule (W3-FIX)", () => {
       "usage_key_header",
     ];
     const notExempted = [
+      "MY_KEY",
+      "SECRET",
+      "A",
+      "PASSWORD2",
       "password",
       "myKey",
       "Password",
@@ -165,30 +163,23 @@ describe("target 1: the constant-style slug rule (W3-FIX)", () => {
       assert.equal(
         looksLikeSecretValue(SLUG, true, name),
         false,
-        `${name} is inside the exempted class and the passphrase is lost`,
+        `${name} ends in header, name, or label, so it is still exempt`,
       );
     }
     for (const name of notExempted) {
       assert.equal(
         looksLikeSecretValue(SLUG, true, name),
         true,
-        `${name} is outside the exempted class, so the passphrase still fires`,
+        `${name} is outside the exempted class, so the passphrase fires`,
       );
     }
-    // 10 of 16 spellings of the same name lose the value. Only the exact
-    // all-caps-with-underscores shape, or a last segment spelled header, name,
-    // or label, pays for the fix.
-    verdict("1 slug rule", "OPEN", `10 of 16 name spellings lose a 28 character passphrase; 0 of 16 lose it under a lowercase name`);
+    verdict("1 slug rule", "DEFENDED", "a passphrase under a constant-style name is reported; only a name ending in header, name, or label is exempt");
   });
 
-  it("[OPEN] the whole class turns on one character class: one digit or one capital in the value brings it back", () => {
-    assert.equal(looksLikeSecretValue(SLUG, true, "MY_KEY"), false);
-    assert.equal(
-      looksLikeSecretValue(SLUG_DIGIT, true, "MY_KEY"),
-      true,
-      "adding one digit makes the value fire again, so the rule is one character class wide",
-    );
-    assert.equal(looksLikeSecretValue(SLUG_UPPER, true, "MY_KEY"), true, "one capital is enough to fire again");
+  it("[DEFENDED] the exemption no longer turns on the all-caps shape", () => {
+    assert.equal(looksLikeSecretValue(SLUG, true, "MY_KEY"), true, "all-caps no longer exempts");
+    assert.equal(looksLikeSecretValue(SLUG_DIGIT, true, "MY_KEY"), true);
+    assert.equal(looksLikeSecretValue(SLUG_UPPER, true, "MY_KEY"), true);
   });
 
   it("[DEFENDED] the cost measured on this tree: every line the rule silences is a header label, never a secret", () => {
@@ -353,10 +344,9 @@ describe("target 2: provider shapes are checked before the slug exemption", () =
         `${label} still fires on entropy, so the ordering is not what saves it`,
       );
     }
-    // And the slug-shaped value that a future format could take is the shape
-    // target 1 already proves is lost.
-    assert.equal(looksLikeSecretValue(SLUG, true, "MY_KEY"), false);
-    verdict("2 provider order", "OPEN (narrow)", "no current key format is proven lost; 8 unlisted real formats were tried and all still fire on entropy, so the exposure is list maintenance, not a measured miss");
+    // And the slug-shaped value now fires, because the all-caps exemption is gone.
+    assert.equal(looksLikeSecretValue(SLUG, true, "MY_KEY"), true);
+    verdict("2 provider order", "DEFENDED", "no current key format is lost; 8 unlisted real formats all fire, and the slug-shaped passphrase that used to be lost now fires too");
   });
 });
 
