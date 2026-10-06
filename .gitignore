@@ -28,3 +28,6 @@ secrets*.json
 .opencode/
 .vscode/
 .idea/
+
+# LaunchSense governance. Kept on this machine only.
+.ls/

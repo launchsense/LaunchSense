@@ -110,6 +110,59 @@ describe("the local file read is gated on the acknowledgement", () => {
   });
 });
 
+describe("the governance file suppresses only what it names", () => {
+  it("does not raise a finding the file accepts, and says it was accepted", () => {
+    withTree(
+      {
+        "src/a.ts": "export function f(x: string) { return eval(x); }\n",
+        "src/b.ts": "export const safe = 1;\n",
+        ".ls/policy.yaml":
+          'version: 1\naccepts:\n  - ruleId: "code.eval-use"\n    reason: "internal tool, no untrusted input"\n',
+      },
+      (root) => {
+        const out = runReview(root);
+        const report = JSON.parse(out.stdout);
+        const rules = (report.findings ?? []).map((f) => f.ruleId);
+        assert.ok(
+          !rules.includes("code.eval-use"),
+          `an accepted finding must not be raised again: ${JSON.stringify(rules)}`,
+        );
+        assert.match(
+          JSON.stringify(report.notChecked ?? []),
+          /Accepted in \.ls\/policy\.yaml/,
+          "the suppression must be disclosed, never silent",
+        );
+      },
+    );
+  });
+
+  it("refuses a file that would silence too much, and suppresses nothing", () => {
+    withTree(
+      {
+        "src/a.ts": "export function f(x: string) { return eval(x); }\n",
+        // Four acceptances covering every rule that can fire on this tree: the
+        // whole set would be silenced, which is over the four-fifths limit.
+        ".ls/policy.yaml":
+          "version: 1\naccepts:\n" +
+          '  - ruleId: "code.eval-use"\n    reason: "internal tool"\n' +
+          '  - ruleId: "license.policy"\n    reason: "we know, no licence yet"\n' +
+          '  - ruleId: "hygiene.no-readme"\n    reason: "private repo"\n',
+      },
+      (root) => {
+        const out = runReview(root);
+        const report = JSON.parse(out.stdout);
+        const rules = (report.findings ?? []).map((f) => f.ruleId);
+        assert.ok(rules.includes("code.eval-use"), "a refused file must suppress nothing");
+        assert.match(
+          JSON.stringify(report.notChecked ?? []),
+          /refused/i,
+          "the refusal must be disclosed",
+        );
+      },
+    );
+  });
+});
+
 describe("local review", () => {
   it("reads license text and does not call a missing lockfile complete", () => {
     const report = buildLocalReport(
