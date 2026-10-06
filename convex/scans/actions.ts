@@ -324,12 +324,15 @@ async function performScan(
     }
   }
 
-  // Integrity rule, enforced here rather than in a comment. The tree URL is
-  // built from the pinned commit sha and refuses anything that is not one, so a
-  // moving ref cannot reach the request. The response's own sha is then checked
-  // against the tree sha the commit response promised, and a disagreement fails
-  // the scan instead of storing a snapshot neither response supports.
-  const treeUrl = treeRequestUrl(owner, repo, sha);
+  // Integrity rule, enforced here rather than in a comment. The tree is requested
+  // by the TREE sha the commit promised, not by the commit sha. GitHub echoes the
+  // requested value back in the tree response's `sha`, so a request by commit sha
+  // returns the commit sha, and the cross-check against commit.tree.sha then
+  // rejects every valid scan. Requesting by the tree sha makes the response's own
+  // sha the tree sha, which is what the check compares. Both are pinned 40-hex
+  // values, so a moving ref still cannot reach the request.
+  const treeRef = commitTreeSha ?? sha;
+  const treeUrl = treeRequestUrl(owner, repo, treeRef);
   if (treeUrl === null) {
     await ctx.runMutation(internal.scans.internal.markFailed, {
       scanId,
