@@ -13,6 +13,10 @@ TIER=alpha
 # The wording of the question. Change this string and the question is asked
 # again, because the person is agreeing to new text.
 NOTICE_VERSION=2026-10-05
+# The wording of the local file-read acknowledgement. Its own version, because it
+# is its own question. Default is yes (operator decision), so the record and the
+# register call it an acknowledgement and not consent.
+FILES_NOTICE_VERSION=2026-10-06
 CONFIG_DIR="$HOME/.config/launchsense"
 CONFIG="$CONFIG_DIR/config.json"
 CONSENT_LOG="$CONFIG_DIR/consent.jsonl"
@@ -76,9 +80,41 @@ decision_on_log() {
   return 1
 }
 
+# The same test for a named purpose. Two purposes share one ledger, so a line is
+# only a repeat of the decision being asked about when the purpose matches too.
+# $1 purpose, $2 noticeVersion, $3 granted.
+decision_on_log_purpose() {
+  [ -f "$CONSENT_LOG" ] || return 1
+  while IFS= read -r LINE; do
+    case "$LINE" in
+      *"\"purpose\":\"$1\""*"\"noticeVersion\":\"$2\""*"\"granted\":$3"*) return 0 ;;
+    esac
+  done < "$CONSENT_LOG"
+  return 1
+}
+
+# The moment a named purpose's decision was made, read back from the ledger. A
+# remembered answer keeps its original time, so a later run does not move it.
+# $1 purpose, $2 granted.
+decision_time_from_log_purpose() {
+  [ -f "$CONSENT_LOG" ] || return 0
+  FOUND=""
+  while IFS= read -r LINE; do
+    case "$LINE" in
+      *"\"purpose\":\"$1\""*"\"granted\":$2"*) ;;
+      *) continue ;;
+    esac
+    REST="${LINE#*\"decidedAt\":\"}"
+    FOUND="${REST%%\"*}"
+  done < "$CONSENT_LOG"
+  if [ -n "$FOUND" ]; then printf '%s' "$FOUND"; fi
+  return 0
+}
+
 # An answer already on record for this exact wording is kept, so a second run
 # does not ask again. Only a new wording asks again.
 REMEMBERED=""
+PRIOR=""
 if [ -f "$CONFIG" ]; then
   PRIOR=$(cat "$CONFIG")
   case "$PRIOR" in
@@ -160,13 +196,65 @@ else
   GRANTED_JSON=false
 fi
 
+# The local file-read acknowledgement. Default is yes: pressing enter allows the
+# expanded read, which is the project files and the agent instruction files. A
+# pre-answered question is not a freely given agreement, so this is recorded and
+# described as an acknowledgement, and the lawful basis is contract, not consent.
+# Like the usage question, it is asked once per wording: an answer already on
+# record for this version is kept, so a second run does not ask again or add a line.
+FILES_GRANTED=false
+FILES_REMEMBERED=""
+if [ -f "$CONFIG" ]; then
+  case "$PRIOR" in
+    *'"filesConsent"'*'"noticeVersion": "'"$FILES_NOTICE_VERSION"'"'*)
+      case "$PRIOR" in
+        *'"acknowledged": true'*) FILES_GRANTED=true; FILES_REMEMBERED="yes" ;;
+        *) FILES_GRANTED=false; FILES_REMEMBERED="no" ;;
+      esac
+      ;;
+  esac
+fi
+if [ -z "$FILES_REMEMBERED" ]; then
+  printf '%s\n' "Allow the local LaunchSense server to read files in this project folder,"
+  printf '%s\n' "including agent instruction files like AGENTS.md and CLAUDE.md?"
+  printf '%s\n' "The reads happen on this machine. Nothing is uploaded."
+  printf '%s\n' "Default is yes. Press enter to allow, or type no to refuse."
+  printf '%s' "yes or no [yes]: "
+  FILES_ANSWER=""
+  read -r FILES_ANSWER || FILES_ANSWER=""
+  case "$FILES_ANSWER" in
+    n | N | no | NO | No)
+      FILES_GRANTED=false
+      echo "The expanded read stays off. The review reads only the working tree."
+      ;;
+    *)
+      FILES_GRANTED=true
+      ;;
+  esac
+fi
+FILES_GRANTED_JSON=false
+if [ "$FILES_GRANTED" = "true" ]; then FILES_GRANTED_JSON=true; fi
+# The moment of the decision. A remembered answer keeps the time it was first
+# given, read back from the ledger line for this purpose, so a later run does not
+# move the recorded moment the way the usage question already avoids.
+FILES_DECIDED_AT="$NOW"
+if [ -n "$FILES_REMEMBERED" ]; then
+  SAVED_FILES="$(decision_time_from_log_purpose files "$FILES_GRANTED_JSON")"
+  if [ -n "$SAVED_FILES" ]; then FILES_DECIDED_AT="$SAVED_FILES"; fi
+fi
+FILES_DECIDED_AT_JSON="\"$FILES_DECIDED_AT\""
+
 # One append-only line per real decision, including a refusal. A refusal is
 # evidence too. This file is the record we cannot see from here. A run that only
 # repeats a decision already on record for this wording writes no line, and a
 # changed answer is a new decision and does write one.
 if [ "${SOURCE#remembered}" = "$SOURCE" ] && ! decision_on_log "$NOTICE_VERSION" "$GRANTED_JSON" "$SOURCE"; then
-  printf '{"noticeVersion":"%s","granted":%s,"decidedAt":"%s","source":"%s"}\n' \
+  printf '{"purpose":"usage","noticeVersion":"%s","granted":%s,"decidedAt":"%s","source":"%s"}\n' \
     "$NOTICE_VERSION" "$GRANTED_JSON" "$DECIDED_AT" "$SOURCE" >> "$CONSENT_LOG"
+fi
+if [ -z "$FILES_REMEMBERED" ] && ! decision_on_log_purpose files "$FILES_NOTICE_VERSION" "$FILES_GRANTED_JSON"; then
+  printf '{"purpose":"files","noticeVersion":"%s","granted":%s,"decidedAt":"%s","source":"prompt"}\n' \
+    "$FILES_NOTICE_VERSION" "$FILES_GRANTED_JSON" "$FILES_DECIDED_AT" >> "$CONSENT_LOG"
 fi
 
 cat > "$CONFIG" <<EOF
@@ -181,6 +269,11 @@ cat > "$CONFIG" <<EOF
     "grantedAt": $GRANTED_AT,
     "refusedAt": $REFUSED_AT,
     "source": "$SOURCE"
+  },
+  "filesConsent": {
+    "acknowledged": $FILES_GRANTED_JSON,
+    "noticeVersion": "$FILES_NOTICE_VERSION",
+    "acknowledgedAt": $FILES_DECIDED_AT_JSON
   },
   "authRequired": false,
   "harness": "local"

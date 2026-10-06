@@ -41,6 +41,75 @@ function withTree(files, body) {
   }
 }
 
+describe("the local file read is gated on the acknowledgement", () => {
+  function runWithHome(root, home) {
+    const env = { ...process.env, LAUNCHSENSE_OFFLINE: "1", HOME: home };
+    delete env.LAUNCHSENSE_API_URL;
+    return spawnSync(
+      process.execPath,
+      ["--experimental-strip-types", join(ROOT, "mcp", "review-entry.ts"), "--root", root, "--json"],
+      { encoding: "utf8", cwd: ROOT, env },
+    );
+  }
+
+  function configHome(acknowledged, noticeVersion) {
+    const home = mkdtempSync(join(tmpdir(), "ls-home-"));
+    mkdirSync(join(home, ".config", "launchsense"), { recursive: true });
+    const filesConsent =
+      acknowledged === undefined
+        ? ""
+        : `,"filesConsent":{"acknowledged":${acknowledged},"noticeVersion":"${noticeVersion}"}`;
+    writeFileSync(
+      join(home, ".config", "launchsense", "config.json"),
+      `{"tier":"alpha","agreed":false,"diagnostics":"off"${filesConsent}}`,
+      "utf8",
+    );
+    return home;
+  }
+
+  it("does not read agent instruction files when nothing is acknowledged", () => {
+    withTree({ "AGENTS.md": "# rules\n", "src/a.ts": "export const x = 1;\n" }, (root) => {
+      const home = configHome(undefined, undefined);
+      try {
+        const out = runWithHome(root, home);
+        const report = JSON.parse(out.stdout);
+        const listed = JSON.stringify(report.notChecked ?? []);
+        assert.match(listed, /AGENTS\.md/, "an unacknowledged agent file must be listed as not checked");
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    });
+  });
+
+  it("reads agent instruction files when acknowledged for the current wording", () => {
+    withTree({ "AGENTS.md": "# rules\n", "src/a.ts": "export const x = 1;\n" }, (root) => {
+      const home = configHome(true, "2026-10-06");
+      try {
+        const out = runWithHome(root, home);
+        const report = JSON.parse(out.stdout);
+        const listed = JSON.stringify(report.notChecked ?? []);
+        assert.doesNotMatch(listed, /Agent instruction file\. Not read/, "an acknowledged agent file is read");
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    });
+  });
+
+  it("does not read agent files when the acknowledgement is for an older wording", () => {
+    withTree({ "AGENTS.md": "# rules\n" }, (root) => {
+      const home = configHome(true, "1999-01-01");
+      try {
+        const out = runWithHome(root, home);
+        const report = JSON.parse(out.stdout);
+        const listed = JSON.stringify(report.notChecked ?? []);
+        assert.match(listed, /AGENTS\.md/, "a stale acknowledgement does not cover the new wording");
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    });
+  });
+});
+
 describe("local review", () => {
   it("reads license text and does not call a missing lockfile complete", () => {
     const report = buildLocalReport(
