@@ -4,13 +4,14 @@ import { resetLocalAuthState } from "./resetLocalAuthState";
 import { buildSignInDecision, saveSignInDecision } from "./signInDecision";
 import { SIGN_IN_OFFER, SIGN_IN_NOTICE_VERSION, SIGN_IN_POLICY } from "../../../shared/copy/signIn";
 
-// Four separate purposes, four boxes, all unticked. One box that says "I agree"
-// to a paragraph hides three things behind one tick, and the person cannot see
-// which one they agreed to. Each purpose below names what leaves, in the words
-// the code uses, so a copy change has to be a real change.
+// One box for four purposes, all unticked. The single tick names every
+// purpose as keywords, the four detail lines beside it say what leaves, and
+// the privacy notice carries the full text. One box that says "I agree" to a
+// paragraph with no keywords would hide three things behind one tick, which
+// is why the keywords are in the label itself rather than behind a link.
 //
-// Signing in turns on all four. There is no per-purpose switch behind these
-// boxes yet, so the page says that instead of pretending each tick is a choice.
+// Signing in turns on all four. There is no per-purpose switch behind this
+// box, so the page says that instead of pretending the tick is a choice.
 //
 // These answers now leave the browser. The click persists them and
 // ConsentRecorder writes them to the consentRecords table once the OAuth callback
@@ -48,12 +49,9 @@ const PURPOSES = [
 export function AuthPanel() {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
+  const [accepted, setAccepted] = useState(false);
 
   if (isLoading || isAuthenticated) return null;
-
-  const outstanding = PURPOSES.filter((purpose) => accepted[purpose.id] !== true);
-  const ready = outstanding.length === 0;
 
   return (
     <div className="auth-panel" aria-label="Connect GitHub">
@@ -61,29 +59,32 @@ export function AuthPanel() {
       <p>{SIGN_IN_POLICY}</p>
       <fieldset>
         <legend>Before you sign in, read what signing in does</legend>
-        {PURPOSES.map((purpose) => (
-          <div key={purpose.id}>
-            <input
-              id={`purpose-${purpose.id}`}
-              type="checkbox"
-              checked={accepted[purpose.id] === true}
-              onChange={(event) =>
-                setAccepted((current) => ({ ...current, [purpose.id]: event.target.checked }))
-              }
-            />
-            <label htmlFor={`purpose-${purpose.id}`}>{purpose.label}</label>
-            <p>{purpose.detail}</p>
-          </div>
-        ))}
+        <div>
+          <input
+            id="purpose-all"
+            type="checkbox"
+            checked={accepted === true}
+            onChange={(event) => setAccepted(event.target.checked)}
+          />
+          <label htmlFor="purpose-all">
+            I have read what signing in does: token storage, one repository read, AI
+            explanations, anonymous usage counts. Full detail in the privacy notice.
+          </label>
+          {PURPOSES.map((purpose) => (
+            <p key={purpose.id}>
+              <strong>{purpose.label}.</strong> {purpose.detail}
+            </p>
+          ))}
+        </div>
         <p>
-          Signing in turns on all four. There is no per-purpose switch behind these boxes yet.
+          Signing in turns on all four. There is no per-purpose switch behind this box yet.
           If you do not want one of them, do not sign in, and ask us at www.withkeshav.com first.
         </p>
         <p>
           <a href="/privacy">Read the privacy notice</a>
         </p>
       </fieldset>
-      <button type="button" disabled={!ready} onClick={() => {
+      <button type="button" disabled={!accepted} onClick={() => {
         // The click cannot record anything, because the person is anonymous until
         // GitHub sends them back. So the click only persists what they agreed to,
         // and ConsentRecorder writes the rows once there is a session. If the
@@ -95,7 +96,7 @@ export function AuthPanel() {
             noticeVersion: SIGN_IN_NOTICE_VERSION,
             decidedAt: Date.now(),
             purposeIds: PURPOSES.map((purpose) => purpose.id),
-            grantedFor: (purposeId) => accepted[purposeId] === true,
+            grantedFor: () => accepted === true,
           }),
         );
         resetLocalAuthState();
@@ -103,9 +104,9 @@ export function AuthPanel() {
           alert("GitHub sign-in could not start. Please refresh and try again.");
         });
       }}>Sign in with GitHub</button>
-      {outstanding.length > 0 && (
+      {!accepted && (
         <p role="status">
-          {outstanding.length} box{outstanding.length === 1 ? "" : "es"} still unticked.
+          Tick the box to continue.
         </p>
       )}
     </div>
