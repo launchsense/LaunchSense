@@ -13,6 +13,20 @@
 // this list field by field. A new column that nobody classified fails the suite,
 // which is the only moment the rule can actually catch somebody.
 //
+// Legal basis. The rule is written to the two definitions that apply:
+//   GDPR Article 4(1): personal data is any information relating to an identified
+//     or identifiable natural person, and a person is identifiable by reference
+//     to an identifier. Recital 26: the principles do not apply to anonymous
+//     information. https://gdpr-info.eu/art-4-gdpr/ and
+//     https://gdpr-info.eu/recitals/no-26/
+//   India DPDP Act 2023, s2(4)(t): personal data is any data about an individual
+//     who is identifiable by or in relation to such data.
+//     https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf
+// A public repository name alone is generally not personal data under either,
+// because a name is not data about an identifiable person. A private repository
+// name tied to one person can be, so the analytics stream never stores the
+// literal: usageEvents carries only the day-scoped HMAC repoKey.
+//
 // The four classes:
 //   pii           a name, an email address, a network address, or free text.
 //                 The rule forbids these, so this list must never contain one.
@@ -216,13 +230,13 @@ export const ANALYTICS_TABLES: readonly InventoryTable[] = [
         field: "shareId",
         klass: "pseudonymous",
         why: "A server-minted share link id, 128 bits of randomness. A value that is not that shape is dropped rather than stored, so no caller-supplied text can reach this column.",
-        boundedBy: "isPublicIdShape, 32 lower-case hex characters, checked at the write path.",
+        boundedBy: "publicIdOrNull, 32 lower-case hex characters, checked at the write path.",
       },
       {
         field: "refShareId",
         klass: "pseudonymous",
         why: "The share link a visitor arrived from, read out of the URL by the browser. Same rule as shareId: the browser may send any string, so only the minted shape is kept.",
-        boundedBy: "isPublicIdShape, 32 lower-case hex characters, checked at the write path.",
+        boundedBy: "publicIdOrNull, 32 lower-case hex characters, checked at the write path.",
       },
       {
         field: "createdAt",
