@@ -318,7 +318,6 @@ describe("the load-bearing facts match on both copies and match the code", () =>
 
   const scanCaps = read("shared", "scanCaps.ts");
   const redaction = read("shared", "redaction.ts");
-  const live = read("convex", "adapters", "live.ts");
 
   function bothSides(sentence, why) {
     for (const [name, text] of [
@@ -349,10 +348,24 @@ describe("the load-bearing facts match on both copies and match the code", () =>
     bothSides(`capped at ${chars} characters`, "state the snippet cap");
   });
 
-  it("states the redirect cap the code sets", () => {
-    const hops = constant(live, "LIVE_MAX_HOPS");
-    const words = { 1: "one", 2: "two", 3: "three", 4: "four", 5: "five" }[hops] ?? String(hops);
-    bothSides(`follows up to ${words} redirects`, "state the redirect cap");
+  it("does not describe a live-app fetch the product no longer offers", () => {
+    // The live-app check was removed from the visitor surface, so the notice
+    // must not describe an HTTP request to a live app URL. The adapter code
+    // still exists but nothing reaches it, and a notice that describes a
+    // removed flow is the same falsehood as one that omits a live one.
+    for (const [name, text] of [
+      ["docs/PRIVACY.md", privacyDocText],
+      ["/privacy", privacyPageText],
+    ]) {
+      assert.ok(
+        !text.includes("live app URL"),
+        `${name} still describes a live-app fetch the product does not perform`,
+      );
+      assert.ok(
+        !text.includes("follows up to"),
+        `${name} still states a live redirect cap for a removed flow`,
+      );
+    }
   });
 
   it("names the same guest file cap on both sides", () => {
