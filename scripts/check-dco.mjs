@@ -28,7 +28,7 @@ function newCommits() {
     if (pr === null) return null;
     return pr.split("\n").map((line) => line.trim()).filter(Boolean);
   }
-  return parts.length === 2 ? [parts[0]] : null;
+  return parts.length >= 1 ? [parts[0]] : null;
 }
 
 const hashes = newCommits();
