@@ -114,7 +114,13 @@ function isReferenceOrExpression(value: string): boolean {
  */
 function isConstantStyleName(name: string): boolean {
   if (name.length === 0) return false;
-  if (/^[A-Z][A-Z0-9_]*$/.test(name)) return true;
+  // Deliberately NOT "any all-caps name". That branch silenced a real value:
+  // SECRET_PHRASE = "correct-horse-battery-staple" wore a constant-style name
+  // and was never reported, which is the worst way for this product to fail.
+  // The exemption now matches only the shape it was written for, a name whose
+  // last word is header, name, or label (HTTP header labels like
+  // USAGE_KEY_HEADER). A constant holding a real passphrase is judged on its
+  // own shape again.
   const tail = name.split(/[_-]/).pop() ?? name;
   return /^(?:header|name|label)$/i.test(tail);
 }
