@@ -218,3 +218,24 @@ What it does not do:
 - It does not turn unknown into a pass, and it never upgrades a partial result into a clearance.
 - The repository sits on that Bot's cloud machine, not on ours. The owner chose that. The checks still run on LaunchSense code, not on the Bot.
 - A model working inside a worker does not add a check by itself. If it keeps naming the same check, a person may later turn it into one.
+
+### Guided ask: licence and stack advice
+
+- Status: noted
+- Named: 2026-10-06
+
+Vibe coders do not know what to ask. A blank box fails them. After a scan, the product asks the next question itself, based on what it just read: which licence fits this repo, and whether the stack is fit to ship.
+
+Licence advice reads the detected facts: the licence the repo declares, the licences the lockfile packages declare, whether copyleft appears, and whether the repo looks commercial. It recommends one licence type and says why, one line per fact. It is a suggestion, not legal advice, the same way an Unknown licence suggestion is a suggestion and never a finding.
+
+Stack advice reads the manifests: unpinned versions, known CVEs with fix versions, end of life runtimes, a missing lockfile, a missing CI workflow. It says what is fit and what is not, as a checklist, not a score.
+
+The questions come from the decision lane, not free chat. The model answers closed questions with fixed options, and deterministic code maps the answers to the recommendation. A model never decides a finding, and it never decides the advice either. If the model does not answer, the page shows the checklist without the recommendation rather than guessing.
+
+What it does not do:
+
+- It does not run today.
+- It never gives legal advice. The licence line stays a suggestion with its reasons attached.
+- It never invents a check. New stack facts arrive as analyzer rows first, and advice only reads them.
+- It never asks for anything the scan did not read. Every question cites the row behind it.
+- It never sends anything anywhere. Answers stay on the page unless the visitor shares the report.
