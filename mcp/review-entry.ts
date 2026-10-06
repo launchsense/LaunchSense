@@ -1,7 +1,7 @@
 // Local review entry. Reads the working tree. Does not call api.github.com.
 // Alpha does not check an API key. The auth slot is recorded and not enforced.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { decide } from "../convex/adapters/decision.ts";
 import type { DecisionQuestion } from "../convex/adapters/decision.ts";
@@ -10,6 +10,7 @@ import { buildLocalReport } from "../shared/review/buildReport.ts";
 import type { AdvisoryCoverage, NotChecked, ReviewFile, ReviewReport } from "../shared/review/buildReport.ts";
 import { diagnosticPayload, diagnosticsAllowed } from "../shared/review/diagnostics.ts";
 import { LOCAL_FILES_NOTICE_VERSION } from "../shared/consent/vocabulary.ts";
+import { applyGovernance, parseGovernance } from "../shared/review/governance.ts";
 import { inventoryNpmLock } from "../shared/review/lockfile.ts";
 import type { LockInventory, LockPackage } from "../shared/review/lockfile.ts";
 import { findingsToAsk, laneCanReorder, questionIdFor, rankFromAnswers, rankState } from "../shared/reports/priority.ts";
@@ -72,6 +73,108 @@ function filesReadAcknowledged(config: LocalConfig): boolean {
   return (
     config.filesAcknowledged === true && config.filesNoticeVersion === LOCAL_FILES_NOTICE_VERSION
   );
+}
+
+/**
+ * Read `.ls/policy.yaml`, apply its acceptances to the report's findings, and
+ * write a timestamped copy of the report under `.ls/reports/`.
+ *
+ * Every outcome is disclosed. A file that is absent changes nothing. A file that
+ * is refused suppresses nothing and says why. A file that would silence too much
+ * is refused whole. An accepted finding is removed and named as accepted, and an
+ * ignored path is named, so a reader can always see what was hidden and why.
+ */
+function isIgnoredBy(policy: { ignorePaths: Array<{ path: string }> }, finding: { path: string }): boolean {
+  return policy.ignorePaths.some(
+    (entry) => finding.path === entry.path || finding.path.startsWith(`${entry.path}/`),
+  );
+}
+function applyGovernanceFile(root: string, report: ReviewReport, acknowledged: boolean): void {
+  const path = join(root, ".ls", "policy.yaml");
+  let text: string;
+  try {
+    if (!existsSync(path)) return;
+    text = readFileSync(path, "utf8");
+  } catch {
+    report.notChecked.push({ scope: ".ls/policy.yaml", reason: "A governance file exists but could not be read. Nothing was suppressed." });
+    return;
+  }
+
+  const parsed = parseGovernance(text);
+  if (!parsed.ok) {
+    report.notChecked.push({
+      scope: ".ls/policy.yaml",
+      reason: `Governance file refused (${parsed.reason}): ${parsed.detail}. Nothing was suppressed.`,
+    });
+    return;
+  }
+  const policy = parsed.policy;
+
+  // Apply once, and only if the file is not a sandbag. The check covers ignored
+  // paths as well as acceptances, so a file cannot hide a repo through a long
+  // list of ignored directories. On a refusal, nothing changes at all.
+  const applied = applyGovernance(report.findings, policy);
+  if (applied.sandbag) {
+    report.notChecked.push({
+      scope: ".ls/policy.yaml",
+      reason: "Governance file refused: it would silence too many findings. Nothing was suppressed.",
+    });
+    return;
+  }
+
+  if (policy.ignorePaths.length > 0) {
+    for (const entry of policy.ignorePaths) {
+      report.notChecked.push({ scope: entry.path, reason: `Ignored by .ls/policy.yaml: ${entry.reason}` });
+    }
+  }
+  if (applied.suppressed.length > 0) {
+    for (const finding of applied.suppressed) {
+      if (isIgnoredBy(policy, finding)) continue;
+      report.notChecked.push({
+        scope: finding.path,
+        reason: `Accepted in .ls/policy.yaml, so not raised again: ${finding.ruleId}`,
+      });
+    }
+    const hidden = new Set(applied.suppressed.map((finding) => finding.fingerprint));
+    report.findings = report.findings.filter((finding) => !hidden.has(finding.fingerprint));
+  }
+
+  // A timestamped copy of the report, kept next to the policy, so the repo has
+  // its own record of what was found and when. Written only when the expanded
+  // local read is acknowledged, because it is a file the review writes.
+  if (!acknowledged) return;
+  try {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const dir = join(root, ".ls", "reports");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${stamp}.md`), render(report, false, null), "utf8");
+    ensureGitignored(root);
+  } catch {
+    report.notChecked.push({ scope: ".ls/reports", reason: "The report copy could not be written." });
+  }
+}
+
+/**
+ * Keep `.ls/` out of git. The folder is the repo's private memory: the findings
+ * a person accepted and the reports they ran. It stays on the machine, so the
+ * first time the review writes it, it adds one line to `.gitignore` if the line
+ * is not already there. A repo that deliberately commits the file removes the
+ * line; that is a choice a person makes, not a default.
+ */
+function ensureGitignored(root: string): void {
+  const path = join(root, ".gitignore");
+  try {
+    const current = existsSync(path) ? readFileSync(path, "utf8") : "";
+    const present = current
+      .split("\n")
+      .some((line) => [".ls/", "/.ls/", ".ls", "/.ls"].includes(line.trim()));
+    if (present) return;
+    const body = current.length > 0 && !current.endsWith("\n") ? `${current}\n` : current;
+    writeFileSync(path, `${body}\n# LaunchSense governance. Kept on this machine only.\n.ls/\n`, "utf8");
+  } catch {
+    // Not fatal. The policy and the report are still written; a repo without a
+    // writable .gitignore is the person's own arrangement.
+  }
 }
 
 function argRoot(): string {
@@ -383,6 +486,11 @@ async function main(): Promise<void> {
     : await lookupPackages(inventory.packages.filter((pkg) => !pkg.dev).slice(0, 15));
   const advisories = await queryLockAdvisories(inventory, offline);
   const report = buildLocalReport(files, skipped, registry, advisories, lock);
+  // The repo's own governance file, `.ls/policy.yaml`. It is read after analysis
+  // and applied to the findings, so an accepted finding is not raised again. A
+  // file that is wrong is refused whole and nothing is suppressed; the refusal is
+  // disclosed rather than silently obeyed or silently ignored.
+  applyGovernanceFile(root, report, filesReadAcknowledged(config));
   // Offline with a complete lockfile in hand: the inventory says how many exact
   // versions were available to check and none of them were. Say so here, in the
   // caller's own words, rather than leaving the flat "not queried" line to imply
