@@ -601,7 +601,14 @@ describe("the vocabulary says what the code does", () => {
   });
 
   it("gives the sign-in purposes the sign-in notice version, not the installer's", () => {
-    assert.match(SIGN_IN_NOTICE_VERSION, /^\d{4}-\d{2}-\d{2}$/, "the notice version is a dated string");
+    // Dated, with an optional same-day suffix: wording can iterate twice in
+    // one day (four boxes to one box), and the records must still tell the
+    // wordings apart.
+    assert.match(
+      SIGN_IN_NOTICE_VERSION,
+      /^\d{4}-\d{2}-\d{2}(-[a-z0-9-]+)?$/,
+      "the notice version is a dated string",
+    );
     assert.notEqual(
       SIGN_IN_NOTICE_VERSION,
       DIAGNOSTICS_NOTICE_VERSION,
