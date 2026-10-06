@@ -30,12 +30,11 @@
 
 import { canonicalJson, derivedUuid, sha256Hex, sha256Prefixed } from "./digest.ts";
 import {
+  CONSENT_LEDGER_PATH,
   CONSENT_PURPOSES,
   CONSENT_RECORD_ID_METHOD,
   CONSENT_SCHEMA_VERSION,
   CONTROLLER_PARTY,
-  DIAGNOSTICS_NOTICE_VERSION,
-  DIAGNOSTICS_NOTICE_WORDING,
   NOT_FILLED_FIELDS,
   PRIVACY_NOTICE_URI,
   purposeById,
@@ -61,7 +60,27 @@ export interface LedgerDecision {
   latest: boolean;
 }
 
-export type ConsentRecordStatus = "recorded" | "not_recorded";
+export type ConsentRecordStatus = "recorded" | "not_recorded" | "recorded_in_database";
+
+/**
+ * What `status` means, stated once so a reader of a record does not have to guess.
+ *
+ *   recorded             this record documents a decision, and it carries the time
+ *                        and the derived id of that decision
+ *   not_recorded         no code writes a decision for this purpose anywhere, so
+ *                        there is nothing to turn into a record
+ *   recorded_in_database a decision exists for this purpose in the Convex table
+ *                        consentRecords, for a person who signed in. This offline
+ *                        generator reads only the local install.sh ledger and
+ *                        cannot read that table, so this record is the shape and
+ *                        not the decision. The export path is the caller's own
+ *                        query, convex/consent.ts:myConsentRecords.
+ *
+ * `recorded_in_database` is this product's own value. TS 27560 names a record and
+ * does not name the case of a decision that exists in a system the publisher of
+ * the record cannot read, and reusing `recorded` here would tell a reader this
+ * file holds a decision it does not hold.
+ */
 
 export interface ConsentEvent {
   /**
@@ -232,15 +251,33 @@ const EVENT_DETAIL: Record<
 /** Extra gap lines that only apply to some purposes or to some decisions. */
 function purposeGaps(purpose: ConsentPurpose, decision: LedgerDecision | null): NotFilled[] {
   const gaps: NotFilled[] = [];
-  if (!purpose.recorded) {
+  if (decision === null) {
+    // Two cases, two reasons, and the difference matters to whoever reads this.
+    const inDatabase = purpose.recorded_in === "convex_database";
     gaps.push({
       field: "event.time",
-      why: purpose.not_recorded_reason ?? "no code writes this decision down",
+      why: inDatabase
+        ? `A decision about ${purpose.id} is recorded in the Convex table consentRecords for a person who signed in, together with the click time and the time this server wrote the row. This offline generator reads only ${CONSENT_LEDGER_PATH} and cannot read that table, so no decision time appears in this file. Read your own rows with the myConsentRecords query in convex/consent.ts.`
+        : (purpose.not_recorded_reason ?? "no code writes this decision down"),
     });
     gaps.push({
       field: "record_id",
-      why: "A record id identifies a record. No record exists for this purpose, so no id is minted.",
+      why: inDatabase
+        ? "A record id identifies a record. The record for this purpose is a row in consentRecords, which this file cannot read, so no id is minted here rather than one that identifies nothing."
+        : "A record id identifies a record. No record exists for this purpose, so no id is minted.",
     });
+    if (inDatabase) {
+      gaps.push({
+        field: "status",
+        why: "The status reads recorded_in_database, which is this product's own value. TS 27560 names no status for a decision that exists in a system the publisher of this record cannot read, so the value is declared here rather than borrowed.",
+      });
+    }
+    if (purpose.notice_wording_in_this_build === null) {
+      gaps.push({
+        field: "privacy_notice.wording_sha256",
+        why: `The wording for notice version ${purpose.notice_version} is not carried by this build as text that can be hashed: the installer's lines live in this repository and the sign-in boxes live in a component. Nothing is hashed here rather than the installer's wording under the sign-in version.`,
+      });
+    }
   }
   if (purpose.retention.enforced_by === null) {
     gaps.push({
@@ -277,8 +314,26 @@ function extensionFor(
     "dpv:subject": "dpv:DataSubject",
     "dpv:controller": "dpv:DataController",
     "dpv:consentWithdrawn": withdrawn ? "yes, recorded as consent_refused" : null,
-    "launchsense:noticeVersion": decision?.noticeVersion ?? DIAGNOSTICS_NOTICE_VERSION,
+    "launchsense:noticeVersion": decision?.noticeVersion ?? purpose.notice_version,
+    // Where a third party can read the decision when this file cannot show it.
+    "launchsense:recordLocation": purpose.recorded_in ?? "nothing stores a decision for this purpose",
   };
+}
+
+/**
+ * Whether this file can show the decision, and if not, why not.
+ *
+ * The status is a fact about this artefact rather than about the product. A
+ * decision that exists only in the database is not `recorded` in a file that
+ * cannot read it, and it is not `not_recorded` either, because it is recorded.
+ */
+function recordStatus(
+  purpose: ConsentPurpose,
+  decision: LedgerDecision | null,
+): ConsentRecordStatus {
+  if (decision !== null) return "recorded";
+  if (purpose.recorded_in === "convex_database") return "recorded_in_database";
+  return "not_recorded";
 }
 
 /** The shared shape both entry points use. */
@@ -291,7 +346,7 @@ function baseRecord(purpose: ConsentPurpose, decision: LedgerDecision | null): C
     pii_principal_id: null,
     privacy_notice: {
       uri: PRIVACY_NOTICE_URI,
-      version: decision?.noticeVersion ?? DIAGNOSTICS_NOTICE_VERSION,
+      version: decision?.noticeVersion ?? purpose.notice_version,
       wording_sha256: null,
     },
     language: "en",
@@ -332,7 +387,7 @@ function baseRecord(purpose: ConsentPurpose, decision: LedgerDecision | null): C
       consent_type: detail.consent_type,
       locale: "en-GB",
     },
-    status: purpose.recorded && decision !== null ? "recorded" : "not_recorded",
+    status: recordStatus(purpose, decision),
     ledger: purpose.ledger,
     integrity: {
       algorithm: "sha256",
@@ -361,7 +416,10 @@ function globalGaps(): NotFilled[] {
  * Build the record for a decision that exists on the ledger.
  *
  * Requires a purpose whose `recorded` is true, because a record for a purpose no
- * code writes down would be a record of a decision nobody made.
+ * code writes down would be a record of a decision nobody made. The ledger this
+ * generator reads holds the installer's question only, so today the caller is
+ * always the usage purpose; the other three are read from the database instead,
+ * through the caller's own query.
  */
 export async function buildConsentRecord(
   decision: LedgerDecision,
@@ -375,9 +433,11 @@ export async function buildConsentRecord(
   // The hash is taken only over the text this build actually carries, and only
   // when the ledger line names that same version. Hashing the current text under
   // an older version would tell a reader they agreed to words they never saw.
-  const wordingMatchesVersion = decision.noticeVersion === DIAGNOSTICS_NOTICE_VERSION;
+  const wording = purpose.notice_wording_in_this_build;
+  const wordingMatchesVersion =
+    wording !== null && decision.noticeVersion === purpose.notice_version;
   if (wordingMatchesVersion) {
-    record.privacy_notice.wording_sha256 = await sha256Prefixed(DIAGNOSTICS_NOTICE_WORDING.join("\n"));
+    record.privacy_notice.wording_sha256 = await sha256Prefixed(wording.join("\n"));
   }
   record.integrity.record_hash = await sha256Prefixed(decision.line);
   record.record_id = await derivedUuid(purpose.id, decision.noticeVersion, decision.decidedAt);
@@ -386,7 +446,10 @@ export async function buildConsentRecord(
   if (!wordingMatchesVersion) {
     record.not_filled.push({
       field: "privacy_notice.wording_sha256",
-      why: `The ledger line records wording version ${decision.noticeVersion}, and this build carries the text of ${DIAGNOSTICS_NOTICE_VERSION} only. The hash is left empty rather than taken over words the person did not read.`,
+      why:
+        wording === null
+          ? `This build carries no wording for notice version ${purpose.notice_version} as text that can be hashed, so no hash is written here.`
+          : `The ledger line records wording version ${decision.noticeVersion}, and this build carries the text of ${purpose.notice_version} only. The hash is left empty rather than taken over words the person did not read.`,
     });
   }
   if (!decision.latest) {
@@ -399,28 +462,29 @@ export async function buildConsentRecord(
 }
 
 /**
- * Build the record shape for a purpose that is asked about and written down
- * nowhere.
+ * Build the record shape for a purpose whose decision this file cannot read.
  *
- * This is the honest half of the lane. The sign-in panel asks four questions and
- * keeps none of the answers, so a record for those purposes has no id, no time,
- * and a `status` of not_recorded. Publishing the shape is more useful than
- * publishing nothing, because a reader can see exactly which fields a built
- * system would have to add.
+ * Two reasons land here and they are not the same thing:
+ *
+ *   - the decision is in the Convex table consentRecords, for a person who signed
+ *     in. This generator reads only the local ledger, so the shape is published
+ *     with `status: recorded_in_database`, no id, and no event time, and the
+ *     not_filled list says where the decision is and how to read it.
+ *   - nothing writes a decision for the purpose at all, which is `not_recorded`.
+ *
+ * Publishing the shape either way is more useful than publishing nothing, because
+ * a reader can see which fields a record built from the decision would carry.
  */
 export async function buildConsentRecordTemplate(
   purposeId: ConsentPurpose["id"],
 ): Promise<ConsentRecord> {
   const purpose = purposeById(purposeId);
   const record = baseRecord(purpose, null);
-  record.privacy_notice.wording_sha256 = await sha256Prefixed(DIAGNOSTICS_NOTICE_WORDING.join("\n"));
-  record.not_filled = [...globalGaps(), ...purposeGaps(purpose, null)];
-  if (purpose.recorded) {
-    record.not_filled.push({
-      field: "event.time",
-      why: "This purpose is recorded, but no ledger line was passed to the builder. A record needs the decision it documents.",
-    });
+  const wording = purpose.notice_wording_in_this_build;
+  if (wording !== null) {
+    record.privacy_notice.wording_sha256 = await sha256Prefixed(wording.join("\n"));
   }
+  record.not_filled = [...globalGaps(), ...purposeGaps(purpose, null)];
   return record;
 }
 
@@ -430,14 +494,24 @@ export async function buildConsentRecords(
 ): Promise<ConsentRecord[]> {
   const records: ConsentRecord[] = [];
   for (const decision of decisions) records.push(await buildConsentRecord(decision));
+  // A shape for every purpose the local ledger does not answer. Dropping those
+  // shapes because a decision exists in the database would leave a reader of this
+  // file with no mention of three of the four purposes.
   for (const purpose of CONSENT_PURPOSES) {
-    if (!purpose.recorded) records.push(await buildConsentRecordTemplate(purpose.id));
+    if (purpose.recorded_in !== "local_ledger") records.push(await buildConsentRecordTemplate(purpose.id));
   }
   return records;
 }
 
 /** The receipt for one record. The copy the person keeps. */
 export async function buildConsentReceipt(record: ConsentRecord): Promise<ConsentReceipt> {
+  // The wording is reproduced only when this build carries the wording the record
+  // names. The sign-in panel's text lives in a component, so a sign-in receipt
+  // states the version and leaves the words out rather than printing the
+  // installer's lines under a sign-in notice version.
+  const purpose = purposeById(record.purpose.id as ConsentPurpose["id"]);
+  const carried = purpose.notice_wording_in_this_build;
+  const showsWording = carried !== null && record.privacy_notice.version === purpose.notice_version;
   const body: Omit<ConsentReceipt, "integrity"> = {
     receipt_version: CONSENT_RECEIPT_VERSION,
     issued_at: record.event.time,
@@ -448,7 +522,7 @@ export async function buildConsentReceipt(record: ConsentRecord): Promise<Consen
       dpo_contact: null,
       lookup: null,
       lookup_note:
-        "No route serves a consent record. The ledger is a file on your own machine and this repository publishes no lookup URL, so the record is checked by hash against the ledger instead.",
+        "No route serves a consent record to anybody but the person it belongs to. The ledger is a file on your own machine, and the sign-in decisions are rows in the Convex table consentRecords that the myConsentRecords query returns to their owner only, so there is no lookup URL and a record id would tell a third party nothing.",
     },
     what_you_agreed_to: {
       purpose: record.purpose.id,
@@ -458,11 +532,12 @@ export async function buildConsentReceipt(record: ConsentRecord): Promise<Consen
       notice_version: record.privacy_notice.version,
       notice_wording_sha256: record.privacy_notice.wording_sha256,
     },
-    notice_wording: record.privacy_notice.version === DIAGNOSTICS_NOTICE_VERSION ? DIAGNOSTICS_NOTICE_WORDING : null,
-    notice_wording_note:
-      record.privacy_notice.version === DIAGNOSTICS_NOTICE_VERSION
-        ? null
-        : `This build carries the text of ${DIAGNOSTICS_NOTICE_VERSION}, and this decision names ${record.privacy_notice.version}. The wording the person read is not reproduced here rather than showing them text they did not agree to.`,
+    notice_wording: showsWording ? carried : null,
+    notice_wording_note: showsWording
+      ? null
+      : carried === null
+        ? `This build does not carry the wording for notice version ${record.privacy_notice.version} as text. The sign-in wording lives in shared/copy/signIn.ts and in the four purpose boxes in src/features/auth/AuthPanel.tsx, so no lines are reproduced here rather than showing you text this file does not hold.`
+        : `This build carries the text of ${purpose.notice_version}, and this decision names ${record.privacy_notice.version}. The wording the person read is not reproduced here rather than showing them text they did not agree to.`,
     categories_involved: record.pii_information.map((item) => item.type),
     where_it_goes: record.pii_controllers.map((party) => ({
       party: party.party_id,
@@ -507,6 +582,13 @@ export function renderConsentReceipt(receipt: ConsentReceipt): string {
   lines.push(`Issued at: ${receipt.issued_at ?? "no decision is on record"}`);
   lines.push(`Record id: ${receipt.record_reference.record_id ?? "none, no record exists"}`);
   lines.push(`Status: ${receipt.status}`);
+  if (receipt.status === "recorded_in_database") {
+    lines.push(
+      "  This file does not hold the decision. It is a row in the Convex table",
+    );
+    lines.push("  consentRecords, and the myConsentRecords query in convex/consent.ts");
+    lines.push("  returns your own rows and nobody else's.");
+  }
   lines.push("");
   lines.push("What you agreed to");
   lines.push(`  Purpose: ${receipt.what_you_agreed_to.purpose}`);
