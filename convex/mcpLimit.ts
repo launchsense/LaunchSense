@@ -256,9 +256,10 @@ const ALLOWED_HARNESS = new Set([
 ]);
 const ALLOWED_ORDER_SOURCE = new Set(["local", "jev", "perplexity", "table", "unspecified"]);
 // A plain version only, and short. A pre-release suffix is a free string, so it is
-// refused: "1.2-AdaLovelace" is a name wearing a version's clothes, and an
-// uncapped suffix made the column unbounded.
-const VERSION_SHAPE = /^\d+\.\d+(\.\d+)?$/;
+// refused: "1.2-AdaLovelace" is a name wearing a version's clothes. Each numeric
+// part is bounded, so the column is bounded too and a caller cannot mint a new
+// dimension with a very long number.
+const VERSION_SHAPE = /^\d{1,4}\.\d{1,4}(\.\d{1,4})?$/;
 
 function declaredOr(value: string, allowed: Set<string>, fallback: string): string {
   const trimmed = value.trim();
