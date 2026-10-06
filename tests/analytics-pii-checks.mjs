@@ -410,6 +410,18 @@ describe("the write paths cannot put a person's details on an analytics row", ()
     );
   });
 
+  it("reports whether the usage row was actually stored", () => {
+    // The route answered {stored:true} even when the row was refused, and the
+    // installer told the person their counts were sent. All three links agree now.
+    assert.match(limit, /returns: v\.boolean\(\)/, "recordUsage must report whether it stored");
+    assert.match(read("convex", "http.ts"), /return json\(\{ stored \}\)/);
+    assert.match(
+      read("mcp", "review-entry.ts"),
+      /body\["stored"\] === true/,
+      "the installer must read the stored flag, not only the status",
+    );
+  });
+
   it("reads no caller network address into any key", () => {
     // The notice says the counter holds no part of your network address, and the
     // rule says no analytics row carries one. Same input, so it is checked once
