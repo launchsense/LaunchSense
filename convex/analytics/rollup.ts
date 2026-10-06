@@ -1,6 +1,7 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 import { forbiddenPropertiesIn } from "./privacy";
+import { deriveVisitors } from "../../shared/visitorJourney";
 
 // The nightly fold. Raw staging rows plus scan and transition facts become a few
 // hundred dailyMetrics rows, and the funnel itself is derived rather than written.
@@ -30,6 +31,12 @@ const MAX_TRANSITION_PAGES = 40;
 // ranged query with a row ceiling, not a page walk.
 const MAX_USAGE_EVENT_ROWS = 5000;
 const MAX_METRIC_ROWS = 2000;
+// visitorDays is capped at issuance (VISITOR_DAY_CAP), and analyticsEvents kinds
+// are capped per kind per day at the write path, so both ceilings below sit
+// above what can exist. Truncation is unreachable by construction, and the
+// counts stay exact rather than floors.
+const MAX_VISITOR_ROWS = 10000;
+const MAX_EVENT_ROWS = 2000;
 const DIM_JSON_CAP = 400;
 
 // A scan that is still validating or fetching has produced no finding fact, so it
@@ -125,6 +132,11 @@ export const METRIC_NAMES = [
   "partial_coverage_count",
   "rescan_requested",
   "rescan_analyzed",
+  "visitors",
+  "visitors_with_scan",
+  "visitors_with_share",
+  "visitors_with_rescan",
+  "report_feedback",
   "repos_with_proven_fix",
   "code_change_fix_count",
   "advisory_fix_count",
@@ -504,6 +516,33 @@ export const rollupDaily = internalMutation({
     // 4. Guardrail 2.
     const regression = regressionAfterFixRate(transitions, scans, indexPairs(transitions), window);
     add("regression_after_fix_rate", { surface: "all" }, regression.returned, regression.ratio);
+
+    // 5. Visitor journey. visitorDays and analyticsEvents both carry a by_day
+    // index, so these are two ranged reads with ceilings, not page walks.
+    const visitorRows = await ctx.db
+      .query("visitorDays")
+      .withIndex("by_day", (q) => q.eq("day", day))
+      .take(MAX_VISITOR_ROWS);
+    const productEvents = (await ctx.db
+      .query("analyticsEvents")
+      .withIndex("by_day", (q) => q.eq("day", day))
+      .take(MAX_EVENT_ROWS)) as unknown as Array<{
+      kind: string;
+      scanId?: string;
+      visitorId?: string;
+      feedbackUseful?: boolean;
+      feedbackReason?: string;
+    }>;
+    const rescanScanIds = new Set<string>();
+    for (const scan of scans) {
+      if (scan.rescanOf !== undefined) rescanScanIds.add(scan._id);
+    }
+    deriveVisitors(
+      visitorRows.map((row) => ({ visitorId: row.visitorId })),
+      productEvents,
+      rescanScanIds,
+      add,
+    );
 
     for (const row of existing) await ctx.db.delete("dailyMetrics", row._id);
     let written = 0;

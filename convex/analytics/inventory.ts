@@ -152,7 +152,7 @@ export const ANALYTICS_TABLES: readonly InventoryTable[] = [
       {
         field: "repoKey",
         klass: "repoId",
-        why: "The only identifier analytics is allowed to keep, in the only form it is allowed: a day-scoped HMAC of owner/repo. The literal repository name never reaches this column.",
+        why: "One of two identifiers analytics may keep, the other being the anonymous visitor id. It is a day-scoped HMAC of owner/repo, and the literal repository name never reaches this column.",
         boundedBy: "/^[0-9a-f]{64}$/ at the write path, refused otherwise, so a raw owner/repo cannot be stored even by mistake.",
       },
       {
@@ -182,7 +182,7 @@ export const ANALYTICS_TABLES: readonly InventoryTable[] = [
       {
         field: "dims",
         klass: "technical",
-        why: "A small set of labels for the count: client, tool, outcome, surface, status, reason, cause. Never a repository, a path, a title, or any free text.",
+        why: "A small set of labels for the count: client, tool, outcome, surface, status, reason, cause, useful. Never a repository, a path, a title, a visitor id, or any free text.",
         boundedBy: "Every dimension bag passes forbiddenPropertiesIn before it becomes a row, and the JSON is capped at 400 characters.",
       },
       {
@@ -218,8 +218,8 @@ export const ANALYTICS_TABLES: readonly InventoryTable[] = [
       {
         field: "kind",
         klass: "technical",
-        why: "Which product event happened. A closed union of ten values.",
-        boundedBy: "v.union of ten literals.",
+        why: "Which product event happened. A closed union of eleven values.",
+        boundedBy: "v.union of eleven literals.",
       },
       {
         field: "scanId",
@@ -239,9 +239,51 @@ export const ANALYTICS_TABLES: readonly InventoryTable[] = [
         boundedBy: "publicIdOrNull, 32 lower-case hex characters, checked at the write path.",
       },
       {
+        field: "visitorId",
+        klass: "pseudonymous",
+        why: "A random id the server minted for one browser, so visits can be counted as distinct without naming a person, a device, or an address. Only the minted UUID shape is kept; anything else is dropped while the event is still recorded.",
+        boundedBy: "visitorIdOrNull, UUID shape, checked at the write path.",
+      },
+      {
+        field: "feedbackUseful",
+        klass: "technical",
+        why: "Whether the visitor said the report was useful. A boolean, so no words can arrive.",
+        boundedBy: "v.boolean, present only on report_feedback rows.",
+      },
+      {
+        field: "feedbackReason",
+        klass: "technical",
+        why: "Why the visitor said so, in their pick from six fixed labels. There is no text box on the feedback path, so no typed words can reach this column.",
+        boundedBy: "v.union of six literals, present only on report_feedback rows.",
+      },
+      {
         field: "createdAt",
         klass: "technical",
         why: "When the event happened.",
+        boundedBy: "A number, milliseconds.",
+      },
+    ],
+  },
+  {
+    table: "visitorDays",
+    role: "First-seen rows for anonymous visitors. The rollup counts them and the raw ids expire after 30 days.",
+    fields: [
+      {
+        field: "day",
+        klass: "technical",
+        why: "The UTC day of first sight, derived from now inside the mutation.",
+        boundedBy: "An ISO date, ten characters, never caller input.",
+      },
+      {
+        field: "visitorId",
+        klass: "pseudonymous",
+        why: "A random id the server minted. It names no person, device, or address, and it is the only visitor key the product keeps.",
+        boundedBy: "crypto.randomUUID at the write path, lower-cased, UUID shape.",
+      },
+      {
+        field: "firstSeenAt",
+        klass: "technical",
+        why: "When the id was minted.",
         boundedBy: "A number, milliseconds.",
       },
     ],

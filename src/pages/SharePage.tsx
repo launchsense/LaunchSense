@@ -3,9 +3,11 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toShareCard } from "../../shared/reports/shareCard";
 import { SiteFrame } from "../features/site/SiteFrame";
+import { useVisitorId } from "../features/scan/useVisitorId";
 
 export default function SharePage({ shareId }: { shareId: string }) {
   const logEvent = useMutation(api.scans.queries.logEvent);
+  const visitorId = useVisitorId();
   const page = useQuery(api.scans.queries.getSharePage, { shareId });
   const card =
     page === undefined || page === null
@@ -21,9 +23,9 @@ export default function SharePage({ shareId }: { shareId: string }) {
 
   useEffect(() => {
     if (page !== undefined && page !== null) {
-      void logEvent({ kind: "share_viewed", shareId });
+      void logEvent({ kind: "share_viewed", shareId, visitorId });
     }
-  }, [page, shareId, logEvent]);
+  }, [page, shareId, logEvent, visitorId]);
 
   if (page === undefined) {
     return (
@@ -80,7 +82,7 @@ export default function SharePage({ shareId }: { shareId: string }) {
         <a
           href={`/?ref=${shareId}`}
           onClick={() => {
-            void logEvent({ kind: "share_cta_clicked", shareId });
+            void logEvent({ kind: "share_cta_clicked", shareId, visitorId });
           }}
         >
           Scan your own repo

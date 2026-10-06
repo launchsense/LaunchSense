@@ -59,9 +59,13 @@ cannot write an unbounded stream of rows.
 Here is the rule our analytics runs on, in plain words. Analytics holds no personal
 information. No email address, no network address, and no free text is written to an
 analytics row. The only label that names anything is the coding tool that sent the call,
-which is a claim about a tool and not about a person. The only identifier analytics is
-allowed is the repository identifier, and we use it for technical purposes only: running
-the scan, linking a rescan, and counting the funnel. Every other value on an analytics row
+which is a claim about a tool and not about a person. Analytics is allowed two identifiers
+and nothing else. The repository identifier, used for technical purposes only: running
+the scan, linking a rescan, and counting the funnel. And an anonymous visitor identifier,
+which is a random value our server mints, carries no personal information, and is used
+only to count distinct visitors. It cannot name a person, a device, or an address.
+Feedback on a report travels as a yes or no plus one of six fixed labels, never as typed
+words. Every other value on an analytics row
 is a count, a code, a time, or one of a closed set of labels.
 
 The list of columns behind that rule, field by field, is in
