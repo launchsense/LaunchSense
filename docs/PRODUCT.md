@@ -277,7 +277,6 @@ builder is about to hit publish.
   hosted MCP. The MCP call is the same public read, with the same guest caps.
   The Connect page is where the address lives. The home page does not repeat it.
 - 200 files and about 2MB per guest scan. 1,000 files and about 8MB when signed in.
-- No browser rendering. The live check reads served HTML, not a rendered phone.
 - The check runs when you press Run, or when a coding tool calls the hosted MCP. There is no
   automatic reminder and no monitoring in Phase 1, so a stale result stays stale
   until you rescan.
