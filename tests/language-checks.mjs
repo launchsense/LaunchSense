@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { toUserError } from "../src/features/scan/userError.ts";
+import { toUserError } from "../shared/userError.ts";
 
 // W6. Every string here was a real overstatement in the app on 2026-10-03.
 // Each fixture is verbatim from that version, so a rule cannot pass by matching
@@ -77,10 +77,10 @@ describe("no overstatement survives", () => {
 
 describe("error text never leaks raw backend messages", () => {
   it("does not render error.message directly in a component", () => {
-    // userError.ts is the single boundary that is allowed to read the raw
-    // message, and it never returns it to the view.
+    // shared/userError.ts is the single boundary that is allowed to read the raw
+    // message, and it never returns it to the view. It lives outside src/, so
+    // this scan over src/ files needs no skip for it.
     for (const { file, text } of allSource.filter((f) => f.file.startsWith("src/"))) {
-      if (file === "src/features/scan/userError.ts") continue;
       assert.doesNotMatch(text, /error\.message/, `${file} renders a raw error message`);
     }
   });

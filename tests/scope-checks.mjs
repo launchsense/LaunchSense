@@ -6,7 +6,7 @@ import { buildVerdict, buildNotCheckedList, SCOPE_LABEL } from "../shared/report
 // yet is a module load error, which fails every test in this file at once and
 // hides which rule broke. Namespace access fails one line at a time.
 import * as scope from "../shared/reports/scope.ts";
-import { toUserError } from "../src/features/scan/userError.ts";
+import { toUserError } from "../shared/userError.ts";
 import { validateLiveUrl } from "../shared/ssrf.ts";
 
 // The defect this guards: "No findings. The checks found nothing to flag." read as

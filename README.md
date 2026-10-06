@@ -3,7 +3,7 @@
 [![Live](https://img.shields.io/badge/live-blue)](https://harmless-chihuahua-667.convex.site)
 [![CI](https://github.com/launchsense/LaunchSense/actions/workflows/check.yml/badge.svg)](https://github.com/launchsense/LaunchSense/actions/workflows/check.yml)
 [![Release](https://img.shields.io/github/v/release/launchsense/LaunchSense)](https://github.com/launchsense/LaunchSense/releases)
-[![License: Proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)](LICENSE.txt)
+[![License: MIT open core](https://img.shields.io/badge/license-MIT%20open%20core-green)](LICENSE.txt)
 [![Security policy](https://img.shields.io/badge/security-policy-green)](SECURITY.md)
 
 LaunchSense checks the codebase, not the business. It does not say if the app will sell.
@@ -131,4 +131,4 @@ Releases use `npm run deploy` and are done by maintainers only. A git push never
 - `docs/SELF-SCAN-LOG.md`: we scan our own repo with LaunchSense after every stage and publish the result.
 - `CHANGELOG.md`: what changed in each release.
 
-Built with React, Vite, and TypeScript. License: proprietary, see `LICENSE.txt`. The repo is visible for review only. No use without permission.
+Built with React, Vite, and TypeScript. License: open core, MIT for the paths LICENSE.txt names, proprietary for the rest. The repo is public so the open parts can be read and forked.

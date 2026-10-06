@@ -13,7 +13,7 @@ import CompareView from "../report/CompareView";
 import Stage5Panels from "../report/Stage5Panels";
 import CapacityMeter from "../report/CapacityMeter";
 import { ToolCard } from "../report/ToolCard";
-import { toUserError } from "./userError";
+import { toUserError } from "../../../shared/userError";
 import { useVisitorId } from "./useVisitorId";
 import ReportFeedback from "../report/ReportFeedback";
 
