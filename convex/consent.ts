@@ -36,7 +36,7 @@ import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { CONSENT_PURPOSES } from "../shared/consent/vocabulary.ts";
+import { SIGN_IN_PURPOSE_IDS } from "../shared/consent/vocabulary.ts";
 
 /** The four purposes the sign-in panel asks about, in the order it lists them. */
 const purposeId = v.union(
@@ -47,15 +47,18 @@ const purposeId = v.union(
 );
 
 /**
- * The same four ids, read from the vocabulary, and checked in the handler.
+ * The same four ids, read from the vocabulary's SIGN-IN list, and checked in the
+ * handler.
  *
  * The argument validator already refuses anything else, and that is the boundary
  * that matters in production. The check is here too because a validator is the
  * only thing standing between a caller and a row, and because the vocabulary is
- * the single place a purpose is defined: a fifth purpose added there fails this
- * file rather than being silently refused at runtime.
+ * the single place a purpose is defined. This reads the SIGN-IN list on purpose:
+ * the vocabulary also holds a local-only purpose (the file read), which must never
+ * reach a sign-in row, so deriving this guard from the full purpose list would
+ * silently widen it. A local purpose added to this file fails rather than passing.
  */
-const KNOWN_PURPOSES: ReadonlySet<string> = new Set(CONSENT_PURPOSES.map((purpose) => purpose.id));
+const KNOWN_PURPOSES: ReadonlySet<string> = new Set(SIGN_IN_PURPOSE_IDS);
 
 /**
  * The surface that writes these rows. A fixed string, not an argument, because

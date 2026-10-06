@@ -773,6 +773,50 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       "No automated decision. No row is written and nothing is stored by this product.",
     choice: "A visitor can block the font request in their browser. Nothing else on the page asks.",
   },
+  {
+    id: "acct-009",
+    purpose:
+      "Read the person's own checkout, including agent instruction files, so the local review can report on it. Nothing is uploaded.",
+    lawful_basis: "GDPR Art 6(1)(b) performance of a contract",
+    lawful_basis_reviewed: false,
+      consent_purpose: "files",
+    data_subject_categories: ["The person who installed the local review and is running it on their own machine"],
+    personal_data_categories: [
+      "File paths in the person's checkout",
+      "File contents, read on the person's own machine",
+      "Agent instruction files, such as AGENTS.md or CLAUDE.md",
+      "The acknowledgement decision itself, with its time, on the person's own machine",
+    ],
+    data_points: [
+    ],
+    storage: [
+      outside(
+        "~/.config/launchsense/consent.jsonl",
+        "On the person's own machine. The acknowledgement is one line. The files themselves are never written anywhere.",
+      ),
+    ],
+    recipients: [],
+    third_country_transfers: [],
+    retention: [
+      {
+        data: "The files a review reads",
+        window: "Kept only for the run. Nothing is uploaded, so there is no server copy to delete.",
+        enforcement: "none",
+        enforced_by: null,
+      },
+      {
+        data: "The acknowledgement line on the person's machine",
+        window: "Kept by the person. This product deletes nothing and reads nothing beyond the run.",
+        enforcement: "none",
+        enforced_by: null,
+      },
+    ],
+    security_measures:
+      "The read happens on the person's own machine and nothing is uploaded, so there is no network copy to protect. The question is an acknowledgement rather than consent: the default is yes, and a pre-answered question is not a freely given agreement, which is why the lawful basis is stated as contract and not as consent.",
+    automated_decision_making:
+      "No automated decision. Nothing is stored off the machine.",
+    choice: "Type no at the question and the expanded read does not happen. The acknowledgement line records the answer either way.",
+  },
 ];
 
 export interface ProcessingRegister {

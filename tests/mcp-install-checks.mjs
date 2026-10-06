@@ -283,6 +283,18 @@ describe("install.sh asks before it records an agreement", () => {
       .map((line) => JSON.parse(line));
   }
 
+  // The usage question's lines. The installer asks two questions now and writes
+  // one line each, so a test about the usage decision filters to it. A line
+  // written before the purpose field existed counts as usage, which is what it was.
+  function usageLines(home) {
+    return readLog(home).filter((line) => line.purpose === undefined || line.purpose === "usage");
+  }
+
+  // The local file-read acknowledgement's lines.
+  function filesLines(home) {
+    return readLog(home).filter((line) => line.purpose === "files");
+  }
+
   it("records no agreement when nobody answers the question", () => {
     withHome((home) => {
       run(home);
@@ -319,8 +331,8 @@ describe("install.sh asks before it records an agreement", () => {
       run(home, { answer: "no" });
       const config = readConfig(home);
       assert.equal(config.agreed, false);
-      const lines = readLog(home);
-      assert.equal(lines.length, 1, `one line per decision; the log held ${lines.length}`);
+      const lines = usageLines(home);
+      assert.equal(lines.length, 1, `one usage line per decision; the log held ${lines.length}`);
       assert.equal(lines[0].granted, false);
       assert.equal(lines[0].source, "prompt");
       assert.ok(lines[0].noticeVersion, "the log must name the wording the person answered");
@@ -399,7 +411,7 @@ describe("install.sh asks before it records an agreement", () => {
         grantedAt,
         "a repeated run must not move the time the person agreed",
       );
-      assert.equal(readLog(home).length, 1, "a repeated run is not a new decision, so it adds no line");
+      assert.equal(usageLines(home).length, 1, "a repeated run is not a new decision, so it adds no usage line");
     });
   });
 
@@ -443,9 +455,9 @@ describe("install.sh asks before it records an agreement", () => {
       run(home, { env: { LAUNCHSENSE_TIER: "enterprise" } });
       run(home, { env: { LAUNCHSENSE_TIER: "enterprise" } });
       assert.equal(
-        readLog(home).length,
+        usageLines(home).length,
         1,
-        `the same forced decision on the same wording is one line, not many; the log held ${readLog(home).length}`,
+        `the same forced decision on the same wording is one line, not many; the log held ${usageLines(home).length}`,
       );
       assert.equal(
         readConfig(home).diagnosticsConsent.decidedAt,
@@ -462,7 +474,7 @@ describe("install.sh asks before it records an agreement", () => {
       run(home, { answer: "no" });
       rmSync(join(home, CONFIG_PATH));
       run(home, { answer: "yes" });
-      const lines = readLog(home);
+      const lines = usageLines(home);
       assert.equal(
         lines.length,
         2,
@@ -486,7 +498,7 @@ describe("install.sh asks before it records an agreement", () => {
         '{"noticeVersion":"2026-10-05","granted":false,"decidedAt":"2020-01-01T00:00:00Z","source":"enterprise tier"}\n',
       );
       run(home, { env: { LAUNCHSENSE_DIAGNOSTICS: "off" } });
-      const lines = readLog(home);
+      const lines = usageLines(home);
       assert.equal(lines.length, 2, "a different forced switch is a new decision");
       const mine = lines.find((line) => line.source === "LAUNCHSENSE_DIAGNOSTICS=off");
       assert.ok(mine, "the new switch must write its own line");
@@ -520,6 +532,75 @@ describe("install.sh asks before it records an agreement", () => {
       /config\.agreed !== true/.test(diagnostics) && /config\.diagnostics === "off"/.test(diagnostics),
       "the reader reads agreed and diagnostics; install.sh must keep writing those two names",
     );
+  });
+
+  it("asks about the local file read in the agreed wording, with yes as the default", () => {
+    withHome((home) => {
+      const output = run(home, { answer: "no" });
+      for (const line of [
+        "Allow the local LaunchSense server to read files in this project folder,",
+        "including agent instruction files like AGENTS.md and CLAUDE.md?",
+        "The reads happen on this machine. Nothing is uploaded.",
+        "Default is yes. Press enter to allow, or type no to refuse.",
+        "yes or no [yes]:",
+      ]) {
+        assert.ok(output.includes(line), `the local file-read question is missing a line: ${line}`);
+      }
+    });
+  });
+
+  it("acknowledges the local file read on an empty answer, because the default is yes", () => {
+    withHome((home) => {
+      run(home, { answer: "" });
+      assert.equal(
+        readConfig(home).filesConsent.acknowledged,
+        true,
+        "an empty answer takes the default, which is yes",
+      );
+      const lines = filesLines(home);
+      assert.equal(lines.length, 1, "one acknowledgement line");
+      assert.equal(lines[0].granted, true);
+      assert.equal(lines[0].noticeVersion, "2026-10-06");
+    });
+  });
+
+  it("records a typed no for the local file read as a refusal", () => {
+    withHome((home) => {
+      run(home, { answer: "yes\nno" });
+      assert.equal(readConfig(home).filesConsent.acknowledged, false, "a typed no is honoured");
+      const lines = filesLines(home);
+      assert.equal(lines.length, 1);
+      assert.equal(lines[0].granted, false, "a refusal is evidence too");
+    });
+  });
+
+  it("does not ask the local file question twice for the same wording", () => {
+    withHome((home) => {
+      run(home, { answer: "yes\nno" });
+      const first = filesLines(home).length;
+      const second = run(home, { answer: "yes" });
+      assert.ok(
+        !second.includes("Allow the local LaunchSense server to read files"),
+        "the acknowledged question must not be asked again for the same wording",
+      );
+      assert.equal(filesLines(home).length, first, "a repeat writes no new acknowledgement line");
+    });
+  });
+
+  it("does not move the acknowledged moment on a later run", () => {
+    withHome((home) => {
+      run(home, { answer: "yes" });
+      const at = readConfig(home).filesConsent.acknowledgedAt;
+      assert.match(at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, `a real timestamp; got ${at}`);
+      const lineAt = filesLines(home)[0].decidedAt;
+      assert.equal(lineAt, at, "the config and the ledger must state the same moment");
+      run(home, { answer: "yes" });
+      assert.equal(
+        readConfig(home).filesConsent.acknowledgedAt,
+        at,
+        "a repeated run must not move the acknowledged moment",
+      );
+    });
   });
 });
 
