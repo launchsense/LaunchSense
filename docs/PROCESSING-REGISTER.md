@@ -252,6 +252,28 @@ It is not legal advice, and no lawyer has reviewed it.
 - Automated decision making: No automated decision. No row is written and nothing is stored by this product.
 - How a person chooses: A visitor can block the font request in their browser. Nothing else on the page asks.
 
+### acct-009: Read the person's own checkout, including agent instruction files, so the local review can report on it. Nothing is uploaded.
+
+- Lawful basis: GDPR Art 6(1)(b) performance of a contract. Reviewed by a lawyer: no.
+- Consent purpose: files, and a decision is on record in the ledger on the person's own machine.
+- Data subjects: The person who installed the local review and is running it on their own machine.
+- Personal data: File paths in the person's checkout; File contents, read on the person's own machine; Agent instruction files, such as AGENTS.md or CLAUDE.md; The acknowledgement decision itself, with its time, on the person's own machine.
+- Columns holding it: none in this schema. Nothing is written for this activity.
+- Storage:
+  - Not a table: ~/.config/launchsense/consent.jsonl. On the person's own machine. The acknowledgement is one line. The files themselves are never written anywhere.
+- Recipients:
+- Third country transfers:
+- Retention:
+  - The files a review reads: Kept only for the run. Nothing is uploaded, so there is no server copy to delete.
+    Enforced: none.
+    By: nothing in this repository enforces this. It is a gap.
+  - The acknowledgement line on the person's machine: Kept by the person. This product deletes nothing and reads nothing beyond the run.
+    Enforced: none.
+    By: nothing in this repository enforces this. It is a gap.
+- Security measures: The read happens on the person's own machine and nothing is uploaded, so there is no network copy to protect. The question is an acknowledgement rather than consent: the default is yes, and a pre-answered question is not a freely given agreement, which is why the lawful basis is stated as contract and not as consent.
+- Automated decision making: No automated decision. Nothing is stored off the machine.
+- How a person chooses: Type no at the question and the expanded read does not happen. The acknowledgement line records the answer either way.
+
 ## Fields this register cannot fill
 
 - `pii_controllers[].registered_name`: No registered legal entity is published. docs/PRIVACY.md section 1 says so. Inventing one would make the record false.
