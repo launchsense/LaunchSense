@@ -15,6 +15,7 @@ import { ToolCard } from "../report/ToolCard";
 import { toUserError } from "../../../shared/userError";
 import { useVisitorId } from "./useVisitorId";
 import ReportFeedback from "../report/ReportFeedback";
+import LocalPath from "./LocalPath";
 import LiteReport from "../report/LiteReport";
 import { readPendingScan, clearPendingScan } from "../auth/signInDecision";
 
@@ -373,16 +374,30 @@ export default function GuestScan() {
   // visitor with a typo to sign in, and told a visitor who had run out of guest
   // read that their repository was not public.
   const showSignIn = !isAuthenticated && (guestCapHit || repoMiss);
-  const capReason: "guestCap" | "repoMiss" | null = !showSignIn
+  // A shared hosted budget that is spent is a different state from a repository
+  // that would not open, and from a read that hit the file cap. Each has its own
+  // heading, because telling someone to sign in when the honest answer is "the
+  // shared budget is spent, run it free locally" is the wrong instruction.
+  const rateLimited = quotaExhausted || scan?.errorKind === "rate_limited";
+  const capReason: "guestCap" | "repoMiss" | "rateLimited" | null = !showSignIn
     ? null
     : repoMiss
       ? "repoMiss"
-      : "guestCap";
-  const capHeading = capReason === "repoMiss" ? "That repository did not open" : "Sign in to read more";
+      : rateLimited
+        ? "rateLimited"
+        : "guestCap";
+  const capHeading =
+    capReason === "repoMiss"
+      ? "That repository did not open"
+      : capReason === "rateLimited"
+        ? "Hosted reads are paused until the hour resets"
+        : "This scan hit the guest limit";
   const capBody =
     capReason === "repoMiss"
       ? "GitHub would not open that repository. It may be private, or the address may be wrong. No files were read."
-      : `This scan stopped at the guest limit of ${GUEST_MAX_FILES.toLocaleString("en-US")} files and about ${Math.round(GUEST_MAX_BYTES / 1_000_000)}MB. The rest of the repository was not read.`;
+      : capReason === "rateLimited"
+        ? "The hosted read is a shared budget, and this hour is spent. The local check has no limit, sends nothing to us, and reads your working tree. Sign in also works, and spends your own GitHub token."
+        : `This scan stopped at the guest limit of ${GUEST_MAX_FILES.toLocaleString("en-US")} files and about ${Math.round(GUEST_MAX_BYTES / 1_000_000)}MB. The rest of the repository was not read. The local check has no such limit.`;
   const capDialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -427,7 +442,7 @@ export default function GuestScan() {
       <details>
         <summary>Privacy note</summary>
         <p>
-          A guest read uses the shared GitHub quota and stops at 200 files and about 2MB. Signed in, the same check uses your GitHub token and reads up to 1,000 files and about 8MB, including one private repo you can already read. We do not store the file contents. We delete the token when you sign out. The Connect page shows how to call this same public read from your coding tool. A partial result is not a pass.
+          A guest read uses the shared GitHub quota and stops at 200 files and about 2MB. Signed in, the same check uses your GitHub token and reads up to 1,000 files and about 8MB, including one private repo you can already read. We do not store the file contents. We delete the token when you sign out. The local check on your own machine has no limit, sends nothing to us, and reads your working tree; the Connect page shows both. A partial result is not a pass.
         </p>
       </details>
       {scan === null && <CapacityMeter waiting={0} running={0} quota={null} />}
@@ -634,6 +649,7 @@ export default function GuestScan() {
         <dialog ref={capDialog} className="cap-dialog" aria-labelledby="limit-signin-title">
           <h2 id="limit-signin-title">{capHeading}</h2>
           <p>{capBody}</p>
+          {capReason !== "repoMiss" && <LocalPath />}
           <AuthPanel scanId={scanId} />
         </dialog>
       )}

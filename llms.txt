@@ -1,6 +1,6 @@
 # LaunchSense
 
-LaunchSense checks the codebase, not the business. The website is the public read: paste a GitHub URL, get a plain report. A coding tool calls the same public read at the hosted MCP address. You do not clone this repo to use it. The repo is open core: MIT for the paths LICENSE.txt names, proprietary for the backend and the web app.
+LaunchSense checks the codebase, not the business. Two doors, and the honest one is local. The local MCP runs on your machine, reads your working tree, sends nothing to us, and has no hourly limit. The hosted read is the sample: paste a public GitHub URL, get a plain report on our server, shared and rate limited. A coding tool can call either. You do not clone this repo to use the hosted address. The repo is open core: MIT for the paths LICENSE.txt names, proprietary for the backend and the web app.
 
 This stage is alpha. Alpha has no login for the public read: the hosted MCP address works with no credential. An auth slot exists and is not enforced. A LaunchSense credential is optional and is how the hosted read is attributed.
 
