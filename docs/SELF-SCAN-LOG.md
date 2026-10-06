@@ -26,6 +26,40 @@ Each stage records the commit scanned, the raw counts, what we fixed, and what w
 
 Newest first.
 
+### Stage: the anonymous visitor, sign-in return, and a false-positive sweep
+
+Scanned the production tip through the hosted path after the visitor-id and
+sign-in work landed. Status: partial, 200 files analyzed, 63 skipped, 52
+findings. The 200 file cap is the guest read cap doing its job and is counted
+honestly.
+
+The high findings are four planted fixtures in `scripts/ai-evidence/fixture.mjs`
+and the expected secret canaries under `tests/`, the same class recorded in the
+Wave 2 entry. They are false positives for a live leak by construction: the
+suite plants them and asserts the detector fires. Recorded, not silenced.
+
+This stage also ran three independent false-positive audits, one per lane, and
+closed the four real defects they found rather than the ones the author expected:
+
+- A comment raised a code finding, and a high one. A doc line reading
+  "do not use eval(x)" blocked the share gate. The comment gate now covers every
+  code rule, not only the SQL rule it covered before.
+- A clean permissive licence (MIT) raised a medium `license.policy` row on the
+  local review path while the hosted path suppressed it. Both doors now emit the
+  finding only when the licence needs attention, with the same severity ladder.
+- An unknown advisory severity became medium locally and info hosted. It lands at
+  info on both, so a low-confidence advisory cannot outrank a known medium.
+- Test-path detection missed `spec/`, `__mocks__/`, `e2e/`, and `cypress/`
+  layouts, so test noise was scored as production. It covers them now.
+
+A decision-lane audit came back clean: the model may only reword and reorder
+inside one severity band, and no path lets a provider add, drop, or re-rank a
+finding across a band.
+
+Gate at the tip: 1206 tests, 0 fail. Commits: `7dc86e3` (lite gate), `2d93fff`
+(single-tick consent), `7094f45` (sign-in return, live check hidden),
+`fc3e1b3` (four false positives closed).
+
 ### Wave 2: hardening, and the corpus fixes
 
 Scanned pushed commit `695d0798d8abe736b0a3dec1e0c8fe1a2a93fe79` through the hosted
