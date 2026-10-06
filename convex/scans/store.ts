@@ -55,6 +55,10 @@ const fullScanDoc = v.object({
   mainAction: v.optional(v.string()),
   rescanOf: v.optional(v.id("scans")),
   signedIn: v.optional(v.boolean()),
+  // Carried on the fetched shape so an action can run canReadScan on the row it
+  // just read. Without it, every action lane would see a signed-in scan with no
+  // owner and turn away the owner along with everyone else.
+  userId: v.optional(v.id("users")),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -533,6 +537,15 @@ const changeCause = v.union(
  * unattributed rescan still happened and still belongs in the denominator.
  * `channel` and `surface` are recorded too, because a rescan is a scan and the
  * funnel would otherwise undercount every one of them.
+ *
+ * `liveUrl` and `mainAction` are the parent's live target, carried forward. A
+ * rescan answers "is the thing still broken on the same code", so losing the
+ * site under test would silently change the question into a different one. The
+ * caller passes the parent's values rather than this mutation re-reading the
+ * parent: `rescanScan` already holds that row, has already refused to proceed
+ * unless it is analyzed, and re-reading it here would be a second read of a row
+ * the caller has in hand. A parent with no live target carries nothing, so the
+ * child has none.
  */
 export const createRescan = internalMutation({
   args: {
@@ -540,6 +553,8 @@ export const createRescan = internalMutation({
     repo: v.string(),
     repoUrl: v.string(),
     rescanOf: v.id("scans"),
+    liveUrl: v.optional(v.string()),
+    mainAction: v.optional(v.string()),
     signedIn: v.boolean(),
     userId: v.optional(v.id("users")),
     attributedCallerId: v.optional(v.id("credentials")),
@@ -555,6 +570,8 @@ export const createRescan = internalMutation({
       repo: args.repo,
       repoUrl: args.repoUrl,
       status: "validating",
+      liveUrl: args.liveUrl,
+      mainAction: args.mainAction,
       rescanOf: args.rescanOf,
       signedIn: args.signedIn,
       userId: args.userId,
