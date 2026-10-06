@@ -45,11 +45,6 @@ numbers above.
 
 A guest read uses the shared GitHub quota and stops at 200 files and about 2MB.
 
-If you give a live app URL, our server makes a plain HTTP request to that address and
-reads the returned HTML. It refuses to contact loopback, private, link-local, or cloud
-metadata addresses, including hostnames that resolve to one. It follows up to three
-redirects and re-checks every hop.
-
 Our server fetches public repo data from GitHub, either as a file list or as one
 repository archive. Your browser only sends the URL and shows the results.
 
