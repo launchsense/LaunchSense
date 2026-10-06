@@ -192,6 +192,47 @@ export function clearSignInDecision(storage: DecisionStorage): void {
 export type RecordOutcome = "recorded" | "no decision" | "recording failed";
 
 /**
+ * The scan the person was reading when they chose to sign in.
+ *
+ * Saved at the sign-in click and read back after the OAuth round trip, so the
+ * page they return to is the scan they left, not an empty box. Same storage and
+ * same lifetime as the decision: sessionStorage, this tab, gone with the tab.
+ */
+export const PENDING_SCAN_KEY = "launchsense.pendingScanId";
+
+/** Persist the scan id on screen, so the return lands back on it. */
+export function savePendingScan(storage: DecisionStorage, scanId: string | null): void {
+  if (scanId === null || scanId.length === 0) return;
+  try {
+    storage.setItem(PENDING_SCAN_KEY, scanId);
+  } catch {
+    // A storage that refuses to remember is not a reason to fail a sign-in.
+    // The person lands on the empty box they would have gotten anyway.
+  }
+}
+
+/** Read the persisted scan id, or null when there is none this build can use. */
+export function readPendingScan(storage: DecisionStorage): string | null {
+  let raw: string | null;
+  try {
+    raw = storage.getItem(PENDING_SCAN_KEY);
+  } catch {
+    return null;
+  }
+  // The same shape the server mints: a Convex row id, lower-case alphanumeric.
+  return raw !== null && /^[a-z0-9]{16,64}$/.test(raw) ? raw : null;
+}
+
+/** Drop the persisted scan id after it has been used, so it cannot fire twice. */
+export function clearPendingScan(storage: DecisionStorage): void {
+  try {
+    storage.removeItem(PENDING_SCAN_KEY);
+  } catch {
+    // Nothing to do: an unused id is harmless, it only reopens a scan.
+  }
+}
+
+/**
  * Write the persisted decision, once, and clear it afterwards.
  *
  * `record` is the Convex mutation, passed in so this module needs no Convex

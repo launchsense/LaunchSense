@@ -29,6 +29,7 @@ Section 3 with the surfaces they verify:
   tests/livecheck-ownership-checks.mjs
   tests/mcp-remote-checks.mjs
   tests/red-team-checks.mjs
+  tests/signin-resume-checks.mjs
 
 The rule is functional, not just this list: any test file that imports or
 loads a module outside the open scope stays under Section 3. The list above
