@@ -59,6 +59,27 @@ describe("the local path says what it is", () => {
   });
 });
 
+describe("the home page offers both doors", () => {
+  const home = readFileSync(new URL("../src/pages/Home.tsx", import.meta.url), "utf8");
+
+  it("keeps the instant sample as the primary action", () => {
+    assert.match(home, /Taste it on a public repo/);
+    assert.match(home, /<GuestScan \/>/);
+  });
+
+  it("shows the free local check on the front page, not only behind a limit", () => {
+    assert.match(home, /Or run it on your own machine, with no limit/);
+    assert.match(home, /<LocalPath \/>/);
+  });
+
+  it("does not hide the local check or fake a limit on the front page", () => {
+    assert.doesNotMatch(home, /countdown|hurry|expires in|spots left/i);
+    for (const character of [/\u2014/, /\u2013/, /\u2026/, /\u00b7/]) {
+      assert.doesNotMatch(home, character);
+    }
+  });
+});
+
 describe("the docs call the local check the better default", () => {
   it("the skill says it reviews your checkout, not only LaunchSense", () => {
     assert.match(skill, /your\*\* checkout|your checkout/);
