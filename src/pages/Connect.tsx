@@ -37,7 +37,7 @@ export default function Connect() {
           <li>Secrets, code shapes, dependency names, license text, project hygiene, duplicate files, and large files.</li>
           <li>OSV for up to 50 packages. The rest stay not checked. deps.dev is not asked.</li>
           <li>The tool <code>launchsense_get_report</code> reads a report by scan id.</li>
-          <li>Two scans an hour from one caller, and eight an hour in total. Then this route pauses until the window resets.</li>
+          <li>The hosted read keeps 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane. Then this route pauses until the window resets. The counter holds no part of your network address.</li>
           <li>A private repo uses Sign in with GitHub on the sample. This address does not read a repo that exists only on your laptop.</li>
         </ul>
         <p>A partial result is not a pass. License lines are signals, not legal advice.</p>
