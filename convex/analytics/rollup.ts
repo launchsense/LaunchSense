@@ -455,10 +455,14 @@ export const rollupDaily = internalMutation({
     // 2. Scan facts. scans has no day index and this lane adds no index to an
     // existing table, so the window is read by page and then attributed in memory.
     const windowStart = window.start - (SCAN_WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000;
-    const scanned = await readPages<FoldScan>(
-      (cursor) => ctx.db.query("scans").order("asc").paginate({ cursor, numItems: READ_PAGE }),
-      MAX_SCAN_PAGES,
-    );
+    // Convex allows only ONE paginated query per function, so neither table is
+    // read with .paginate(). Each is read with a bounded .take(), newest first,
+    // which covers the window and can be called twice in one function. A loop of
+    // .paginate() calls (and even two single ones) threw "ran multiple paginated
+    // queries" and left dailyMetrics empty since Wave 6.
+    const scanCap = READ_PAGE * MAX_SCAN_PAGES;
+    const scanRows = await ctx.db.query("scans").order("desc").take(scanCap);
+    const scanned = { rows: scanRows as FoldScan[], truncated: scanRows.length >= scanCap };
     const scans = scanned.rows.filter((scan) => {
       const created = typeof scan.createdAt === "number" ? scan.createdAt : 0;
       return created >= windowStart && created < window.end;
@@ -472,11 +476,12 @@ export const rollupDaily = internalMutation({
     }
 
     // 3. Transitions, and the scan pairs they describe.
-    const read = await readPages<FoldTransition>(
-      (cursor) =>
-        ctx.db.query("findingTransitions").order("asc").paginate({ cursor, numItems: READ_PAGE }),
-      MAX_TRANSITION_PAGES,
-    );
+    const transitionCap = READ_PAGE * MAX_TRANSITION_PAGES;
+    const transitionRows = await ctx.db
+      .query("findingTransitions")
+      .order("desc")
+      .take(transitionCap);
+    const read = { rows: transitionRows as FoldTransition[], truncated: transitionRows.length >= transitionCap };
     const transitions = read.rows;
     const scanById = indexScans(scans);
 
@@ -548,28 +553,7 @@ export const rollupDaily = internalMutation({
   },
 });
 
-/**
- * Read a table by page, oldest first, with a hard page ceiling.
- *
- * Convex orders a whole-table query by creation time, so ascending pages walk the
- * table from its oldest row. `read` is the paginated call itself, passed in so
- * this helper stays typed against whichever table the caller is reading.
- */
-async function readPages<T>(
-  read: (cursor: string | null) => Promise<{
-    page: T[];
-    isDone: boolean;
-    continueCursor: string;
-  }>,
-  maxPages: number,
-): Promise<{ rows: T[]; truncated: boolean }> {
-  const rows: T[] = [];
-  let cursor: string | null = null;
-  for (let page = 0; page < maxPages; page += 1) {
-    const result = await read(cursor);
-    for (const row of result.page) rows.push(row);
-    if (result.isDone) return { rows, truncated: false };
-    cursor = result.continueCursor;
-  }
-  return { rows, truncated: true };
-}
+// The rollup reads each table in a single paginated call, because Convex allows
+// only one paginated query per function. A helper that looped .paginate() calls
+// threw "ran multiple paginated queries", so it is gone rather than left as a
+// pattern for the next reader to copy.

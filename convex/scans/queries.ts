@@ -68,6 +68,15 @@ const scanFields = {
   rescanOf: v.optional(v.id("scans")),
   signedIn: v.optional(v.boolean()),
   userId: v.optional(v.id("users")),
+  // These three are written on every row by createScan. A public query validator
+  // rejects a row that carries a field it does not name, so omitting them made
+  // get_report and POST /api/mcp/report return 500 on every new scan.
+  attributedCallerId: v.optional(v.id("credentials")),
+  attributed: v.optional(v.boolean()),
+  channel: v.optional(v.union(v.literal("web"), v.literal("mcp"), v.literal("api"))),
+  surface: v.optional(v.union(v.literal("web"), v.literal("mcp_hosted"))),
+  commitSha: v.optional(v.string()),
+  treeSha: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
