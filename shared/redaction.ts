@@ -86,6 +86,27 @@ export function fingerprintFinding(
   return occurrence > 0 ? `${base}:${occurrence}` : base;
 }
 
+// The fingerprint without its occurrence number, which is the identity two
+// identical findings in one file share.
+//
+// Why this exists. The occurrence number is a running count, so it depends on
+// position: delete the first of two identical lines and the second is renumbered
+// from 1 to 0. Matching on the number then reports the deleted finding as still
+// present and the surviving one as gone, and a stored acceptance for ":1" stops
+// matching a finding that never moved. Comparing by this base instead pairs a
+// group of identical findings with the same group next scan and lets the counts
+// do the work: two before, one after, is one fixed and one still broken.
+//
+// The occurrence is stripped only when the fingerprint really ends in
+// `:hash:digits`, where hash is the eight hex characters this module writes. A
+// plain fingerprint ends at the hash and is returned unchanged, so a hash that
+// happens to be all digits is never mistaken for one.
+export function baseFingerprint(fingerprint: string): string {
+  const match = /:([0-9a-f]{8}):(\d+)$/.exec(fingerprint);
+  if (match === null) return fingerprint;
+  return `${fingerprint.slice(0, match.index)}:${match[1]}`;
+}
+
 // How many findings already in this run carry the same rule, path and redacted
 // snippet. That count is the occurrence number the next identical finding takes.
 export function occurrenceFor(
