@@ -283,6 +283,13 @@ export default function Privacy() {
             counts stay on your machine until you say yes. You can turn them off later with
             <code> LAUNCHSENSE_DIAGNOSTICS=off</code>.
           </li>
+          <li>
+            The same installer asks a second question, about reading your own project files and
+            your agent instruction files, such as AGENTS.md. That one defaults to yes, so it is an
+            acknowledgement rather than consent, and it is described that way here and on the
+            record. Nothing is uploaded either way: the read happens on your machine. Type no and
+            those files are listed as not checked.
+          </li>
         </ul>
         <p>
           What is not built yet: turning off scan history from an account menu, and a Delete my

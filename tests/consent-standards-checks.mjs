@@ -17,6 +17,7 @@ import {
   DIAGNOSTICS_NOTICE_VERSION,
   DIAGNOSTICS_NOTICE_WORDING,
   NOT_FILLED_FIELDS,
+  SIGN_IN_PURPOSE_IDS,
 } from "../shared/consent/vocabulary.ts";
 import { PROCESSING_ACTIVITIES, renderProcessingRegister } from "../shared/consent/register.ts";
 import {
@@ -246,14 +247,17 @@ describe("a consent record carries the fields ISO/IEC TS 27560:2023 names", () =
 
   it("names the four purposes the sign-in panel asks about, with the same labels", () => {
     // The panel is the surface a person reads. If a purpose is renamed in one place
-    // and not the other, the record describes a question nobody was asked.
+    // and not the other, the record describes a question nobody was asked. The
+    // local file read is a fifth purpose but it is not asked on this panel.
     const panelIds = [...authPanel.matchAll(/^ {4}id: "([a-z]+)",$/gm)].map((m) => m[1]);
     assert.deepEqual(
-      CONSENT_PURPOSES.map((purpose) => purpose.id),
+      [...SIGN_IN_PURPOSE_IDS],
       panelIds,
       "the consent vocabulary and the sign-in boxes must ask about the same things in the same order",
     );
-    for (const purpose of CONSENT_PURPOSES) {
+    for (const id of SIGN_IN_PURPOSE_IDS) {
+      const purpose = CONSENT_PURPOSES.find((item) => item.id === id);
+      assert.ok(purpose, `${id} must exist in the vocabulary`);
       assert.ok(
         authPanel.includes(purpose.label),
         `the sign-in panel no longer says: ${purpose.label}`,
@@ -272,9 +276,9 @@ describe("a consent record carries the fields ISO/IEC TS 27560:2023 names", () =
     }
     const inLedger = CONSENT_PURPOSES.filter((purpose) => purpose.recorded_in === "local_ledger");
     assert.deepEqual(
-      inLedger.map((purpose) => purpose.id),
-      ["usage"],
-      "the install.sh question is the one the offline generator can read",
+      inLedger.map((purpose) => purpose.id).sort(),
+      ["files", "usage"],
+      "the installer questions are the ones the offline generator can read",
     );
     const inDatabase = CONSENT_PURPOSES.filter((purpose) => purpose.recorded_in === "convex_database");
     assert.deepEqual(

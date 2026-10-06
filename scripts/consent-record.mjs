@@ -93,6 +93,7 @@ async function readLedger(path) {
       granted: parsed["granted"],
       decidedAt: parsed["decidedAt"],
       source: typeof parsed["source"] === "string" ? parsed["source"] : "this line names no source",
+      purpose: typeof parsed["purpose"] === "string" ? parsed["purpose"] : "usage",
       line,
       prevHash,
       latest: index === lines.length - 1,
@@ -111,7 +112,7 @@ const records = [];
 // line in the ledger. An earlier answer is evidence and keeps its own record.
 let currentRecord = null;
 for (const [index, decision] of decisions.entries()) {
-  const record = await buildConsentRecord(decision);
+  const record = await buildConsentRecord(decision, decision.purpose ?? "usage");
   records.push(record);
   if (index === decisions.length - 1) currentRecord = record;
 }

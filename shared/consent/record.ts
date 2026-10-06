@@ -52,6 +52,12 @@ export interface LedgerDecision {
   decidedAt: string;
   /** How the answer was reached: prompt, a remembered answer, or a tier switch. */
   source: string;
+  /**
+   * Which question the line answers. One ledger holds every local question, so a
+   * line without this field is an older line, and the only local question then was
+   * usage, which is what it is read as.
+   */
+  purpose?: ConsentPurpose["id"];
   /** The exact ledger line, hashed as the record's own anchor. */
   line: string;
   /** Hash of the line before it, or null on the first line. */
@@ -215,6 +221,7 @@ const PURPOSE_TYPE: Record<ConsentPurpose["id"], string> = {
   read: "service_delivery_via_authenticated_third_party_api",
   explain: "service_delivery_via_third_party_ai",
   usage: "product_analytics_via_opt_in",
+  files: "local_review_of_the_person's_own_checkout",
 };
 
 /** Manner, location, and mechanism, taken from how the code actually asks. */
@@ -245,6 +252,12 @@ const EVENT_DETAIL: Record<
     location: "the local review installer, one question at the end of the run",
     mechanism: "terminal_prompt",
     consent_type: "explicit",
+  },
+  files: {
+    manner: "notice_with_a_default",
+    location: "the local review installer, before the expanded read",
+    mechanism: "terminal_prompt",
+    consent_type: "implied",
   },
 };
 
@@ -493,7 +506,7 @@ export async function buildConsentRecords(
   decisions: LedgerDecision[],
 ): Promise<ConsentRecord[]> {
   const records: ConsentRecord[] = [];
-  for (const decision of decisions) records.push(await buildConsentRecord(decision));
+  for (const decision of decisions) records.push(await buildConsentRecord(decision, decision.purpose ?? "usage"));
   // A shape for every purpose the local ledger does not answer. Dropping those
   // shapes because a decision exists in the database would leave a reader of this
   // file with no mention of three of the four purposes.

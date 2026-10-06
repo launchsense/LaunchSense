@@ -23,10 +23,10 @@
 // repository the person intends to scan.
 
 import { SIGN_IN_NOTICE_VERSION } from "../../../shared/copy/signIn.ts";
-import { CONSENT_PURPOSES } from "../../../shared/consent/vocabulary.ts";
-import type { ConsentPurpose } from "../../../shared/consent/vocabulary.ts";
+import { SIGN_IN_PURPOSE_IDS } from "../../../shared/consent/vocabulary.ts";
+import type { SignInPurposeId } from "../../../shared/consent/vocabulary.ts";
 
-export type PurposeId = ConsentPurpose["id"];
+export type PurposeId = SignInPurposeId;
 
 /** One answer, as the person gave it. A refusal is an answer too. */
 export interface SignInDecisionEntry {
@@ -68,7 +68,7 @@ export interface DecisionStorage {
   removeItem(key: string): void;
 }
 
-const PURPOSE_IDS: readonly string[] = CONSENT_PURPOSES.map((purpose) => purpose.id);
+const PURPOSE_IDS: readonly string[] = SIGN_IN_PURPOSE_IDS;
 
 function isPurposeId(value: unknown): value is PurposeId {
   return typeof value === "string" && PURPOSE_IDS.includes(value);
