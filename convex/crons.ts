@@ -29,4 +29,11 @@ crons.daily(
   {},
 );
 
+crons.daily(
+  "purge expired visitor ids",
+  { hourUTC: 3, minuteUTC: 50 },
+  internal.analytics.retention.purgeExpiredVisitorIds,
+  {},
+);
+
 export default crons;

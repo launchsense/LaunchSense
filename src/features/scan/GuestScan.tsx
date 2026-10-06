@@ -14,6 +14,8 @@ import Stage5Panels from "../report/Stage5Panels";
 import CapacityMeter from "../report/CapacityMeter";
 import { ToolCard } from "../report/ToolCard";
 import { toUserError } from "./userError";
+import { useVisitorId } from "./useVisitorId";
+import ReportFeedback from "../report/ReportFeedback";
 
 // This project's own public repo, so a first-time visitor can see a real
 // report without needing a repo of their own to hand.
@@ -48,6 +50,7 @@ export default function GuestScan() {
   const createPassport = useAction(api.scans.sharing.createPassport);
   const explainScan = useAction(api.scans.aiExplain.explainScan);
   const logEvent = useMutation(api.scans.queries.logEvent);
+  const visitorId = useVisitorId();
   const [repoUrl, setRepoUrl] = useState("");
   const [liveUrl, setLiveUrl] = useState("");
   const [mainAction, setMainAction] = useState("");
@@ -76,9 +79,9 @@ export default function GuestScan() {
 
   useEffect(() => {
     if (refShare !== null) {
-      void logEvent({ kind: "referred_visit", refShareId: refShare });
+      void logEvent({ kind: "referred_visit", refShareId: refShare, visitorId });
     }
-  }, [refShare, logEvent]);
+  }, [refShare, logEvent, visitorId]);
   const [shareId, setShareId] = useState<string | null>(null);
   const [passportId, setPassportId] = useState<string | null>(null);
   const [shareError, setShareError] = useState("");
@@ -139,7 +142,7 @@ export default function GuestScan() {
         mainAction: mainAction.trim().length > 0 ? mainAction.trim() : undefined,
       });
       setLiveOutcome({ reaches: checked.reaches, httpStatus: checked.httpStatus });
-      void logEvent({ kind: "live_checked", scanId: targetScanId });
+      void logEvent({ kind: "live_checked", scanId: targetScanId, visitorId });
     } catch (error) {
       setLiveError(toLiveUserError(error, "Could not check the live app. The repository scan is finished."));
     }
@@ -178,9 +181,9 @@ export default function GuestScan() {
       setProviderAnswered(false);
       setExplanations([]);
       setNotActionable([]);
-      void logEvent({ kind: "scan_started", scanId: result.scanId, refShareId: refShare ?? undefined });
+      void logEvent({ kind: "scan_started", scanId: result.scanId, refShareId: refShare ?? undefined, visitorId });
       if (refShare !== null) {
-        void logEvent({ kind: "referred_scan_started", scanId: result.scanId, refShareId: refShare });
+        void logEvent({ kind: "referred_scan_started", scanId: result.scanId, refShareId: refShare, visitorId });
       }
       if (result.status === "failed") {
         // The repository never opened, but the live app is a different address
@@ -225,6 +228,7 @@ export default function GuestScan() {
       void logEvent({
         kind: analyzed.status === "completed" ? "scan_completed" : "scan_partial",
         scanId: result.scanId,
+        visitorId,
       });
       await runLiveCheck(result.scanId);
       setPhase("idle");
@@ -270,6 +274,7 @@ export default function GuestScan() {
       void logEvent({
         kind: result.status === "completed" ? "scan_completed" : "scan_partial",
         scanId: queuedScan.scanId,
+        visitorId,
       });
       // A resumed scan reaches the same finished state as a fresh one, so it
       // gets the same live check. This is the path a signed-in scan is most
@@ -290,7 +295,7 @@ export default function GuestScan() {
     try {
       const result = await createShare({ scanId });
       setShareId(result.shareId);
-      void logEvent({ kind: "share_created", scanId, shareId: result.shareId });
+      void logEvent({ kind: "share_created", scanId, shareId: result.shareId, visitorId });
     } catch (error) {
       setShareError(toUserError(error, "Could not create a share link. Try again."));
     }
@@ -365,7 +370,7 @@ export default function GuestScan() {
     try {
       const result = await createPassport({ scanId });
       setPassportId(result.passportId);
-      void logEvent({ kind: "passport_created", scanId });
+      void logEvent({ kind: "passport_created", scanId, visitorId });
     } catch (error) {
       setShareError(toUserError(error, "Could not issue a passport. Try again."));
     }
@@ -590,6 +595,9 @@ export default function GuestScan() {
           {analyzed && scanState !== undefined && (
             <ToolCard tools={scanState.codingTools} />
           )}
+          {analyzed && scanId !== null && (
+            <ReportFeedback scanId={scanId} visitorId={visitorId} />
+          )}
           {analyzed && (
             <div aria-label="Rescan" className="scan-secondary">
               <button className="ghost" type="button" disabled={phase !== "idle"} onClick={() => void onRescan()}>
@@ -659,7 +667,7 @@ export default function GuestScan() {
                   <button type="button" onClick={() => {
                     setShareViewedAt(Date.now());
                     if (shareId !== null && scanId !== null) {
-                      void logEvent({ kind: "share_viewed", scanId, shareId });
+                      void logEvent({ kind: "share_viewed", scanId, shareId, visitorId });
                     }
                   }}>
                     It opened fine

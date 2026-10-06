@@ -104,7 +104,7 @@ function isStringColumn(type) {
 
 describe("the analytics tables declare no PII column", () => {
   it("inventory every analytics table, and say what each one is for", () => {
-    assert.equal(ANALYTICS_TABLES.length, 7, "seven analytics tables are governed by this rule");
+    assert.equal(ANALYTICS_TABLES.length, 8, "eight analytics tables are governed by this rule");
     for (const table of ANALYTICS_TABLES) {
       assert.ok(table.role.length > 0, `${table.table} must say what it is for`);
       assert.ok(table.fields.length > 0, `${table.table} must list its columns`);
@@ -291,6 +291,7 @@ describe("the inventory matches the schema, so a new PII column cannot arrive qu
       "usageEvents",
       "dailyMetrics",
       "analyticsEvents",
+      "visitorDays",
       "rateLimits",
       "usageDiagnostics",
       "providerCalls",
@@ -447,13 +448,20 @@ describe("the write paths cannot put a person's details on an analytics row", ()
 });
 
 describe("the notice states the analytics data rule on every surface that carries it", () => {
-  // The five sentences are the rule in plain words. They are the same on all
-  // three surfaces, and every one of them is true of the code above.
+  // The rule in plain words. The same sentences on all three surfaces, and
+  // every one of them is true of the code above. Sentence four grew when the
+  // anonymous visitor identifier was allowed: the repository identifier keeps
+  // its three purposes, and the visitor id gets its own sentence with its own
+  // purpose, so neither identifier borrows the other's reason.
   const RULE = [
     "Analytics holds no personal information.",
     "No email address, no network address, and no free text is written to an analytics row.",
     "The only label that names anything is the coding tool that sent the call, which is a claim about a tool and not about a person.",
-    "The only identifier analytics is allowed is the repository identifier, and we use it for technical purposes only: running the scan, linking a rescan, and counting the funnel.",
+    "Analytics is allowed two identifiers and nothing else.",
+    "The repository identifier, used for technical purposes only: running the scan, linking a rescan, and counting the funnel.",
+    "And an anonymous visitor identifier, which is a random value our server mints, carries no personal information, and is used only to count distinct visitors.",
+    "It cannot name a person, a device, or an address.",
+    "Feedback on a report travels as a yes or no plus one of six fixed labels, never as typed words.",
     "Every other value on an analytics row is a count, a code, a time, or one of a closed set of labels.",
   ];
 
@@ -475,11 +483,22 @@ describe("the notice states the analytics data rule on every surface that carrie
     // The part a reader is most likely to need, checked on its own so a failure
     // names the sentence rather than the list.
     const purposeSentence =
-      "The only identifier analytics is allowed is the repository identifier, and we use it for technical purposes only: running the scan, linking a rescan, and counting the funnel.";
+      "The repository identifier, used for technical purposes only: running the scan, linking a rescan, and counting the funnel.";
     for (const [name, text] of surfaces) {
       assert.ok(
         text.includes(purposeSentence),
         `${name} must say the repository identifier is used for technical purposes only`,
+      );
+    }
+  });
+
+  it("says the visitor identifier counts distinct visitors and nothing else", () => {
+    const visitorSentence =
+      "And an anonymous visitor identifier, which is a random value our server mints, carries no personal information, and is used only to count distinct visitors.";
+    for (const [name, text] of surfaces) {
+      assert.ok(
+        text.includes(visitorSentence),
+        `${name} must bound the visitor identifier to counting distinct visitors`,
       );
     }
   });
