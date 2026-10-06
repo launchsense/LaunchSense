@@ -9,6 +9,7 @@ import { queryOsvBatch } from "../convex/adapters/osv.ts";
 import { buildLocalReport } from "../shared/review/buildReport.ts";
 import type { AdvisoryCoverage, NotChecked, ReviewFile, ReviewReport } from "../shared/review/buildReport.ts";
 import { diagnosticPayload, diagnosticsAllowed } from "../shared/review/diagnostics.ts";
+import { LOCAL_FILES_NOTICE_VERSION } from "../shared/consent/vocabulary.ts";
 import { inventoryNpmLock } from "../shared/review/lockfile.ts";
 import type { LockInventory, LockPackage } from "../shared/review/lockfile.ts";
 import { findingsToAsk, laneCanReorder, questionIdFor, rankFromAnswers, rankState } from "../shared/reports/priority.ts";
@@ -47,6 +48,30 @@ interface LocalConfig {
   agreed?: boolean;
   authRequired?: boolean;
   harness?: string;
+  filesAcknowledged?: boolean;
+  filesNoticeVersion?: string;
+}
+
+/**
+ * The agent instruction files. These are the ones the local file-read
+ * acknowledgement covers: the review reads them so it knows the project's own
+ * rules, and it reads them only when the person acknowledged that read for the
+ * wording in force now. Absent, refused, or stale means they are listed as not
+ * checked, never read silently.
+ */
+const AGENT_FILES = new Set([
+  "AGENTS.md",
+  "CLAUDE.md",
+  "CURSOR.md",
+  ".cursorrules",
+  ".windsurfrules",
+  "copilot-instructions.md",
+]);
+
+function filesReadAcknowledged(config: LocalConfig): boolean {
+  return (
+    config.filesAcknowledged === true && config.filesNoticeVersion === LOCAL_FILES_NOTICE_VERSION
+  );
 }
 
 function argRoot(): string {
@@ -69,13 +94,21 @@ function readConfig(): LocalConfig {
       agreed: record["agreed"] === true,
       authRequired: record["authRequired"] === true,
       harness: typeof record["harness"] === "string" ? record["harness"] : undefined,
+      filesAcknowledged:
+        typeof record["filesConsent"] === "object" && record["filesConsent"] !== null
+          ? (record["filesConsent"] as Record<string, unknown>)["acknowledged"] === true
+          : false,
+      filesNoticeVersion:
+        typeof record["filesConsent"] === "object" && record["filesConsent"] !== null
+          ? ((record["filesConsent"] as Record<string, unknown>)["noticeVersion"] as string | undefined)
+          : undefined,
     };
   } catch {
     return {};
   }
 }
 
-function walk(root: string): { files: ReviewFile[]; skipped: NotChecked[] } {
+function walk(root: string, agentReadAllowed: boolean): { files: ReviewFile[]; skipped: NotChecked[] } {
   const files: ReviewFile[] = [];
   const skipped: NotChecked[] = [];
   let bytes = 0;
@@ -113,6 +146,16 @@ function walk(root: string): { files: ReviewFile[]; skipped: NotChecked[] } {
       }
       if (!info.isFile()) continue;
       const path = relative(root, full).split("\\").join("/");
+      // An agent instruction file is read only when the person acknowledged the
+      // expanded local read for the wording in force now. Refused or stale means
+      // it is disclosed as not checked, the same as any other unread file.
+      if (!agentReadAllowed && AGENT_FILES.has(name)) {
+        skipped.push({
+          scope: path,
+          reason: "Agent instruction file. Not read: the local file read was not acknowledged for the current wording.",
+        });
+        continue;
+      }
       const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : "";
       if (BINARY.has(ext)) {
         skipped.push({ scope: path, reason: "Binary or media file." });
@@ -332,7 +375,7 @@ async function main(): Promise<void> {
   const config = readConfig();
   const root = argRoot();
   const offline = process.env["LAUNCHSENSE_OFFLINE"] === "1";
-  const { files, skipped } = walk(root);
+  const { files, skipped } = walk(root, filesReadAcknowledged(config));
   const lock = files.find((file) => file.path.endsWith("package-lock.json"));
   const inventory = lock === undefined ? null : inventoryNpmLock(lock.content, directNames(files));
   const registry = offline || inventory === null

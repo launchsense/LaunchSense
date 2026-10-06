@@ -209,7 +209,7 @@ function makeCtx(sessionUserId) {
   return { db: makeDb(), sessionUserId };
 }
 
-const ALL_PURPOSES = CONSENT_PURPOSES.map((purpose) => purpose.id);
+const ALL_PURPOSES = vocabulary.SIGN_IN_PURPOSE_IDS;
 
 /** A real click: every purpose granted, the version in force, a fixed time. */
 const DECIDED_AT = Date.UTC(2026, 9, 6, 11, 0, 0);
@@ -280,6 +280,19 @@ describe("the consentRecords table", () => {
     const mutation = readRepo("convex/consent.ts");
     const mutated = [...mutation.matchAll(/v\.literal\("([a-z]+)"\)/g)].map((m) => m[1]);
     assert.deepEqual(mutated, ALL_PURPOSES, "convex/consent.ts must accept the same four purposes");
+    // Its runtime guard must be the SIGN-IN list, not the full purpose list. The
+    // vocabulary also holds a local-only purpose, and deriving the guard from the
+    // full list would let that purpose be written into a sign-in row.
+    assert.match(
+      mutation,
+      /new Set\(SIGN_IN_PURPOSE_IDS\)/,
+      "convex/consent.ts must derive its known-purpose guard from the sign-in ids",
+    );
+    assert.doesNotMatch(
+      mutation,
+      /new Set\(CONSENT_PURPOSES/,
+      "deriving from the full purpose list would let the local file purpose into a sign-in row",
+    );
   });
 });
 
