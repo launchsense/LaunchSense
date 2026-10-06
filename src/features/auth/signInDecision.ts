@@ -1,6 +1,6 @@
 // The sign-in decision, before it can be a record.
 //
-// The panel asks four separate purposes in four boxes and one button. The button
+// The panel asks one box covering four purposes, and one button. The button
 // starts an OAuth redirect, and until that redirect comes back the person is
 // anonymous: there is no user id to attach a record to. So the click cannot write
 // a consent record, and pretending otherwise would either need a client-supplied
