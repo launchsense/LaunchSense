@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { resetLocalAuthState } from "./resetLocalAuthState";
-import { buildSignInDecision, saveSignInDecision } from "./signInDecision";
+import { buildSignInDecision, saveSignInDecision, savePendingScan } from "./signInDecision";
 import { SIGN_IN_OFFER, SIGN_IN_NOTICE_VERSION, SIGN_IN_POLICY } from "../../../shared/copy/signIn";
 
 // One box for four purposes, all unticked. The single tick names every
@@ -45,8 +45,11 @@ const PURPOSES = [
   },
 ] as const;
 
-// Shown only in the cap dialog, while signed out. Signed-in people use Sign out in the menu.
-export function AuthPanel() {
+// Shown only in the cap dialog and the lite report, while signed out. Signed-in
+// people use Sign out in the menu. The optional scanId is the scan on screen: it
+// is remembered across the OAuth round trip so the person returns to their own
+// result instead of an empty box.
+export function AuthPanel(props: { scanId?: string | null } = {}) {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const [accepted, setAccepted] = useState(false);
@@ -100,6 +103,7 @@ export function AuthPanel() {
           }),
         );
         resetLocalAuthState();
+        savePendingScan(window.sessionStorage, props.scanId ?? null);
         signIn("github").catch(() => {
           alert("GitHub sign-in could not start. Please refresh and try again.");
         });
