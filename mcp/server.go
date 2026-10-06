@@ -390,6 +390,16 @@ func (s *server) handle(req rpcRequest) (any, *rpcError) {
 		if err := json.Unmarshal(req.Params, &call); err != nil {
 			return nil, &rpcError{Code: -32602, Message: "Invalid tool call."}
 		}
+		// A null or absent params unmarshals into a zero toolCall with no name,
+		// which used to answer "Unknown tool: " with a blank name. That named a
+		// problem that does not exist (no tool was named at all) and sent the
+		// caller looking for a typo. Say what is actually wrong.
+		if call.Name == "" {
+			return nil, &rpcError{
+				Code:    -32602,
+				Message: "Invalid tool call: the params member must be a JSON object with a name field.",
+			}
+		}
 		def, known := toolDef(call.Name)
 		if !known {
 			// isError means a tool ran and failed. A name this server does not

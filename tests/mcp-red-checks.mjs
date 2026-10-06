@@ -877,32 +877,42 @@ describe("Red team: the local MCP server", () => {
       }
     });
 
-    it("[OPEN] 5.7 a null params is reported as an unknown tool with a blank name, which names a problem that does not exist", async () => {
+    it("[DEFENDED] 5.7 a null params names the envelope problem, not a tool that does not exist", async () => {
       needGo();
-      // The real mistake is the envelope: params was null, so there was no tool
-      // call to name. The answer says "Unknown tool: " with nothing after it,
-      // which points a reader at the tool list instead of at the bad message.
+      // Fixed 2026-10-06. A null params unmarshals into an empty tool call, and
+      // the answer used to be "Unknown tool: " with a blank name, which pointed
+      // the reader at the tool list instead of at the bad message. It now names
+      // the real problem: params must be an object with a name field.
       const nullParams = await session(
         HELLO + '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":null}\n',
       );
-      const blank = nullParams.replies.find((r) => r.id === 1);
-      assert.ok(blank, `one answer: ${nullParams.stdout.slice(0, 160)}`);
-      assert.equal(blank.error.code, -32602, "measured: -32602");
-      assert.match(
-        blank.error.message,
-        /Unknown tool: $/,
-        `measured: the name after the colon is empty, so the message names nothing: ${JSON.stringify(blank.error.message)}`,
+      const answer = nullParams.replies.find((r) => r.id === 1);
+      assert.ok(answer, `one answer: ${nullParams.stdout.slice(0, 160)}`);
+      assert.equal(answer.error.code, -32602, "still a params error");
+      assert.doesNotMatch(
+        answer.error.message,
+        /Unknown tool/,
+        "it must not blame a tool when no tool was named",
       );
+      assert.match(answer.error.message, /name field/, "it names the real problem");
 
-      // The same blank name comes from a missing name and from an empty one.
+      // A missing name and an empty name get the same honest answer.
       const missingName = await session(
         HELLO + '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"arguments":{}}}\n',
       );
-      assert.match(missingName.replies.find((r) => r.id === 2).error.message, /Unknown tool: $/, "measured: same blank name");
+      assert.match(
+        missingName.replies.find((r) => r.id === 2).error.message,
+        /name field/,
+        "a params object with no name gets the same answer",
+      );
 
       const emptyName = await callTool(3, "", {});
       const empty = await session(HELLO + emptyName);
-      assert.match(empty.replies.find((r) => r.id === 3).error.message, /Unknown tool: $/, "measured: same blank name");
+      assert.match(
+        empty.replies.find((r) => r.id === 3).error.message,
+        /name field/,
+        "an empty name gets the same answer",
+      );
     });
 
     it("[DEFENDED] 5.8 multi-byte text survives the round trip through a tool answer", async () => {
