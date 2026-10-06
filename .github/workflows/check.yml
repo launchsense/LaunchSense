@@ -8,7 +8,11 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      # Full history: the DCO gate walks origin/main..HEAD, and a shallow
+      # checkout has no base to walk from.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
