@@ -192,13 +192,14 @@ function finding(
   title: string,
   why: string,
   raw: string,
+  severityOverride?: Severity,
 ): ReviewFinding {
   const snippet = redactedSnippet(raw);
   return {
     ruleId,
     path,
     line,
-    severity: severityForFinding(ruleId, path),
+    severity: severityOverride ?? severityForFinding(ruleId, path),
     title,
     why,
     fingerprint: fingerprintFinding(ruleId, ANALYZER_VERSION, path, snippet),
@@ -251,16 +252,26 @@ export function buildLocalReport(
   }
 
   const licenses = analyzeLicenses(paths, files, files.length > 0);
-  findings.push(
-    finding(
-      "license.policy",
-      licenses.files[0] ?? "(repo)",
-      1,
-      licenses.detected.length > 0 ? `License signals: ${licenses.detected.join(", ")}` : "No license signal in the files read",
-      licenses.note,
-      licenses.note,
-    ),
-  );
+  // A licence policy the lane calls Allowed is not a finding. The hosted path
+  // emits nothing in that case, and the local path must agree, or a clean MIT
+  // repo carries a medium "needs attention" row on one door and not the other.
+  // Severity follows the same ladder as the hosted door: Not recommended is
+  // high, Not checked is info, everything else is medium.
+  if (licenses.policy !== "Allowed") {
+    const licenseSeverity: Severity =
+      licenses.policy === "Not recommended" ? "high" : licenses.policy === "Not checked" ? "info" : "medium";
+    findings.push(
+      finding(
+        "license.policy",
+        licenses.files[0] ?? "(repo)",
+        1,
+        licenses.detected.length > 0 ? `License signals: ${licenses.detected.join(", ")}` : "No license signal in the files read",
+        licenses.note,
+        licenses.note,
+        licenseSeverity,
+      ),
+    );
+  }
 
   const lockFile = files.find((file) => (file.path.split("/").pop() ?? "") === "package-lock.json");
   const direct = new Set(deps.deps.filter((dep) => dep.ecosystem === "npm").map((dep) => dep.name));
@@ -379,9 +390,12 @@ export function buildLocalReport(
     }
     const listed = advisories.hits.slice(0, 20);
     for (const hit of listed) {
+      // An unknown advisory severity is real but unranked, so it lands at info,
+      // the same choice the hosted door makes. A guessed medium here would let a
+      // low-confidence advisory outrank a known medium finding.
       const severity: Severity = hit.severity === "high" || hit.severity === "low" || hit.severity === "medium"
         ? hit.severity
-        : "medium";
+        : "info";
       const title = `${hit.id} is recorded for ${hit.name}@${hit.version}`;
       const why = `${hit.id} is a public advisory record for this exact ${hit.depth} version. This is not a statement that the app is exploitable.`;
       findings.push({
