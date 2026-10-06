@@ -11,6 +11,17 @@ This skill reviews **your** checkout, the repository you installed it into, not 
 
 Call `launchsense_scan_repo` when the person wants to know what is wrong before they share. It reviews the checkout under `LAUNCHSENSE_ROOT` and takes no arguments. A `repoUrl` is refused, because the local server reads files on this machine and never downloads GitHub.
 
+## The governance file: `.ls/policy.yaml`
+
+The review reads a governance file at `.ls/policy.yaml` under `LAUNCHSENSE_ROOT`, if one exists. It is the repo's own memory: the findings the person already looked at and accepted, each with a reason, so a later review does not raise them again. It is declarative only. It cannot run code, disable a rule, or change a severity.
+
+- A finding is only ever hidden when an acceptance names it, by fingerprint, by rule and path, or by rule alone. Nothing else is hidden.
+- A wrong file is refused whole and nothing is suppressed. A file that would silence too much is refused whole too. A refusal is stated in the not-checked list.
+- An accepted finding is named in the not-checked list as accepted, so a reader can always see what was hidden and why.
+- The folder is gitignored and stays on the machine. Do not commit it unless the repo owner says to.
+
+When the person accepts a finding, write the acceptance into `.ls/policy.yaml` with their reason. Do not write the file silently: show them the entry and let them confirm. Never remove an acceptance they made without asking.
+
 The local server also offers `launchsense_scan_public_notice`, which scans nothing. It only names where the public read lives. The hosted address has a different tool, `launchsense_scan_public`, and that one really does read a public repo on our server. Do not expect a scan from the local notice tool.
 
 The local server speaks MCP over stdio as newline-delimited JSON: one JSON message per line, no length header. One message may not pass 4 MiB; a longer line is answered with an error and nothing runs. A report body over 1 MiB comes back marked partial. A partial result is not a pass.
