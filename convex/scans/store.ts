@@ -55,10 +55,18 @@ const fullScanDoc = v.object({
   mainAction: v.optional(v.string()),
   rescanOf: v.optional(v.id("scans")),
   signedIn: v.optional(v.boolean()),
-  // Carried on the fetched shape so an action can run canReadScan on the row it
-  // just read. Without it, every action lane would see a signed-in scan with no
-  // owner and turn away the owner along with everyone else.
+  // The fetched shape must declare every field the schema can hold. A Convex
+  // return validator rejects a document that carries a field it does not name,
+  // so an omission here makes fetchScan throw on a real row, in every lane that
+  // reads it. These fields were added to the schema after this shape was written
+  // and were missing, which broke the read on every row createScan writes.
   userId: v.optional(v.id("users")),
+  attributedCallerId: v.optional(v.id("credentials")),
+  attributed: v.optional(v.boolean()),
+  channel: v.optional(v.union(v.literal("web"), v.literal("mcp"), v.literal("api"))),
+  surface: v.optional(v.union(v.literal("web"), v.literal("mcp_hosted"))),
+  commitSha: v.optional(v.string()),
+  treeSha: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
