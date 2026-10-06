@@ -104,10 +104,10 @@ const RULES: Rule[] = [
     title: "Secure Communications",
     version: ASVS,
     source: ASVS_SOURCE,
-    coverage: "partial",
+    coverage: "not-automatable",
     rules: [],
-    caveat: "HTTPS on the live site only, when a live URL is given.",
-    kind: "live",
+    caveat: "Communications are a runtime property. The live-site check was removed from the product, so nothing here is read.",
+    kind: "always-not-checked",
   },
   {
     id: "V12.1.1",
@@ -176,8 +176,8 @@ const RULES: Rule[] = [
     version: TOP10,
     source: TOP10_SOURCE,
     coverage: "partial",
-    rules: CREDENTIAL_RULES,
-    caveat: "Pattern scan of fetched files, not a crypto review.",
+    rules: ["code.weak-crypto"],
+    caveat: "Weak hash and cipher calls only. A hard-coded credential is a CWE-798 row, not a cryptographic failure.",
     kind: "evidence",
   },
   {
@@ -276,8 +276,52 @@ const RULES: Rule[] = [
     version: "CWE",
     source: "https://cwe.mitre.org/data/definitions/95.html",
     coverage: "partial",
-    rules: ["secret.eval-use"],
+    rules: ["secret.eval-use", "code.eval-use"],
     caveat: "Label on the eval pattern we already scan. Not a new check.",
+    kind: "evidence",
+  },
+  {
+    id: "CWE-79",
+    title: "Cross-site scripting sink",
+    version: "CWE",
+    source: "https://cwe.mitre.org/data/definitions/79.html",
+    coverage: "partial",
+    rules: ["code.inner-html"],
+    caveat:
+      "Label on innerHTML assignments we already scan. Identifies a potential XSS sink, not proof of XSS.",
+    kind: "evidence",
+  },
+  {
+    id: "CWE-78",
+    title: "Command execution surface",
+    version: "CWE",
+    source: "https://cwe.mitre.org/data/definitions/78.html",
+    coverage: "partial",
+    rules: ["code.child-process"],
+    caveat:
+      "Label on child_process use we already scan. Identifies a potential command-injection vector, not proof of injection.",
+    kind: "evidence",
+  },
+  {
+    id: "CWE-327",
+    title: "Broken or risky cryptographic algorithm",
+    version: "CWE",
+    source: "https://cwe.mitre.org/data/definitions/327.html",
+    coverage: "partial",
+    rules: ["code.weak-crypto"],
+    caveat:
+      "Label on weak hash and cipher calls we already scan. MD5 for a checksum is not the same as MD5 for a password hash.",
+    kind: "evidence",
+  },
+  {
+    id: "CWE-942",
+    title: "Permissive cross-domain policy",
+    version: "CWE",
+    source: "https://cwe.mitre.org/data/definitions/942.html",
+    coverage: "partial",
+    rules: ["code.cors-wildcard"],
+    caveat:
+      "Label on wildcard CORS we already scan. A star origin is not always a vulnerability, but it is a permissive policy.",
     kind: "evidence",
   },
   {
@@ -331,6 +375,9 @@ function statusFor(
       if (rule.rules.length === 0) return "not-checked";
       return evidenceCount > 0 ? "signal-found" : "no-signal";
     case "live":
+      // No row uses this kind since the live-site check was removed from the
+      // product. It stays so a future live signal has a home, and it is
+      // unreachable today on purpose.
       return input.liveChecked ? "no-signal" : "not-checked";
     case "osv":
       if (evidenceCount > 0) return "signal-found";
@@ -366,4 +413,36 @@ export function buildStandards(input: MappingInput): StandardMapping[] {
       source: rule.source,
     };
   });
+}
+
+/**
+ * The coverage metric. Two axes, never merged.
+ *
+ * `coverage` is what the product can check at all (partial, not-automatable,
+ * full). `status` is what this scan actually found. A row can be coverage
+ * `partial` and status `not-checked` at once (the OSV window was unknown), so
+ * adding them into one number would double count and mislead. This returns both.
+ *
+ * Invariant held by tests/license-scope-checks.mjs and the standards checks: a
+ * `partial` row always names a live evidence rule, so the partial count is a
+ * count of real checks, not labels.
+ */
+export interface StandardsCoverage {
+  coverage: { full: number; partial: number; notAutomatable: number };
+  status: { signalFound: number; noSignal: number; notChecked: number };
+  total: number;
+}
+
+export function standardsCoverage(rows: readonly StandardMapping[]): StandardsCoverage {
+  const coverage = { full: 0, partial: 0, notAutomatable: 0 };
+  const status = { signalFound: 0, noSignal: 0, notChecked: 0 };
+  for (const row of rows) {
+    if (row.coverage === "full") coverage.full += 1;
+    else if (row.coverage === "partial") coverage.partial += 1;
+    else coverage.notAutomatable += 1;
+    if (row.status === "signal-found") status.signalFound += 1;
+    else if (row.status === "no-signal") status.noSignal += 1;
+    else status.notChecked += 1;
+  }
+  return { coverage, status, total: rows.length };
 }
