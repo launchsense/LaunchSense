@@ -13,8 +13,9 @@ export const SIGN_IN_POLICY =
  * question in a terminal, and this panel asks four questions in a browser. One
  * version string for both would make a record claim words the person never read.
  *
- * What it covers: SIGN_IN_OFFER, SIGN_IN_POLICY, and the four purpose boxes and
- * their detail lines in src/features/auth/AuthPanel.tsx.
+ * What it covers: SIGN_IN_OFFER, SIGN_IN_POLICY, and the single consent box
+ * with its keyword line in src/features/auth/AuthPanel.tsx, plus the four
+ * purpose detail lines beside it.
  *
  * What it does not do: nothing re-asks anybody. The panel is only shown while
  * signed out, so a person who signs out and signs in again is asked again, and
@@ -23,4 +24,4 @@ export const SIGN_IN_POLICY =
  * upsert on (person, purpose, notice version) in convex/consent.ts is what keeps
  * the two answers apart.
  */
-export const SIGN_IN_NOTICE_VERSION = "2026-10-06";
+export const SIGN_IN_NOTICE_VERSION = "2026-10-06-single";
