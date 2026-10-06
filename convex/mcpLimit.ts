@@ -236,22 +236,11 @@ export const consumeExplain = internalMutation({
   },
 });
 
-/**
- * The shape a declared value must have before it lands in `usageDiagnostics`.
- *
- * The usage route takes its body from whoever holds the deployment key, and the
- * four declared strings used to be sliced and stored. A slice bounds the length,
- * not the content, so the route could be made to write a name or an email
- * address into an analytics row. This refuses the characters that make those
- * possible: no at sign, no space, no slash, no colon, no address.
- *
- * Everything the installer legitimately sends is a short token: stage "alpha",
- * tier "alpha", harness "local", version "alpha", orderSource "table".
- */
 // Closed sets, not a character shape. A shape that allows letters, dots and
-// dashes accepts "AdaLovelace", which is a person's name. These fields are tool
-// and build labels, so each is matched against the exact values the installer
-// sends, and anything else becomes the fallback label. A name is never stored raw.
+// dashes accepts "AdaLovelace", and a version shape with a pre-release suffix
+// accepts "1.2-AdaLovelace". These fields are tool and build labels, so each is
+// matched against the exact values the installer sends, and anything else is
+// normalized to the fallback label. A name is never stored raw.
 const ALLOWED_STAGE = new Set(["alpha"]);
 const ALLOWED_TIER = new Set(["alpha", "pro"]);
 const ALLOWED_HARNESS = new Set([
@@ -266,23 +255,36 @@ const ALLOWED_HARNESS = new Set([
   "unknown",
 ]);
 const ALLOWED_ORDER_SOURCE = new Set(["local", "jev", "perplexity", "table", "unspecified"]);
-const VERSION_SHAPE = /^\d+\.\d+(\.\d+)?([-+][A-Za-z0-9.]+)?$/;
+// A plain version only, and short. A pre-release suffix is a free string, so it is
+// refused: "1.2-AdaLovelace" is a name wearing a version's clothes, and an
+// uncapped suffix made the column unbounded.
+const VERSION_SHAPE = /^\d+\.\d+(\.\d+)?$/;
 
 function declaredOr(value: string, allowed: Set<string>, fallback: string): string {
   const trimmed = value.trim();
   return allowed.has(trimmed) ? trimmed : fallback;
 }
 
-/** True when a value is one of the exact labels this lane is allowed to keep. */
-export function isDeclaredValue(value: string, longer = false): boolean {
-  void longer;
+function declaredVersion(value: string): string {
+  const trimmed = value.trim();
+  return trimmed === "alpha" || VERSION_SHAPE.test(trimmed) ? trimmed : "other";
+}
+
+/**
+ * True when a value is one of the labels any of these fields is allowed to keep.
+ *
+ * Exported for tests. The write path does not use it: it normalizes each field
+ * with declaredOr or declaredVersion, because a value valid for one field is not
+ * valid for another.
+ */
+export function isDeclaredValue(value: string): boolean {
   const v = value.trim();
   return (
     ALLOWED_STAGE.has(v) ||
     ALLOWED_TIER.has(v) ||
     ALLOWED_HARNESS.has(v) ||
     ALLOWED_ORDER_SOURCE.has(v) ||
-    VERSION_SHAPE.test(v)
+    declaredVersion(v) === v
   );
 }
 
@@ -307,10 +309,7 @@ export const recordUsage = internalMutation({
     const stage = declaredOr(args.stage, ALLOWED_STAGE, "other");
     const tier = declaredOr(args.tier, ALLOWED_TIER, "other");
     const harness = declaredOr(args.harness, ALLOWED_HARNESS, "other");
-    const version =
-      args.version.trim() === "alpha" || VERSION_SHAPE.test(args.version.trim())
-        ? args.version.trim()
-        : "other";
+    const version = declaredVersion(args.version);
     const orderSource = declaredOr(args.orderSource, ALLOWED_ORDER_SOURCE, "unspecified");
     await ctx.db.insert("usageDiagnostics", {
       day: new Date().toISOString().slice(0, 10),
