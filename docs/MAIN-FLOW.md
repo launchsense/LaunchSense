@@ -89,7 +89,7 @@ Sign-out deletes the GitHub token used for a signed-in read. The token is not ke
 
 Connect shows `https://harmless-chihuahua-667.convex.site/mcp`. Home links there. Home does not repeat the address.
 
-The coding tool sends one JSON-RPC message to that address. `launchsense_scan_public` takes a public GitHub URL and runs the same read as the paste: pin the commit, respect the guest caps, then return the coverage line and the findings. `launchsense_get_report` reads a report by scan id. Two scans an hour from one caller, and eight an hour in total, then the route pauses. Alpha has no login. A private repo stays on the signed-in paste. This address does not read a repo that exists only on a laptop.
+The coding tool sends one JSON-RPC message to that address. `launchsense_scan_public` takes a public GitHub URL and runs the same read as the paste: pin the commit, respect the guest caps, then return the coverage line and the findings. `launchsense_get_report` reads a report by scan id. The hosted read keeps 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then the route pauses. The counter holds no part of your network address. Alpha has no login. A private repo stays on the signed-in paste. This address does not read a repo that exists only on a laptop.
 
 ## Walk after deploy
 
