@@ -1,63 +1,111 @@
-LaunchSense Proprietary License
+LaunchSense License: open core (MIT) plus proprietary
 
 Copyright (c) 2026 Keshav Maheshwari. All rights reserved.
 
 Contact for permission: www.withkeshav.com
 
-1. NO LICENCE IS GRANTED
+1. OPEN SCOPE
 
-No licence is granted to copy, download, modify, distribute, sublicense,
-sublicense, publish, or use this software or any resource in this repository,
-in whole or in part, except as expressly permitted in writing by the
-copyright holder.
+The MIT terms in Section 2 apply ONLY to the files under these paths:
 
-This applies while the repository is public and after it is made private. This
-notice is not temporary and does not expire.
+  shared/
+  convex/adapters/
+  convex/scans/snapshot.ts (this file only, not the rest of convex/scans/)
+  mcp/
+  skills/launchsense/
+  install.sh
+  scripts/
+  tests/
 
-2. WHILE THE REPOSITORY IS PUBLIC
+except the test files that load proprietary modules, which stay under
+Section 3 with the surfaces they verify:
+
+  tests/ai-lane-gate-checks.mjs
+  tests/analytics-lane-checks.mjs
+  tests/analytics-pii-checks.mjs
+  tests/consent-record-lane-checks.mjs
+  tests/decision-monitoring-checks.mjs
+  tests/identity-attribution-checks.mjs
+  tests/livecheck-ownership-checks.mjs
+  tests/mcp-remote-checks.mjs
+  tests/red-team-checks.mjs
+
+The rule is functional, not just this list: any test file that imports or
+loads a module outside the open scope stays under Section 3. The list above
+is complete as of this writing, and `tests/license-scope-checks.mjs` fails
+when a file breaks it.
+
+References inside open files to proprietary paths (in comments, docs, or
+skill text) are pointers, not grants. The referenced files stay under
+Section 3.
+
+2. MIT GRANT FOR THE OPEN SCOPE
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the files listed in Section 1, to deal in those files without restriction,
+including without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of those files, and to permit
+persons to whom those files are furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of those files.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THOSE FILES OR THE USE OR OTHER DEALINGS IN
+THOSE FILES.
+
+This grant gives no patent rights beyond what the law implies, and no
+trademark rights. See Section 5.
+
+3. PROPRIETARY REMAINDER
+
+Everything else, including convex/ except the Section 1 carve-outs, and src/,
+is All Rights Reserved. No licence is granted to copy, download, modify,
+distribute, sublicense, publish, or use it, in whole or in part, except as
+expressly permitted in writing by the copyright holder.
 
 Viewing a public repository on GitHub is governed by GitHub's own Terms of
 Service, which separately grant users the right to view and fork public
-content. That grant comes from GitHub, not from the copyright holder. Nothing
-here widens it, and nothing here can narrow it.
-
-Accordingly, and honestly: the copyright holder cannot technically prevent a
-download of public code. What this notice does is make such a download
-unauthorised. Under copyright law, copying, downloading into a working copy,
-modifying, and redistributing without permission are acts reserved to the
-copyright holder.
-
-3. AFTER THE REPOSITORY IS MADE PRIVATE
+content. That grant comes from GitHub, not from the copyright holder. A fork
+copies the whole repository, including the Section 3 files, for which no
+licence is granted here. Nothing here widens the GitHub grant, and nothing
+here can narrow it.
 
 Making this repository private does not release anyone who already obtained a
 copy. Any copy taken while the repository was public remains subject to the
-terms in force at the time it was taken. Those terms permit nothing without
-written permission.
+terms in force at the time it was taken.
 
-Existing public forks are not made private by the copyright holder and are not
-deleted.
+4. THIRD-PARTY CONTENT
 
-4. FORKS AND DERIVATIVES
+This licence grants nothing over third-party code. Dependencies stay under
+their own licences; the deterministic notice (`npm run notices`) and the
+bill of materials (`npm run sbom`, CycloneDX 1.7, see `docs/SBOM.md`) name
+them. Prompt and instruction text listed in `THIRD-PARTY-NOTICES.md` stays
+under its own terms, and vendoring any of it requires keeping its notice.
 
-A derivative work, a fork, or a modification of this software is a copy. It is
-not permitted. It does not become permitted because it is published, because it
-is visible, or because the repository is public.
+5. TRADEMARK
 
-5. PERMISSION
+"LaunchSense" is a trademark of the copyright holder. No trademark rights are
+granted by this notice. A fork or derivative may make nominative reference to
+LaunchSense, but must not use it as a product name, must not imply
+endorsement, and must not point at the operator's hosted address as its
+default.
+
+6. PERMISSION
 
 Permission requests go to the copyright holder at www.withkeshav.com. Written
 permission may be granted for a specified use and revoked for future use.
 
-6. NO WARRANTY
+7. NO WARRANTY FOR THE PROPRIETARY REMAINDER
 
-THE CODE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF,
-OR IN CONNECTION WITH THE CODE OR THE USE OF THE CODE.
-
-7. TRADEMARK
-
-"LaunchSense" is a trademark of the copyright holder. No trademark rights are
-granted by this notice.
+THE PROPRIETARY FILES ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+FROM, OUT OF, OR IN CONNECTION WITH THOSE FILES OR THE USE OF THOSE FILES.
