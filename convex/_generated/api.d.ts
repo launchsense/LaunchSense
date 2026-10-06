@@ -22,6 +22,7 @@ import type * as analytics_privacy from "../analytics/privacy.js";
 import type * as analytics_retention from "../analytics/retention.js";
 import type * as analytics_rollup from "../analytics/rollup.js";
 import type * as auth from "../auth.js";
+import type * as consent from "../consent.js";
 import type * as crons from "../crons.js";
 import type * as decisionMonitoring from "../decisionMonitoring.js";
 import type * as entitlements from "../entitlements.js";
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   "analytics/retention": typeof analytics_retention;
   "analytics/rollup": typeof analytics_rollup;
   auth: typeof auth;
+  consent: typeof consent;
   crons: typeof crons;
   decisionMonitoring: typeof decisionMonitoring;
   entitlements: typeof entitlements;

@@ -304,6 +304,7 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       "Account id, email address, and the account fields GitHub returns at sign-in",
       "Scans linked to that account id",
       "Saved projects, usage meters, and feature entitlements",
+      "The sign-in decisions themselves: which of the four purposes, whether each was granted, the wording version, the click time, and the time the row was written",
     ],
     data_points: [
       "githubScanTokens.accessToken",
@@ -324,9 +325,16 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       "connectedInstallations.account",
       "connectedInstallations.repoSelection",
       "connectedInstallations.installationTargetId",
+      "consentRecords.userId",
+      "consentRecords.purposeId",
+      "consentRecords.granted",
+      "consentRecords.noticeVersion",
+      "consentRecords.decidedAt",
+      "consentRecords.recordedAt",
+      "consentRecords.source",
     ],
     storage: [
-      ...tables("githubScanTokens", "projects", "usageMeters", "featureEntitlements", "connectedInstallations"),
+      ...tables("githubScanTokens", "projects", "usageMeters", "featureEntitlements", "connectedInstallations", "consentRecords"),
       outside(
         "users and the auth tables from @convex-dev/auth",
         "The account row, the email address, and the fields GitHub returns at sign-in. They are authTables spread into the schema rather than a table this file names, so they are listed here instead of being claimed as a schema table.",
@@ -366,11 +374,18 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
         enforcement: "none",
         enforced_by: null,
       },
+      {
+        data: "consentRecords: the sign-in decisions",
+        window: "Kept while the account exists. Nothing in this repository deletes the table, so a stored decision cannot be taken back from the product today.",
+        enforcement: "none",
+        enforced_by: null,
+      },
     ],
     security_measures: [
       "The token is readable only by server-side internal functions. The functions a signed-in caller can invoke return a boolean or nothing.",
       "Signing out deletes the token row in the same action that ends the session.",
       "The token is stored as a plaintext string. That is a stated fact of this build, not an oversight being described as a control.",
+      "A consent record is written under the account id in the session, never under one supplied by the caller, and the export query returns only the caller's own rows.",
     ].join(" "),
     automated_decision_making: NO_ART22,
     choice: "Sign out from the menu and the token is deleted straight away. There is no account deletion button, and this one says so rather than implying one exists.",
@@ -386,6 +401,7 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       "A finding fingerprint, which is a hash the report already shows",
       "The severity, the title, and the reason",
       "The provider call row: day, source, model, latency, a hash of the prompt, and token counts",
+      "The sign-in decision for this purpose, and the same columns the other three purposes carry",
     ],
     data_points: [
       "providerCalls.scanId",
@@ -398,8 +414,12 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       "providerCalls.totalTokens",
       "providerCalls.ok",
       "providerCalls.day",
+      "consentRecords.purposeId",
+      "consentRecords.granted",
+      "consentRecords.noticeVersion",
+      "consentRecords.decidedAt",
     ],
-    storage: [ ...tables("providerCalls") ],
+    storage: [...tables("providerCalls", "consentRecords")],
     recipients: [
       {
         party: "Google Gemini",
@@ -434,11 +454,18 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
         enforcement: "none",
         enforced_by: null,
       },
+      {
+        data: "consentRecords: the decision for this purpose",
+        window: "Kept while the account exists. Nothing in this repository deletes the table, so the decision cannot be taken back from the product today.",
+        enforcement: "none",
+        enforced_by: null,
+      },
     ],
     security_measures: [
       "The request carries no file path and no file contents.",
       "Output is rejected when it references an unknown finding, drops an actionable finding, or claims a check that did not run. Rejected output falls back to fixed wording.",
       "If neither provider answers, no provider is asked and fixed wording is shown.",
+      "The decision that allows this purpose is stored as granted true or false against the account in the session, and no model asks it, records it, or reads it.",
     ].join(" "),
     automated_decision_making:
       "A model rewrites the wording of a finding that a fixed rule already produced. It cannot add, drop, re-rank, or re-score a finding. The plain-words button does nothing at all without a press, which is what puts it on consent rather than contract.",
@@ -521,10 +548,11 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
     lawful_basis: "GDPR Art 6(1)(a) consent",
     lawful_basis_reviewed: false,
     consent_purpose: "usage",
-    data_subject_categories: ["People who installed the local review and answered yes"],
+    data_subject_categories: ["People who installed the local review and answered yes, and people who signed in and ticked the usage box"],
     personal_data_categories: [
       "Rule id counts, the harness label, the tool version, the run duration, and which order source ran",
       "The decision itself, with its time, on the person's own machine",
+      "For a signed-in person, the same decision as one row in consentRecords under their account id",
     ],
     data_points: [
       "usageDiagnostics.day",
@@ -535,13 +563,16 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       "usageDiagnostics.durationMs",
       "usageDiagnostics.orderSource",
       "usageDiagnostics.ruleCounts",
+      "consentRecords.purposeId",
+      "consentRecords.granted",
+      "consentRecords.decidedAt",
     ],
     storage: [
       outside(
         "~/.config/launchsense/consent.jsonl",
         "On the person's own machine. Append-only, one line per decision, never uploaded because nothing reads it.",
       ),
-      ...tables("usageDiagnostics"),
+      ...tables("usageDiagnostics", "consentRecords"),
     ],
     recipients: [
       {
@@ -568,6 +599,12 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
       {
         data: "The ledger on the person's machine",
         window: "Kept by the person. This product deletes nothing and reads nothing.",
+        enforcement: "none",
+        enforced_by: null,
+      },
+      {
+        data: "consentRecords: the usage decision for a signed-in person",
+        window: "Kept while the account exists. Nothing in this repository deletes the table, and the local question is still the one that decides whether counts are sent.",
         enforcement: "none",
         enforced_by: null,
       },
@@ -840,9 +877,16 @@ export function renderProcessingRegister(): string {
     lines.push(`- Lawful basis: ${activity.lawful_basis}. Reviewed by a lawyer: ${activity.lawful_basis_reviewed ? "yes" : "no"}.`);
     if (activity.consent_purpose !== null) {
       const purpose = CONSENT_PURPOSES.find((item) => item.id === activity.consent_purpose);
-      lines.push(
-        `- Consent purpose: ${activity.consent_purpose}${purpose?.recorded === true ? ", and a decision is on record" : ", asked in the sign-in panel and recorded nowhere"}.`,
-      );
+      // "Recorded" and "readable by this generator" are different facts, and the
+      // sentence has to say which one it means. The Art 30 register is about what
+      // the controller holds, so the database row is the fact that belongs here.
+      const where =
+        purpose?.recorded_in === "local_ledger"
+          ? ", and a decision is on record in the ledger on the person's own machine"
+          : purpose?.recorded_in === "convex_database"
+            ? ", and a decision is on record in the Convex table consentRecords for a person who signed in"
+            : ", and no decision is on record for it anywhere";
+      lines.push(`- Consent purpose: ${activity.consent_purpose}${where}.`);
     }
     lines.push(`- Data subjects: ${activity.data_subject_categories.join("; ")}.`);
     lines.push(`- Personal data: ${activity.personal_data_categories.join("; ")}.`);
