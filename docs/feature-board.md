@@ -239,3 +239,26 @@ What it does not do:
 - It never invents a check. New stack facts arrive as analyzer rows first, and advice only reads them.
 - It never asks for anything the scan did not read. Every question cites the row behind it.
 - It never sends anything anywhere. Answers stay on the page unless the visitor shares the report.
+
+### Policies built with you (the full-service stack)
+
+- Status: noted
+- Named: 2026-10-06
+
+The open core stays fixed. A model never decides a finding. What changes for a customer is the policy: the rules they want enforced, in their words.
+
+This is a target market, not a tool feature. A team that vibe-coded an MVP and now faces an enterprise security review does not want a generic scan. They want their own rules: our licences only, these APIs banned, our secrets look like this, every repo must carry a privacy page and a terms page. That is a bespoke policy pack, and it is where a forward-deployed engineer earns money.
+
+The shape of the service. A short engagement, about a week, in which an engineer maps the customer's stack, writes ten to fifteen policies as a declarative pack, runs them across the customer's repos, and hands back the fix prompts. The pack is theirs. It runs on their machine and in their CI through the GitHub Action. Nothing about the core changes to make it work.
+
+What it teaches the product. Every bespoke rule is a candidate template. Once a week of work produces the same rule twice, it becomes a named pack for a vertical, so the tenth fintech customer is not the tenth snowflake. Without that rule, every engagement is custom work and the margin is a services margin, not a product margin.
+
+Where it shows up. UX, UI, and content all carry this: a page that says we will write your policies with you, a pricing line for the sprint, and the copy that explains it in plain words.
+
+What it does not do:
+
+- It does not run today. There is no policy engine, no pack format, and no FDE process yet.
+- It does not let a policy execute code. Declarative only: patterns, allowlists, banned calls, required files, size caps.
+- It does not let a custom policy invent, drop, or re-rank a finding. A policy tightens or reports; it never decides what is true.
+- It does not ship as a template until it passes the corpus precision gates, so a pack cannot lower precision for everyone else.
+- It does not change the open core. The core stays one implementation and two doors.
