@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { RepoDna, ReadinessBand } from "../../../shared/reports/repoDna";
 import type { StandardMapping } from "../../../shared/reports/standards";
+import { standardsCoverage } from "../../../shared/reports/standards";
 import type { Achievement, Mission } from "../../../shared/reports/missions";
 import { buildNoAgentExport } from "../../../shared/reports/noAgentExport";
 import type { FixPlan } from "../../../shared/reports/fixPlan";
@@ -86,11 +87,19 @@ export function DnaPanel(props: { dna: RepoDna; readiness: ReadinessBand }) {
 }
 
 export function StandardsPanel(props: { mappings: StandardMapping[] }) {
+  const coverage = standardsCoverage(props.mappings);
   return (
     <div aria-label="Standards">
       <h4>Standards signals</h4>
       <p>
         These rows map findings the checks already made onto OWASP Top 10, OWASP ASVS, OSV, and CWE. A row with no check stays not checked. Signals only. This is not a certification.
+      </p>
+      <p>
+        Coverage: {coverage.coverage.partial} requirements have a check,{" "}
+        {coverage.coverage.notAutomatable} stay not checked, {coverage.coverage.full} are
+        fully checked. This scan found a signal on {coverage.status.signalFound} of{" "}
+        {coverage.total}. Two numbers, never merged: what we can check at all, and what
+        this scan actually found.
       </p>
       <ul>
         {props.mappings.map((m) => (
