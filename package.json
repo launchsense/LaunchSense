@@ -1,6 +1,7 @@
 {
   "name": "launchsense",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE.txt",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -10,7 +11,8 @@
     "build": "npm run typecheck && vite build",
     "lint": "eslint . --max-warnings 0",
     "check:claims": "node scripts/check-claims.mjs",
-    "check": "npm run typecheck && npm run lint && npm run check:claims && node --test tests/*.mjs",
+    "check:dco": "node scripts/check-dco.mjs",
+    "check": "npm run typecheck && npm run lint && npm run check:claims && npm run check:dco && node --test tests/*.mjs",
     "review:local": "node --experimental-strip-types mcp/review-entry.ts --root .",
     "notices": "node scripts/third-party-notices.mjs",
     "consent-record": "node scripts/consent-record.mjs",
