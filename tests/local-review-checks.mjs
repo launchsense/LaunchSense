@@ -56,7 +56,27 @@ describe("local review", () => {
     assert.equal(report.authRequired, false);
     assert.equal(report.status, "partial");
     assert.match(report.lockNote, /incomplete/);
-    assert.ok(report.findings.some((item) => item.ruleId === "license.policy"));
+    // An MIT repo is Allowed, so it carries no licence finding. A clean
+    // permissive licence must not appear as a medium row that needs review.
+    assert.ok(
+      !report.findings.some((item) => item.ruleId === "license.policy"),
+      "an Allowed licence must not raise a license.policy finding",
+    );
+  });
+
+  it("still raises license.policy when the licence needs review", () => {
+    const report = buildLocalReport(
+      [
+        { path: "package.json", content: JSON.stringify({ name: "demo", license: "GPL-3.0-only" }) },
+        { path: "LICENSE", content: "GNU GENERAL PUBLIC LICENSE\nVersion 3" },
+        { path: "src/app.ts", content: "export const ready = true;\n" },
+      ],
+      [],
+      null,
+    );
+    const row = report.findings.find((item) => item.ruleId === "license.policy");
+    assert.ok(row, "a licence that needs review must still be raised");
+    assert.notEqual(row.severity, "info", "a review-required licence is not an info note");
   });
 });
 
