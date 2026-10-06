@@ -10,15 +10,37 @@
 // is the single place a purpose is described, so those three cannot disagree
 // about what a purpose is.
 //
-// Two inputs, both real:
+// Two inputs, both real, and they live in two different places:
 //
 //   usage     install.sh, one question, answered once, remembered in
-//             ~/.config/launchsense/consent.jsonl. This is a consent record.
-//   token     src/features/auth/AuthPanel.tsx, four unticked boxes. The boxes
-//   read     are client-side React state and nothing writes them down anywhere.
-//   explain   So for these three the honest status is asked and not recorded, and
-//             `recorded: false` says so on the record rather than implying a row
-//             exists. That gap is the most important thing in this file.
+//             ~/.config/launchsense/consent.jsonl. A local ledger, and the
+//             offline generator can read it.
+//   token     src/features/auth/AuthPanel.tsx, four unticked boxes. The click
+//   read      persists the four answers to sessionStorage, and once the OAuth
+//   explain   callback has made a session, src/features/auth/ConsentRecorder.tsx
+//             writes one row per purpose into the Convex table consentRecords
+//             through convex/consent.ts:recordSignInDecisions.
+//
+// So all four purposes are recorded now, and `recorded` says true for each of
+// them. What separates them is `recorded_in`, because the offline generator and
+// the database are not the same place and a document that blurred the two would
+// be wrong in a way nobody could check:
+//
+//   local_ledger      the answer is in a file on the person's own machine, so
+//                     `npm run consent-record` can read it and print the record.
+//   convex_database   the answer is a row in this product's database, for a person
+//                     who signed in. The offline generator holds no Convex
+//                     credentials and makes no request, so it cannot read that
+//                     table and cannot print those records. The export path is
+//                     the caller's own query, convex/consent.ts:myConsentRecords.
+//
+// The honest consequence shows up in the record shape. `recorded_in_database` is
+// a status of its own, and it means exactly that: a decision exists, this file
+// cannot show it, and here is where to read it.
+//
+// Recorded nowhere is still a possible state for a future purpose. Nothing stops
+// a fifth purpose being added without a record, so the flag is checked rather
+// than assumed.
 //
 // Cited vocabulary:
 //   ISO/IEC TS 27560:2023, first edition 2023-08. Table 1 (record header) and
@@ -26,6 +48,8 @@
 //   example records; this file follows the field list, not a transcription.
 //   W3C Data Privacy Vocabulary v2, CG-Final 2024-08-01. A Community Group
 //   Final Specification, so it is cited as a vocabulary and not as a standard.
+
+import { SIGN_IN_NOTICE_VERSION } from "../copy/signIn.ts";
 
 /** The shape version, pinned so a record written before a change stays readable. */
 export const CONSENT_SCHEMA_VERSION = "launchsense.consent/1.0";
@@ -135,7 +159,32 @@ export interface ConsentPurpose {
   recorded: boolean;
   /** Why a purpose is not recorded, when it is not. */
   not_recorded_reason: string | null;
-  /** Where the decision lands. Null where nothing stores it. */
+  /**
+   * Where the decision is written. Null where nothing writes one.
+   *
+   * This is not the same question as `recorded`. A decision can be on record in
+   * the database and still be unreadable by the offline generator, and a record
+   * document that said only "recorded" would leave a reader thinking the file it
+   * was handed contains the decision.
+   */
+  recorded_in: "local_ledger" | "convex_database" | null;
+  /**
+   * The wording version in force for this purpose. The installer's question and
+   * the sign-in panel are different wording in different places, so they carry
+   * different versions and a record must never carry one under the other.
+   */
+  notice_version: string;
+  /**
+   * The exact lines this build carries for this purpose's notice, or null when it
+   * carries none.
+   *
+   * The installer's lines live here. The four sign-in boxes live in a .tsx
+   * component, so a generator cannot hash them, and null is the honest answer: a
+   * hash over the wrong words would tell a reader they agreed to text they never
+   * saw, which is the one failure this lane exists to avoid.
+   */
+  notice_wording_in_this_build: readonly string[] | null;
+  /** Where the decision lands, in the words a person reads. Null where nothing stores it. */
   ledger: string | null;
   collection_method: string;
   processing_method: string;
@@ -158,6 +207,13 @@ const CONVEX_LOCATION: StorageLocation = {
   ...UNKNOWN_REGION,
 };
 
+/**
+ * Where a sign-in decision lands, named the way a person reads it. The consent
+ * record for the three panel purposes is a row in this table, not a file.
+ */
+const CONSENT_TABLE =
+  "Convex database, deployment harmless-chihuahua-667, table consentRecords";
+
 const LOCAL_LEDGER: StorageLocation = {
   system: "The person's own machine, ~/.config/launchsense/consent.jsonl",
   ...UNKNOWN_REGION,
@@ -177,10 +233,12 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
     description: "Keep the GitHub access token for one account so the person is not asked to sign in again.",
     lawful_basis: "dpv:Contract",
     lawful_basis_citation: "GDPR Art 6(1)(b). Sign-in is what the person asked for, so it is not a consent case.",
-    recorded: false,
-    not_recorded_reason:
-      "The four boxes in AuthPanel are client-side React state. No code writes a decision, a time, or a wording version for them, so there is nothing to turn into a record.",
-    ledger: null,
+    recorded: true,
+    not_recorded_reason: null,
+    recorded_in: "convex_database",
+    notice_version: SIGN_IN_NOTICE_VERSION,
+    notice_wording_in_this_build: null,
+    ledger: CONSENT_TABLE,
     collection_method: "just_in_time_notice_at_sign_in",
     processing_method: "stored_on_our_server_and_read_by_our_server_only",
     pii_information: [
@@ -201,10 +259,12 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
     description: "Use that token once, on our server, to download one repository archive.",
     lawful_basis: "dpv:Contract",
     lawful_basis_citation: "GDPR Art 6(1)(b). The read is the service that was asked for.",
-    recorded: false,
-    not_recorded_reason:
-      "The four sign-in boxes are client-side React state and no code writes them down. The scan rows are recorded, but the decision to allow this read is not.",
-    ledger: null,
+    recorded: true,
+    not_recorded_reason: null,
+    recorded_in: "convex_database",
+    notice_version: SIGN_IN_NOTICE_VERSION,
+    notice_wording_in_this_build: null,
+    ledger: CONSENT_TABLE,
     collection_method: "just_in_time_notice_at_sign_in",
     processing_method: "read_in_memory_and_discarded",
     pii_information: [
@@ -228,10 +288,12 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
     description: "Send one finding's fingerprint, severity, title, and reason to an AI provider, on a button press.",
     lawful_basis: "dpv:Consent",
     lawful_basis_citation: "GDPR Art 6(1)(a). The scan works without it, so consent is the right basis here and not contract.",
-    recorded: false,
-    not_recorded_reason:
-      "The four sign-in boxes are client-side React state and no code writes them down. The provider call itself is recorded in providerCalls, but the decision that allowed it is not.",
-    ledger: null,
+    recorded: true,
+    not_recorded_reason: null,
+    recorded_in: "convex_database",
+    notice_version: SIGN_IN_NOTICE_VERSION,
+    notice_wording_in_this_build: null,
+    ledger: CONSENT_TABLE,
     collection_method: "just_in_time_notice_at_sign_in_and_again_at_the_button",
     processing_method: "transmitted_to_a_processor_over_tls",
     pii_information: [
@@ -280,6 +342,9 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
     lawful_basis_citation: "GDPR Art 6(1)(a). The counts are optional and default to off.",
     recorded: true,
     not_recorded_reason: null,
+    recorded_in: "local_ledger",
+    notice_version: DIAGNOSTICS_NOTICE_VERSION,
+    notice_wording_in_this_build: DIAGNOSTICS_NOTICE_WORDING,
     ledger: LOCAL_LEDGER.system,
     collection_method: "one_question_before_anything_is_recorded_default_is_no",
     processing_method: "transmitted_over_tls_to_our_own_server",
@@ -307,7 +372,7 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
   },
 ];
 
-/** The one purpose with a decision on record. Everything else names its own gap. */
+/** The one purpose with a decision on record. Throws rather than inventing one. */
 export function purposeById(id: ConsentPurpose["id"]): ConsentPurpose {
   const found = CONSENT_PURPOSES.find((purpose) => purpose.id === id);
   if (found === undefined) throw new Error(`no consent purpose with id ${id}`);
@@ -335,7 +400,7 @@ export const NOT_FILLED_FIELDS: readonly NotFilled[] = [
   },
   {
     field: "pii_principal_id",
-    why: "The ledger holds no person identifier. install.sh records a decision about wording, not about who answered, so the id is scoped to this record and links to nobody.",
+    why: "The local ledger holds no person identifier. install.sh records a decision about wording, not about who answered, so the id is scoped to this record and links to nobody. The consentRecords rows do carry the account id, but this offline generator cannot read that table, so the database rows cannot fill this field here.",
   },
   {
     field: "storage_locations[].region",
@@ -343,7 +408,7 @@ export const NOT_FILLED_FIELDS: readonly NotFilled[] = [
   },
   {
     field: "event.type=consent_withdrawn",
-    why: "No withdrawal path is built. install.sh can be re-run with LAUNCHSENSE_DIAGNOSTICS=off, which writes a refusal, and that refusal is the closest thing to a withdrawal this product has.",
+    why: "No withdrawal path is built. A person can refuse a purpose in the sign-in panel and that refusal is stored as granted false in consentRecords, and install.sh can be re-run with LAUNCHSENSE_DIAGNOSTICS=off, which writes a refusal line. Neither is a withdrawal: nothing in this product turns a stored decision off, and there is no button and no route to do it.",
   },
   {
     field: "integrity.record_hash (as written by the installer)",

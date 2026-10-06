@@ -112,8 +112,8 @@ export const AI_NEVER_DECIDES: readonly NeverDecided[] = [
   },
   {
     item: "Consent",
-    why: "Consent is one question with one answer, written by install.sh to a file on the person's own machine. No model asks it, records it, or reads it.",
-    where: ["install.sh", "shared/consent/vocabulary.ts"],
+    why: "Consent is a fixed question with one answer. The installer writes its answer to a file on the person's own machine, and the sign-in panel writes its four answers to the Convex table consentRecords under the account in the session. No model asks either question, records either answer, or reads either record.",
+    where: ["install.sh", "convex/consent.ts", "shared/consent/vocabulary.ts"],
   },
   {
     item: "Who a caller is",

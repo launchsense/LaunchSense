@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { resetLocalAuthState } from "./resetLocalAuthState";
-import { SIGN_IN_OFFER, SIGN_IN_POLICY } from "../../../shared/copy/signIn";
+import { buildSignInDecision, saveSignInDecision } from "./signInDecision";
+import { SIGN_IN_OFFER, SIGN_IN_NOTICE_VERSION, SIGN_IN_POLICY } from "../../../shared/copy/signIn";
 
 // Four separate purposes, four boxes, all unticked. One box that says "I agree"
 // to a paragraph hides three things behind one tick, and the person cannot see
@@ -10,6 +11,12 @@ import { SIGN_IN_OFFER, SIGN_IN_POLICY } from "../../../shared/copy/signIn";
 //
 // Signing in turns on all four. There is no per-purpose switch behind these
 // boxes yet, so the page says that instead of pretending each tick is a choice.
+//
+// These answers now leave the browser. The click persists them and
+// ConsentRecorder writes them to the consentRecords table once the OAuth callback
+// has made a session, so a signed-in person can read their own answers back.
+// A person who signed in before that existed has no row, and none was invented
+// for them.
 const PURPOSES = [
   {
     id: "token",
@@ -77,6 +84,20 @@ export function AuthPanel() {
         </p>
       </fieldset>
       <button type="button" disabled={!ready} onClick={() => {
+        // The click cannot record anything, because the person is anonymous until
+        // GitHub sends them back. So the click only persists what they agreed to,
+        // and ConsentRecorder writes the rows once there is a session. If the
+        // redirect never comes back, nothing is recorded, which is correct: there
+        // was no account to record it against.
+        saveSignInDecision(
+          window.sessionStorage,
+          buildSignInDecision({
+            noticeVersion: SIGN_IN_NOTICE_VERSION,
+            decidedAt: Date.now(),
+            purposeIds: PURPOSES.map((purpose) => purpose.id),
+            grantedFor: (purposeId) => accepted[purposeId] === true,
+          }),
+        );
         resetLocalAuthState();
         signIn("github").catch(() => {
           alert("GitHub sign-in could not start. Please refresh and try again.");

@@ -77,16 +77,17 @@ It is not legal advice, and no lawyer has reviewed it.
 ### acct-002: Keep a GitHub token so a signed-in person is not asked to sign in again, and read one repository with it.
 
 - Lawful basis: GDPR Art 6(1)(b) contract. Reviewed by a lawyer: no.
-- Consent purpose: token, asked in the sign-in panel and recorded nowhere.
+- Consent purpose: token, and a decision is on record in the Convex table consentRecords for a person who signed in.
 - Data subjects: Account holders who signed in with GitHub.
-- Personal data: A GitHub OAuth access token, stored as a plaintext string at rest; Account id, email address, and the account fields GitHub returns at sign-in; Scans linked to that account id; Saved projects, usage meters, and feature entitlements.
-- Columns holding it: githubScanTokens.accessToken, githubScanTokens.userId, githubScanTokens.updatedAt, scans.userId, scans.signedIn, projects.userId, projects.owner, projects.repo, usageMeters.userId, usageMeters.kind, usageMeters.day, featureEntitlements.featureKey, featureEntitlements.enabled, connectedInstallations.userId, connectedInstallations.installationId, connectedInstallations.account, connectedInstallations.repoSelection, connectedInstallations.installationTargetId.
+- Personal data: A GitHub OAuth access token, stored as a plaintext string at rest; Account id, email address, and the account fields GitHub returns at sign-in; Scans linked to that account id; Saved projects, usage meters, and feature entitlements; The sign-in decisions themselves: which of the four purposes, whether each was granted, the wording version, the click time, and the time the row was written.
+- Columns holding it: githubScanTokens.accessToken, githubScanTokens.userId, githubScanTokens.updatedAt, scans.userId, scans.signedIn, projects.userId, projects.owner, projects.repo, usageMeters.userId, usageMeters.kind, usageMeters.day, featureEntitlements.featureKey, featureEntitlements.enabled, connectedInstallations.userId, connectedInstallations.installationId, connectedInstallations.account, connectedInstallations.repoSelection, connectedInstallations.installationTargetId, consentRecords.userId, consentRecords.purposeId, consentRecords.granted, consentRecords.noticeVersion, consentRecords.decidedAt, consentRecords.recordedAt, consentRecords.source.
 - Storage:
   - Table: githubScanTokens. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Table: projects. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Table: usageMeters. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Table: featureEntitlements. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Table: connectedInstallations. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
+  - Table: consentRecords. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
   - Not a table: users and the auth tables from @convex-dev/auth. The account row, the email address, and the fields GitHub returns at sign-in. They are authTables spread into the schema rather than a table this file names, so they are listed here instead of being claimed as a schema table.
 - Recipients:
   - Convex (processor, region unknown, not confirmed): The database, including the token in the clear
@@ -100,19 +101,23 @@ It is not legal advice, and no lawyer has reviewed it.
   - projects, usageMeters, featureEntitlements: Kept while the account exists. No automatic deletion exists.
     Enforced: none.
     By: nothing in this repository enforces this. It is a gap.
-- Security measures: The token is readable only by server-side internal functions. The functions a signed-in caller can invoke return a boolean or nothing. Signing out deletes the token row in the same action that ends the session. The token is stored as a plaintext string. That is a stated fact of this build, not an oversight being described as a control.
+  - consentRecords: the sign-in decisions: Kept while the account exists. Nothing in this repository deletes the table, so a stored decision cannot be taken back from the product today.
+    Enforced: none.
+    By: nothing in this repository enforces this. It is a gap.
+- Security measures: The token is readable only by server-side internal functions. The functions a signed-in caller can invoke return a boolean or nothing. Signing out deletes the token row in the same action that ends the session. The token is stored as a plaintext string. That is a stated fact of this build, not an oversight being described as a control. A consent record is written under the account id in the session, never under one supplied by the caller, and the export query returns only the caller's own rows.
 - Automated decision making: No automated decision within Art 22(1). A fixed rule pack produces the findings and the severities, no profile of a person is built, and nothing here decides anything about a person.
 - How a person chooses: Sign out from the menu and the token is deleted straight away. There is no account deletion button, and this one says so rather than implying one exists.
 
 ### acct-003: Rewrite one finding in plainer language, on a button press, through an AI provider.
 
 - Lawful basis: GDPR Art 6(1)(a) consent. Reviewed by a lawyer: no.
-- Consent purpose: explain, asked in the sign-in panel and recorded nowhere.
+- Consent purpose: explain, and a decision is on record in the Convex table consentRecords for a person who signed in.
 - Data subjects: Anyone who presses Explain in plain words.
-- Personal data: A finding fingerprint, which is a hash the report already shows; The severity, the title, and the reason; The provider call row: day, source, model, latency, a hash of the prompt, and token counts.
-- Columns holding it: providerCalls.scanId, providerCalls.source, providerCalls.model, providerCalls.latencyMs, providerCalls.promptHash, providerCalls.inputTokens, providerCalls.outputTokens, providerCalls.totalTokens, providerCalls.ok, providerCalls.day.
+- Personal data: A finding fingerprint, which is a hash the report already shows; The severity, the title, and the reason; The provider call row: day, source, model, latency, a hash of the prompt, and token counts; The sign-in decision for this purpose, and the same columns the other three purposes carry.
+- Columns holding it: providerCalls.scanId, providerCalls.source, providerCalls.model, providerCalls.latencyMs, providerCalls.promptHash, providerCalls.inputTokens, providerCalls.outputTokens, providerCalls.totalTokens, providerCalls.ok, providerCalls.day, consentRecords.purposeId, consentRecords.granted, consentRecords.noticeVersion, consentRecords.decidedAt.
 - Storage:
   - Table: providerCalls. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
+  - Table: consentRecords. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
 - Recipients:
   - Google Gemini (processor, region unknown, not confirmed): The fingerprint, the severity, the title, and the reason
   - Ollama Cloud (processor, region unknown, not confirmed): The same four values, only if Gemini does not answer first
@@ -125,14 +130,17 @@ It is not legal advice, and no lawyer has reviewed it.
   - providerCalls: Kept. Nothing in this repository deletes it.
     Enforced: none.
     By: nothing in this repository enforces this. It is a gap.
-- Security measures: The request carries no file path and no file contents. Output is rejected when it references an unknown finding, drops an actionable finding, or claims a check that did not run. Rejected output falls back to fixed wording. If neither provider answers, no provider is asked and fixed wording is shown.
+  - consentRecords: the decision for this purpose: Kept while the account exists. Nothing in this repository deletes the table, so the decision cannot be taken back from the product today.
+    Enforced: none.
+    By: nothing in this repository enforces this. It is a gap.
+- Security measures: The request carries no file path and no file contents. Output is rejected when it references an unknown finding, drops an actionable finding, or claims a check that did not run. Rejected output falls back to fixed wording. If neither provider answers, no provider is asked and fixed wording is shown. The decision that allows this purpose is stored as granted true or false against the account in the session, and no model asks it, records it, or reads it.
 - Automated decision making: A model rewrites the wording of a finding that a fixed rule already produced. It cannot add, drop, re-rank, or re-score a finding. The plain-words button does nothing at all without a press, which is what puts it on consent rather than contract.
 - How a person chooses: Do not press Explain in plain words and no provider is asked. A scan never asks a provider by itself.
 
 ### acct-004: Count which harness calls the hosted coding tool address, which tool, how often, and whether it worked.
 
 - Lawful basis: GDPR Art 6(1)(f) legitimate interests. Reviewed by a lawyer: no.
-- Consent purpose: usage, and a decision is on record.
+- Consent purpose: usage, and a decision is on record in the ledger on the person's own machine.
 - Data subjects: Coding tool operators, who are not identified by the call.
 - Personal data: A protocol action count per day: initialize, tools/list, tools/call; An allowlisted harness name, at most eight values, and an optional client version; The protocol version, the method name, the tool name, and the outcome; A one-way hash of a repository name scoped to the day, when a call read a repository; The daily rolled-up counts.
 - Columns holding it: usageEvents.day, usageEvents.kind, usageEvents.clientName, usageEvents.clientVersion, usageEvents.protocolVersion, usageEvents.mcpMethodName, usageEvents.toolName, usageEvents.outcome, usageEvents.errorType, usageEvents.rpcResponseStatusCode, usageEvents.durationMs, usageEvents.repoKey, dailyMetrics.day, dailyMetrics.metric, dailyMetrics.dims, dailyMetrics.count.
@@ -157,13 +165,14 @@ It is not legal advice, and no lawyer has reviewed it.
 ### acct-005: Receive usage counts from the local review, after the person answers one question and says yes.
 
 - Lawful basis: GDPR Art 6(1)(a) consent. Reviewed by a lawyer: no.
-- Consent purpose: usage, and a decision is on record.
-- Data subjects: People who installed the local review and answered yes.
-- Personal data: Rule id counts, the harness label, the tool version, the run duration, and which order source ran; The decision itself, with its time, on the person's own machine.
-- Columns holding it: usageDiagnostics.day, usageDiagnostics.stage, usageDiagnostics.tier, usageDiagnostics.harness, usageDiagnostics.version, usageDiagnostics.durationMs, usageDiagnostics.orderSource, usageDiagnostics.ruleCounts.
+- Consent purpose: usage, and a decision is on record in the ledger on the person's own machine.
+- Data subjects: People who installed the local review and answered yes, and people who signed in and ticked the usage box.
+- Personal data: Rule id counts, the harness label, the tool version, the run duration, and which order source ran; The decision itself, with its time, on the person's own machine; For a signed-in person, the same decision as one row in consentRecords under their account id.
+- Columns holding it: usageDiagnostics.day, usageDiagnostics.stage, usageDiagnostics.tier, usageDiagnostics.harness, usageDiagnostics.version, usageDiagnostics.durationMs, usageDiagnostics.orderSource, usageDiagnostics.ruleCounts, consentRecords.purposeId, consentRecords.granted, consentRecords.decidedAt.
 - Storage:
   - Not a table: ~/.config/launchsense/consent.jsonl. On the person's own machine. Append-only, one line per decision, never uploaded because nothing reads it.
   - Table: usageDiagnostics. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
+  - Table: consentRecords. A table in convex/schema.ts. What it holds is named in this activity's personal data list.
 - Recipients:
   - Convex (processor, region unknown, not confirmed): The counts, over the hosted usage route
 - Third country transfers:
@@ -173,6 +182,9 @@ It is not legal advice, and no lawyer has reviewed it.
     Enforced: none.
     By: nothing in this repository enforces this. It is a gap.
   - The ledger on the person's machine: Kept by the person. This product deletes nothing and reads nothing.
+    Enforced: none.
+    By: nothing in this repository enforces this. It is a gap.
+  - consentRecords: the usage decision for a signed-in person: Kept while the account exists. Nothing in this repository deletes the table, and the local question is still the one that decides whether counts are sent.
     Enforced: none.
     By: nothing in this repository enforces this. It is a gap.
 - Security measures: The route refuses a payload containing path, content, snippet, or title keys, and refuses a counts string over 4000 characters. An enterprise tier record is refused and stores nothing. The question defaults to no, and a run that only repeats an answer already on record writes no line.
@@ -243,9 +255,9 @@ It is not legal advice, and no lawyer has reviewed it.
 ## Fields this register cannot fill
 
 - `pii_controllers[].registered_name`: No registered legal entity is published. docs/PRIVACY.md section 1 says so. Inventing one would make the record false.
-- `pii_principal_id`: The ledger holds no person identifier. install.sh records a decision about wording, not about who answered, so the id is scoped to this record and links to nobody.
+- `pii_principal_id`: The local ledger holds no person identifier. install.sh records a decision about wording, not about who answered, so the id is scoped to this record and links to nobody. The consentRecords rows do carry the account id, but this offline generator cannot read that table, so the database rows cannot fill this field here.
 - `storage_locations[].region`: No host or provider has confirmed a region. Every region reads unknown rather than a plausible guess.
-- `event.type=consent_withdrawn`: No withdrawal path is built. install.sh can be re-run with LAUNCHSENSE_DIAGNOSTICS=off, which writes a refusal, and that refusal is the closest thing to a withdrawal this product has.
+- `event.type=consent_withdrawn`: No withdrawal path is built. A person can refuse a purpose in the sign-in panel and that refusal is stored as granted false in consentRecords, and install.sh can be re-run with LAUNCHSENSE_DIAGNOSTICS=off, which writes a refusal line. Neither is a withdrawal: nothing in this product turns a stored decision off, and there is no button and no route to do it.
 - `integrity.record_hash (as written by the installer)`: The installer writes no hash. The chain is derived by the reader from the append-only file, so tampering is detectable only against that file and not against a stored copy.
 - `pii_controllers[].data_protection_officer`: No data protection officer is named or appointed. There is no contact role to fill this with.
 

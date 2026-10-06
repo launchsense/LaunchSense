@@ -9,6 +9,15 @@
 // the decision. It holds no token, no key, and no identifier for the person, and
 // this script prints nothing that is not already in that file.
 //
+// WHAT THIS FILE CANNOT DO. It reads one local ledger and nothing else. It holds
+// no Convex credentials, opens no connection, and cannot read the consentRecords
+// table where the sign-in panel's four decisions are written for a signed-in
+// person. So the token, read, and explain records it prints are the shape of those
+// records with `status: recorded_in_database`, no record id, and no event time,
+// and their not_filled list names the table and the query that do hold the
+// decision. Making this file pretend it could produce them would be the same
+// defect as claiming the decision was never captured, in the other direction.
+//
 // The records are built in the shape ISO/IEC TS 27560:2023 names, and the receipt
 // is the copy a person can keep. Both are deterministic: the same ledger gives the
 // same bytes, because the record id is derived from the content and no clock is read.
@@ -107,7 +116,10 @@ for (const [index, decision] of decisions.entries()) {
   if (index === decisions.length - 1) currentRecord = record;
 }
 for (const purpose of CONSENT_PURPOSES) {
-  if (!purpose.recorded) records.push(await buildConsentRecordTemplate(purpose.id));
+  // A shape for every purpose this ledger cannot answer. The decision may well
+  // exist in the database, and printing nothing about it would leave a reader of
+  // this file thinking it was never captured.
+  if (purpose.recorded_in !== "local_ledger") records.push(await buildConsentRecordTemplate(purpose.id));
 }
 
 const current = decisions.find((decision) => decision.latest) ?? null;
@@ -124,6 +136,11 @@ const summary = {
   records: records.length,
   recorded_records: records.filter((record) => record.status === "recorded").length,
   shapes_only: records.filter((record) => record.status === "not_recorded").length,
+  in_database_not_in_this_file: records.filter((record) => record.status === "recorded_in_database").length,
+  // Said in the output, not only in a comment, so a reader who only ever sees the
+  // JSON still learns that this file is not the whole record set.
+  sign_in_records:
+    "Not in this file. This generator reads the local ledger only and cannot read the Convex database. A signed-in person reads their own rows with the myConsentRecords query in convex/consent.ts.",
 };
 
 if (outDir !== null) {
