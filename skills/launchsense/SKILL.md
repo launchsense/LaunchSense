@@ -1,11 +1,11 @@
 ---
 name: launchsense
-description: Use when a checkout of LaunchSense should review files already open. The public connection is the hosted MCP URL. This skill does not invent findings.
+description: Use when the repo you have open should be reviewed before you share it. Reviews your own checkout locally, free and unlimited, and sends nothing to us. The public connection is the hosted MCP URL. This skill does not invent findings.
 ---
 
 # LaunchSense
 
-This skill is for a checkout of LaunchSense. The public connection is `https://harmless-chihuahua-667.convex.site/mcp`. People do not clone this repo to use that address.
+This skill reviews **your** checkout, the repository you installed it into, not only a checkout of LaunchSense itself. It runs on your machine, reads your working tree including uncommitted work, sends nothing to us, and has no hourly limit. The hosted connection is `https://harmless-chihuahua-667.convex.site/mcp`, which is the sample read of a public repo on our server, and it is shared and rate limited. The local check is the one with no limit.
 
 ## When to call the review
 
