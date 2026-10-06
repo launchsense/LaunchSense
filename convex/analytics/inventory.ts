@@ -301,14 +301,14 @@ export const ANALYTICS_TABLES: readonly InventoryTable[] = [
       {
         field: "harness",
         klass: "technical",
-        why: "The harness label the installer declares. It is a claim about a tool, not a person's name, and it is matched against the same closed set the hosted client name uses.",
+        why: "The harness label the installer declares. It is a claim about a tool, not a person's name, and it is matched against the hosted client-name set plus local.",
         boundedBy: "Closed set: local, cursor, claude_code, claude_desktop, codex, vscode, windsurf, other, unknown. Anything else is normalized to other.",
       },
       {
         field: "version",
         klass: "technical",
         why: "The installer's own version.",
-        boundedBy: "alpha, or a plain version matching /^\\d+\\.\\d+(\\.\\d+)?$/. A pre-release suffix is refused, so a name cannot ride in one. Anything else is normalized to other.",
+        boundedBy: "alpha, or a plain version matching /^\\d{1,4}\\.\\d{1,4}(\\.\\d{1,4})?$/ (at most 14 characters). A pre-release suffix is refused, so a name cannot ride in one. Anything else is normalized to other.",
       },
       {
         field: "durationMs",
