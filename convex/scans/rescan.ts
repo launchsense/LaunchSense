@@ -99,6 +99,11 @@ export const rescanScan = action({
       repo,
       repoUrl: base.repoUrl,
       rescanOf: args.scanId,
+      // The parent's live target travels with the row. `base` is the scan the
+      // caller asked to rescan, already read above and already required to be
+      // analyzed, so these are the same values a second read would return.
+      liveUrl: base.liveUrl,
+      mainAction: base.mainAction,
       signedIn,
       userId: userId ?? undefined,
       attributed: false,

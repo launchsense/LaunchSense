@@ -220,7 +220,12 @@ export const LIVE_CHECK_REASONS: readonly string[] = [
   "Local and test hostnames are not allowed.",
   "Single-word hostnames are not allowed.",
   "IPv6 addresses are not allowed for live checks.",
-  "Scan was not found.",
+  // One entry for both reasons this lane refuses a scan id: the scan is not
+  // there, or the scan is there and is not the caller's. They read the same on
+  // purpose, because two sentences would tell anyone holding an id which ids
+  // exist. Listed so the reader sees the refusal instead of the generic
+  // fallback, which would hide the only useful instruction in it.
+  "That scan is not available to your account.",
 ];
 
 /**
