@@ -4,6 +4,7 @@
 // whether code, advisories, or the analyzer itself changed.
 
 import type { Severity } from "../policies/severity";
+import { baseFingerprint } from "../redaction.ts";
 
 export type TransitionState =
   | "fixed"
@@ -94,6 +95,17 @@ export function compareFindings(
 ): Transition[] {
   const out: Transition[] = [];
   const newByFp = new Map(newList.map((f) => [f.fingerprint, f]));
+  // Identical findings in one file share a base and differ only by occurrence,
+  // which is a running count. Group the new list by base so a match is made
+  // against the group, not against one position. Two identical findings that
+  // become one then read as one still broken and one fixed, whatever the order.
+  const newByBase = new Map<string, string[]>();
+  for (const finding of newList) {
+    const key = baseFingerprint(finding.fingerprint);
+    const group = newByBase.get(key);
+    if (group === undefined) newByBase.set(key, [finding.fingerprint]);
+    else group.push(finding.fingerprint);
+  }
   const matchedNew = new Set<string>();
 
   if (opts.oldAnalyzer !== opts.newAnalyzer) {
@@ -132,14 +144,19 @@ export function compareFindings(
   }
 
   for (const old of oldList) {
-    const same = newByFp.get(old.fingerprint);
-    if (same !== undefined) {
-      matchedNew.add(old.fingerprint);
+    const base = baseFingerprint(old.fingerprint);
+    const group = newByBase.get(base);
+    const match = group === undefined ? undefined : group.shift();
+    if (match !== undefined) {
+      matchedNew.add(match);
       out.push({
         oldFingerprint: old.fingerprint,
-        newFingerprint: same.fingerprint,
+        newFingerprint: match,
         ruleId: old.ruleId,
-        state: opts.previouslyFixed.has(old.fingerprint) ? "regressed" : "still_broken",
+        state:
+          opts.previouslyFixed.has(old.fingerprint) || opts.previouslyFixed.has(base)
+            ? "regressed"
+            : "still_broken",
         cause: null,
       });
       continue;
