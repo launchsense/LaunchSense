@@ -16,6 +16,7 @@ import { ToolCard } from "../report/ToolCard";
 import { toUserError } from "../../../shared/userError";
 import { useVisitorId } from "./useVisitorId";
 import ReportFeedback from "../report/ReportFeedback";
+import LiteReport from "../report/LiteReport";
 
 // This project's own public repo, so a first-time visitor can see a real
 // report without needing a repo of their own to hand.
@@ -574,7 +575,7 @@ export default function GuestScan() {
               </p>
             </div>
           )}
-          {analyzed && resultsState !== undefined && (
+          {analyzed && resultsState !== undefined && isAuthenticated && (
             <ScanReport
               findings={resultsState.findings}
               plan={plan}
@@ -592,6 +593,14 @@ export default function GuestScan() {
               priorityNote={scan.priorityNote}
             />
           )}
+          {analyzed && resultsState !== undefined && !isAuthenticated && scan !== null && (
+            <LiteReport
+              findings={resultsState.findings}
+              plan={plan}
+              coverageNote={scan.coverageNote}
+              partial={scan.status === "partial"}
+            />
+          )}
           {analyzed && scanState !== undefined && (
             <ToolCard tools={scanState.codingTools} />
           )}
@@ -603,9 +612,11 @@ export default function GuestScan() {
               <button className="ghost" type="button" disabled={phase !== "idle"} onClick={() => void onRescan()}>
                 {phase !== "idle" ? "Working" : "Re-scan for new commits"}
               </button>
-              <button className="ghost" type="button" disabled={phase !== "idle"} onClick={() => void onExplain()}>
-                Explain in plain words
-              </button>
+              {isAuthenticated && (
+                <button className="ghost" type="button" disabled={phase !== "idle"} onClick={() => void onExplain()}>
+                  Explain in plain words
+                </button>
+              )}
               {rescanNote.length === 0 && comparePair === null && (
                 <p>
                   Re-scanning is the part that matters. After you fix things and
@@ -614,15 +625,15 @@ export default function GuestScan() {
                 </p>
               )}
               {rescanNote.length > 0 && <p role="status">{rescanNote}</p>}
-              {explainNote.length > 0 && <p role="status">{explainNote}</p>}
-              {explanations.length > 0 && (
+              {isAuthenticated && explainNote.length > 0 && <p role="status">{explainNote}</p>}
+              {isAuthenticated && explanations.length > 0 && (
                 <ul aria-label="Plain-word explanations">
                   {explanations.slice(0, 8).map((item) => (
                     <li key={item.fingerprint}>{item.plain}</li>
                   ))}
                 </ul>
               )}
-              {explanations.length > 8 && (
+              {isAuthenticated && explanations.length > 8 && (
                 <p>{explanations.length - 8} more finding(s) are explained in the full report.</p>
               )}
               {notActionable.length > 0 && (
@@ -676,7 +687,7 @@ export default function GuestScan() {
               )}
             </div>
           )}
-          {analyzed && resultsState !== undefined && (
+          {analyzed && resultsState !== undefined && isAuthenticated && (
             <Stage5Panels
               scanId={scanId as Id<"scans">}
               plan={plan}
@@ -694,7 +705,7 @@ export default function GuestScan() {
               signedIn={scan.signedIn === true}
             />
           )}
-          {compareState !== undefined && compareState !== null && comparePair !== null && (
+          {compareState !== undefined && compareState !== null && comparePair !== null && isAuthenticated && (
             <CompareView
               fromSha={compareState.from.sha}
               toSha={compareState.to.sha}
