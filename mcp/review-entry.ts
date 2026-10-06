@@ -280,7 +280,12 @@ async function sendDiagnostics(report: ReviewReport, config: LocalConfig, starte
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(8000),
     });
-    return response.status === 200;
+    if (response.status !== 200) return false;
+    // The route reports whether the row was actually stored. A 200 with
+    // stored:false means the counts were refused, and the review must not tell
+    // the person they were sent when nothing was written.
+    const body = (await response.json().catch(() => null)) as { stored?: unknown } | null;
+    return body !== null && body["stored"] === true;
   } catch {
     return false;
   }

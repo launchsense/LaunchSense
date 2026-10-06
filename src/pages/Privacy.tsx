@@ -85,6 +85,21 @@ export default function Privacy() {
           First-party analytics writes are limited by event kind and day, so the public endpoint
           cannot write an unbounded stream of rows.
         </p>
+        <p>
+          Here is the rule our analytics runs on, in plain words. Analytics holds no personal
+          information. No email address, no network address, and no free text is written to an
+          analytics row. The only label that names anything is the coding tool that sent the
+          call, which is a claim about a tool and not about a person. The only identifier
+          analytics is allowed is the repository identifier, and we use it for technical
+          purposes only: running the scan, linking a rescan, and counting the funnel. Every
+          other value on an analytics row is a count, a code, a time, or one of a closed set of
+          labels.
+        </p>
+        <p>
+          The list of columns behind that rule, field by field, is in{" "}
+          <code>convex/analytics/inventory.ts</code>, and a test reads the database schema and
+          fails if a column appears there that nobody classified.
+        </p>
         <h3>A note on deleted schemas</h3>
         <p>
           Convex does not drop fields from records that already exist. When we removed the
