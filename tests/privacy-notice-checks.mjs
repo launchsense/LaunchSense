@@ -165,45 +165,41 @@ describe("the page and the repository file say the same thing", () => {
   });
 });
 
-describe("sign in asks about four separate purposes", () => {
-  it("has four checkboxes, one per purpose", () => {
-    // One <input> literal renders every box from the list, so counting the
-    // literal would prove nothing. The list is the count.
-    const ids = [...authPanel.matchAll(/^ {4}id: "([a-z]+)",$/gm)].map((m) => m[1]);
-    assert.deepEqual(ids, ["token", "read", "explain", "usage"], "one list entry per purpose box");
-    assert.match(authPanel, /PURPOSES\.map\(\(purpose\) =>/, "each entry must render a box");
-    assert.match(authPanel, /<input[\s\S]{0,120}type="checkbox"/, "each entry renders a checkbox");
+describe("sign in asks once for all four purposes", () => {
+  it("has one checkbox, not four", () => {
+    assert.equal(
+      [...authPanel.matchAll(/type="checkbox"/g)].length,
+      1,
+      "one tick covers all four purposes",
+    );
+    assert.match(authPanel, /id="purpose-all"/, "the single box has a stable id");
+    assert.match(authPanel, /htmlFor="purpose-all"/, "the label points at the box");
   });
 
-  it("starts every box unticked", () => {
+  it("starts unticked", () => {
     assert.doesNotMatch(
       authPanel,
       /defaultChecked/,
       "a pre-ticked box is not a decision: ICO and DPDP s6(1) both rule it out",
     );
     assert.doesNotMatch(authPanel, /checked=\{(true|false)\}/, "no box may be fixed at build time");
-    assert.match(authPanel, /checked=\{accepted\[purpose\.id\] === true\}/, "state starts false");
-    assert.match(authPanel, /useState<Record<string, boolean>>\(\{\}\)/, "empty state means unticked");
+    assert.match(authPanel, /useState\(false\)/, "empty state means unticked");
   });
 
-  it("labels every box and names a different purpose on each", () => {
-    const labels = [...authPanel.matchAll(/<label htmlFor=\{`purpose-\$\{purpose\.id\}`\}>([^<]+)</g)].map(
-      (m) => m[1],
-    );
-    assert.equal(labels.length, 1, "the label must be rendered from the purpose list");
-    assert.match(authPanel, /htmlFor=\{`purpose-\$\{purpose\.id\}`\}/, "each input needs its label");
-    assert.match(authPanel, /id=\{`purpose-\$\{purpose\.id\}`\}/, "each label needs its input");
-  });
-
-  it("names the four purposes the research asked for", () => {
-    for (const purpose of [
-      "Store my GitHub token so I do not sign in again",
-      "Read one repository on my token",
-      "Explain findings in plain words with an AI provider",
-      "Send anonymous usage counts from the coding tool connection",
+  it("names every purpose as keywords in the label", () => {
+    for (const keyword of [
+      "token storage",
+      "one repository read",
+      "AI explanations",
+      "anonymous usage counts",
     ]) {
-      assert.ok(authPanelText.includes(purpose), `a purpose box is missing: ${purpose}`);
+      assert.ok(authPanelText.includes(keyword), `the single label is missing: ${keyword}`);
     }
+  });
+
+  it("keeps the four purposes recorded behind the tick", () => {
+    assert.match(authPanel, /PURPOSES\.map\(\(purpose\) => purpose\.id\)/, "the tick grants all four ids");
+    assert.match(authPanel, /grantedFor: \(\) => accepted === true/, "one tick grants every purpose or none");
   });
 
   it("says what each purpose stores or sends, not just that it exists", () => {
@@ -217,16 +213,15 @@ describe("sign in asks about four separate purposes", () => {
     }
   });
 
-  it("blocks the sign-in button until every purpose is acknowledged", () => {
-    assert.match(authPanel, /const ready = outstanding\.length === 0/, "readiness must come from the boxes");
-    assert.match(authPanel, /disabled=\{!ready\}/, "the sign-in button must be disabled until they are all ticked");
-    assert.match(authPanel, /role="status"/, "the reader is told how many boxes are left");
+  it("blocks the sign-in button until the box is ticked", () => {
+    assert.match(authPanel, /disabled=\{!accepted\}/, "the sign-in button must be disabled until ticked");
+    assert.match(authPanel, /role="status"/, "the reader is told the box is unticked");
   });
 
   it("says signing in turns on all four, because no per-purpose switch exists yet", () => {
     assert.ok(
       authPanelText.includes("Signing in turns on all four"),
-      "four boxes that look like independent choices must not hide that they are one switch",
+      "one tick that silently records four purposes must say so",
     );
   });
 
