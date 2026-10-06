@@ -236,6 +236,59 @@ export const consumeExplain = internalMutation({
   },
 });
 
+// Closed sets, not a character shape. A shape that allows letters, dots and
+// dashes accepts "AdaLovelace", and a version shape with a pre-release suffix
+// accepts "1.2-AdaLovelace". These fields are tool and build labels, so each is
+// matched against the exact values the installer sends, and anything else is
+// normalized to the fallback label. A name is never stored raw.
+const ALLOWED_STAGE = new Set(["alpha"]);
+const ALLOWED_TIER = new Set(["alpha", "pro"]);
+const ALLOWED_HARNESS = new Set([
+  "local",
+  "cursor",
+  "claude_code",
+  "claude_desktop",
+  "codex",
+  "vscode",
+  "windsurf",
+  "other",
+  "unknown",
+]);
+const ALLOWED_ORDER_SOURCE = new Set(["local", "jev", "perplexity", "table", "unspecified"]);
+// A plain version only, and short. A pre-release suffix is a free string, so it is
+// refused: "1.2-AdaLovelace" is a name wearing a version's clothes. Each numeric
+// part is bounded, so the column is bounded too and a caller cannot mint a new
+// dimension with a very long number.
+const VERSION_SHAPE = /^\d{1,4}\.\d{1,4}(\.\d{1,4})?$/;
+
+function declaredOr(value: string, allowed: Set<string>, fallback: string): string {
+  const trimmed = value.trim();
+  return allowed.has(trimmed) ? trimmed : fallback;
+}
+
+function declaredVersion(value: string): string {
+  const trimmed = value.trim();
+  return trimmed === "alpha" || VERSION_SHAPE.test(trimmed) ? trimmed : "other";
+}
+
+/**
+ * True when a value is one of the labels any of these fields is allowed to keep.
+ *
+ * Exported for tests. The write path does not use it: it normalizes each field
+ * with declaredOr or declaredVersion, because a value valid for one field is not
+ * valid for another.
+ */
+export function isDeclaredValue(value: string): boolean {
+  const v = value.trim();
+  return (
+    ALLOWED_STAGE.has(v) ||
+    ALLOWED_TIER.has(v) ||
+    ALLOWED_HARNESS.has(v) ||
+    ALLOWED_ORDER_SOURCE.has(v) ||
+    declaredVersion(v) === v
+  );
+}
+
 export const recordUsage = internalMutation({
   args: {
     stage: v.string(),
@@ -246,22 +299,30 @@ export const recordUsage = internalMutation({
     orderSource: v.string(),
     ruleCounts: v.string(),
   },
-  returns: v.null(),
+  returns: v.boolean(),
   handler: async (ctx, args) => {
-    if (args.tier === "enterprise") return null;
-    if (args.ruleCounts.length > 4000) return null;
-    if (/\/|function |eval\(|-----BEGIN/.test(args.ruleCounts)) return null;
+    if (args.tier === "enterprise") return false;
+    if (args.ruleCounts.length > 4000) return false;
+    if (/\/|function |eval\(|-----BEGIN/.test(args.ruleCounts)) return false;
+    // Each declared string is normalized to a closed label. A value outside the
+    // set becomes "other" (or "unspecified" for the order source), so a name or
+    // an address can never land in the row, and the row is still counted.
+    const stage = declaredOr(args.stage, ALLOWED_STAGE, "other");
+    const tier = declaredOr(args.tier, ALLOWED_TIER, "other");
+    const harness = declaredOr(args.harness, ALLOWED_HARNESS, "other");
+    const version = declaredVersion(args.version);
+    const orderSource = declaredOr(args.orderSource, ALLOWED_ORDER_SOURCE, "unspecified");
     await ctx.db.insert("usageDiagnostics", {
       day: new Date().toISOString().slice(0, 10),
-      stage: args.stage.slice(0, 20),
-      tier: args.tier.slice(0, 20),
-      harness: args.harness.slice(0, 40),
-      version: args.version.slice(0, 40),
+      stage,
+      tier,
+      harness,
+      version,
       durationMs: args.durationMs,
-      orderSource: args.orderSource.slice(0, 20),
+      orderSource,
       ruleCounts: args.ruleCounts,
       createdAt: Date.now(),
     });
-    return null;
+    return true;
   },
 });
