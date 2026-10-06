@@ -422,6 +422,7 @@ async function scanPublicTool(
       scanId: scan.scanId,
       status: analyzed.status,
       coverageNote: report.scan?.coverageNote ?? null,
+      errorMessage: report.scan?.errorMessage ?? null,
       findingCount: report.findings.length,
       findings: report.findings.map((finding) => ({
         ruleId: finding.ruleId,
@@ -449,6 +450,7 @@ async function reportTool(
       sha: report.scan.sha ?? null,
       status: report.scan.status,
       coverageNote: report.scan.coverageNote ?? null,
+      errorMessage: report.scan.errorMessage ?? null,
       findingCount: report.findings.length,
       findings: report.findings.map((finding) => ({
         ruleId: finding.ruleId,

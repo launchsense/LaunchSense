@@ -178,6 +178,7 @@ export function formatPublicScan(report: {
   scanId: string;
   status: string;
   coverageNote: string | null;
+  errorMessage: string | null;
   findingCount: number;
   findings: Array<{ ruleId: string; severity: string; title: string; path: string; line: number | null }>;
 }): string {
@@ -185,8 +186,9 @@ export function formatPublicScan(report: {
     `Scan ${report.scanId}`,
     `Status: ${report.status}`,
     `Coverage: ${report.coverageNote ?? "not recorded"}`,
-    `Findings listed: ${report.findingCount}`,
   ];
+  if (report.errorMessage !== null) lines.push(`Reason: ${report.errorMessage}`);
+  lines.push(`Findings listed: ${report.findingCount}`);
   for (const finding of report.findings) {
     const line = finding.line === null ? "" : `:${finding.line}`;
     lines.push(`- ${finding.severity} ${finding.ruleId} ${finding.path}${line} ${finding.title}`);
@@ -200,6 +202,7 @@ export function formatReport(report: {
   sha: string | null;
   status: string;
   coverageNote: string | null;
+  errorMessage: string | null;
   findingCount: number;
   findings: Array<{ ruleId: string; severity: string; title: string; path: string; line: number | null }>;
 }): string {
@@ -208,8 +211,9 @@ export function formatReport(report: {
     `Commit: ${report.sha ?? "not recorded"}`,
     `Status: ${report.status}`,
     `Coverage: ${report.coverageNote ?? "not recorded"}`,
-    `Findings listed: ${report.findingCount}`,
   ];
+  if (report.errorMessage !== null) lines.push(`Reason: ${report.errorMessage}`);
+  lines.push(`Findings listed: ${report.findingCount}`);
   for (const finding of report.findings) {
     const line = finding.line === null ? "" : `:${finding.line}`;
     lines.push(`- ${finding.severity} ${finding.ruleId} ${finding.path}${line} ${finding.title}`);
