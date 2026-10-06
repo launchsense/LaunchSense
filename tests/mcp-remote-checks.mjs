@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   formatPublicScan,
+  formatReport,
   handleMcpMessage,
   wantsEventStream,
 } from "../convex/mcpHttp.ts";
@@ -72,14 +73,42 @@ describe("hosted MCP protocol", () => {
       scanId: "scan1",
       status: "partial",
       coverageNote: "Read 10 of 40 files.",
+      errorMessage: null,
       findingCount: 0,
       findings: [],
     });
     assert.match(text, /Read 10 of 40 files/);
     assert.match(text, /Findings listed: 0/);
     assert.match(text, /A partial result is not a pass/);
+    assert.doesNotMatch(text, /Reason:/);
     assert.equal(wantsEventStream("text/event-stream"), true);
     assert.equal(wantsEventStream("application/json, text/event-stream"), false);
+  });
+
+  it("names the stored reason when a scan stops before any finding", () => {
+    const reason = "GitHub API quota is exhausted. Try again later. Showing a partial result with nothing marked as checked.";
+    const pub = formatPublicScan({
+      scanId: "scan2",
+      status: "partial",
+      coverageNote: null,
+      errorMessage: reason,
+      findingCount: 0,
+      findings: [],
+    });
+    assert.match(pub, /Coverage: not recorded/);
+    assert.match(pub, /Reason: GitHub API quota is exhausted/);
+    assert.match(pub, /A partial result is not a pass/);
+    const rep = formatReport({
+      scanId: "scan2",
+      sha: null,
+      status: "partial",
+      coverageNote: null,
+      errorMessage: reason,
+      findingCount: 0,
+      findings: [],
+    });
+    assert.match(rep, /Commit: not recorded/);
+    assert.match(rep, /Reason: GitHub API quota is exhausted/);
   });
 
   it("the connect page shows the hosted address and the home page does not tell people to clone", () => {
