@@ -398,18 +398,18 @@ describe("the guest cap dialog says which case it is", () => {
 
   it("chooses the heading and the body from the case, not from one fixed line", () => {
     // One name says which case the dialog is in, and it is null exactly when the
-    // dialog is closed, so the wording cannot drift from the condition.
+    // dialog is closed, so the wording cannot drift from the condition. A spent
+    // hosted budget is its own case: the honest answer is the free local check,
+    // not a sign-in wall.
     assert.match(
       guestSource,
-      /const capReason: "guestCap" \| "repoMiss" \| null = !showSignIn\s*\?\s*null\s*:\s*repoMiss\s*\?\s*"repoMiss"\s*:\s*"guestCap"/,
+      /const capReason: "guestCap" \| "repoMiss" \| "rateLimited" \| null = !showSignIn/,
     );
+    assert.match(guestSource, /capReason === "rateLimited"/);
+    assert.match(guestSource, /Hosted reads are paused until the hour resets/);
     assert.match(
       guestSource,
-      /const capHeading = capReason === "repoMiss" \? "That repository did not open" : "Sign in to read more"/,
-    );
-    assert.match(
-      guestSource,
-      /const capBody =\s*capReason === "repoMiss"\s*\? "GitHub would not open that repository\.[\s\S]{0,240}?`This scan stopped at the guest limit/,
+      /const capBody =\s*capReason === "repoMiss"[\s\S]{0,400}`This scan stopped at the guest limit/,
       "the body must branch on the case too",
     );
     assert.match(guestSource, /<h2 id="limit-signin-title">\{capHeading\}<\/h2>/);
