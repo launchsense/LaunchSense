@@ -34,6 +34,8 @@ const severity = v.union(
 // Wave 6: hosted MCP usage events and the daily rollup, then identity and
 // attribution. A credential row is a server-minted bearer token, and a scan row
 // says which credential made it and which surface it arrived on.
+// Wave 10: the sign-in consent records. One row per person per purpose per
+// notice version, written from the session rather than from an argument.
 export default defineSchema({
   ...authTables,
   scans: defineTable({
@@ -417,6 +419,57 @@ export default defineSchema({
     count: v.number(),
     limit: v.number(),
   }).index("by_user_day", ["userId", "day", "kind"]),
+  // One row per purpose per notice version for one signed-in person. This is the
+  // record the sign-in panel was missing: the four boxes were client-side React
+  // state, so the decisions existed for the length of a click and nowhere else.
+  //
+  // The identity is (userId, purposeId, noticeVersion), which is what
+  // by_user_purpose plus the noticeVersion comparison in
+  // convex/consent.ts:recordSignInDecisions gives. A person who signs out and signs
+  // in again under new wording updates nothing and adds a row, so the old answer
+  // stays readable beside the new one. Both answers are evidence.
+  //
+  // granted is written false as readily as true. The panel requires all four
+  // boxes today, so a refusal cannot come from that surface, but a refusal is
+  // evidence and a record that can only hold agreement would be the wrong shape.
+  //
+  // decidedAt is the click, which only the browser saw, and recordedAt is this
+  // server's own clock. Two times because they answer two questions: when the
+  // person decided, and when the controller learned it. A browser clock can be
+  // wrong, and the mutation refuses a decidedAt that is not a plausible time.
+  //
+  // source is written by the server, not taken from the caller. A free-text
+  // column a client can fill is a column a client can lie in, and there is no
+  // surface here that needs to name itself.
+  consentRecords: defineTable({
+    /** The account the decision belongs to. Taken from the session, never from arguments. */
+    userId: v.id("users"),
+    /** One of the four purposes the sign-in panel asks about, in panel order. */
+    purposeId: v.union(
+      v.literal("token"),
+      v.literal("read"),
+      v.literal("explain"),
+      v.literal("usage"),
+    ),
+    granted: v.boolean(),
+    /** Which wording the person read. A wording change adds a row rather than moving this. */
+    noticeVersion: v.string(),
+    /** Epoch ms of the click. */
+    decidedAt: v.number(),
+    /** Epoch ms on this server. */
+    recordedAt: v.number(),
+    source: v.string(),
+  })
+    // by_user and by_user_purpose are kept on purpose. The upsert in
+    // convex/consent.ts reads one purpose at a time, so it wants by_user_purpose.
+    // The export in myConsentRecords wants every row the account has, sorted by
+    // creation, and by_user is the index that answers that without a filter.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
+    .index("by_user", ["userId"])
+    // Convex forbids optional fields in an index, so noticeVersion is not in this
+    // one. The handler reads by_user_purpose and compares the version itself, which
+    // is a handful of rows per person rather than a scan.
+    .index("by_user_purpose", ["userId", "purposeId"]),
   providerCalls: defineTable({
     scanId: v.id("scans"),
     kind: v.union(v.literal("explain"), v.literal("decide")),

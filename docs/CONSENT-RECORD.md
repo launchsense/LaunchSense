@@ -11,9 +11,37 @@ npm run consent-record -- --out-dir DIR   writes consent-records.json, consent-r
 The two inputs are real and they are in different places. `install.sh` asks one
 question, remembers the answer, and appends one line per real decision to a ledger
 on the person's own machine. The sign-in panel in `src/features/auth/AuthPanel.tsx`
-asks about four purposes in four unticked boxes. Both are described in
-`shared/consent/vocabulary.ts`, which is the only place a purpose is defined, so a
-copy change and a record change are one change.
+asks about four purposes in four unticked boxes, and a person who signs in gets
+those four answers written to the Convex table `consentRecords`. Both are
+described in `shared/consent/vocabulary.ts`, which is the only place a purpose is
+defined, so a copy change and a record change are one change.
+
+## What this file can and cannot read
+
+`npm run consent-record` reads one thing: the local ledger. It holds no Convex
+credentials, opens no connection, and cannot read the Convex database, so it cannot
+read the `consentRecords` table either. So the three records it prints for `token`,
+`read`, and `explain` are the **shape** of those records and not the decisions, and
+they say so:
+
+- `status: recorded_in_database`, which is this product's own value. It means a
+  decision exists for that purpose for a person who signed in, this file cannot
+  show it, and here is where to read it.
+- no `record_id`, because the id is derived from the decision time this file does
+  not have.
+- no `event.time`, for the same reason.
+- a `not_filled` list naming the table and the query.
+
+The export path is the caller's own query, `myConsentRecords` in
+`convex/consent.ts`. It takes no argument, reads the account id out of the
+session, and returns that account's rows and nobody else's. Nothing in this
+repository turns that query into a download button, so a person who wants their
+records asks for them and we run the query, or runs it from their own session.
+
+The generator is not made to pretend it can do more than that. Claiming the
+sign-in decision was never captured would be false now that it is captured, and
+claiming this file holds it would be false too. Both are the same mistake in
+opposite directions.
 
 ## What the standard asks for, and what we have
 
@@ -25,8 +53,8 @@ tables, because the names are the point of the standard. The values are ours.
 |---|---|---|
 | `schema_version` | filled | `launchsense.consent/1.0`, pinned so a record written before a change stays readable |
 | `record_id` | filled | Derived from the purpose, the notice version, and the decision time. Not a random UUID-4, because the person keeps the receipt |
-| `pii_principal_id` | **not filled** | Nothing in this repository links a decision to a person |
-| `privacy_notice` | filled | A URI, the version, and a SHA-256 over the exact lines the person read. A reference and a hash, never a stored copy |
+| `pii_principal_id` | **not filled** | The ledger holds no person identifier. The `consentRecords` rows do carry the account id, and this offline file cannot read that table |
+| `privacy_notice` | filled | A URI, the version, and a SHA-256 over the exact lines the person read. A reference and a hash, never a stored copy. The hash is only taken where this build carries the wording, so the sign-in records carry none |
 | `language` | filled | `en` |
 | `purposes` | filled | One entry. One purpose per record, so the event cannot apply to two purposes |
 | `purpose` | filled | Id, type, lawful basis, and the description a notice would use |
@@ -37,7 +65,7 @@ tables, because the names are the point of the standard. The values are ours.
 | `processing_method` | filled | What happens to it next |
 | `storage_locations` | filled in part | The system is filled. **Every region reads `unknown`** |
 | `retention_period` | filled in part | The window is filled. `enforced_by` is null where nothing deletes the data |
-| `event` | filled for the ledger, **not filled** for the panel | Time, manner, location, mechanism, consent type, and locale |
+| `event` | filled for the ledger, **not filled** for the sign-in records in this file | Time, manner, location, mechanism, consent type, and locale |
 | `integrity` | filled | SHA-256 over the ledger line, chained to the line before it |
 | consent receipt | filled | The copy the person keeps |
 
@@ -51,13 +79,18 @@ not because nobody filled it in.
 1. **A registered controller name.** `docs/PRIVACY.md` section 1 says no registered
    company name, registered address, or data protection officer is published. The
    record carries `registration_unknown: true` instead of a name that reads well.
-2. **A principal identifier.** The ledger records a decision about wording, not about
-   who answered. The id is scoped to the record and links to nobody.
+2. **A principal identifier.** The local ledger records a decision about wording,
+   not about who answered. The id is scoped to the record and links to nobody. The
+   `consentRecords` rows do carry the account id, and this offline file cannot read
+   that table, so those rows cannot fill the field here.
 3. **A region.** No host or provider has confirmed one to this product. Writing
    `eu-west` because it would be nice to write it is the exact failure the field
    exists to prevent, so every region reads `unknown` with a note saying so.
-4. **A withdrawal event.** No withdrawal path is built. The closest thing that exists
-   is a re-run with `LAUNCHSENSE_DIAGNOSTICS=off`, which writes a refusal line.
+4. **A withdrawal event.** No withdrawal path is built. A person can refuse a
+   purpose in the sign-in panel and that refusal is stored as `granted: false`, and
+   `install.sh` can be re-run with `LAUNCHSENSE_DIAGNOSTICS=off`, which writes a
+   refusal line. Neither turns a stored decision off. There is no button and no
+   route that does it.
 5. **A data protection officer.** None is appointed, so there is no contact role to
    fill.
 6. **A hash written by the installer.** It writes none. The chain is derived by the
@@ -69,19 +102,52 @@ not because nobody filled it in.
 refusal is evidence, so it is recorded, and the record says `consent_refused` is this
 product's own value rather than borrowing a term that means something else.
 
-## The gap that matters most
+`status` has an eighth, smaller gap. `recorded_in_database` is this product's own
+value, and it exists because TS 27560 names a record but not the case of a decision
+held in a system the publisher of the record cannot read.
 
-Three of the four purposes in the sign-in panel have **no record anywhere**. The four
-boxes are client-side React state in `AuthPanel.tsx`. Nothing writes a decision, a
-time, or a wording version for them, so there is nothing to turn into a record.
+## The sign-in records
 
-`buildConsentRecordTemplate` publishes the shape anyway, with `status: not_recorded`,
-no record id, and no event time, so a reader can see exactly which fields a built
-system would have to add. That is more useful than silence, and far more useful than
-a record that implies a decision was captured.
+The gap this document used to lead with is closed, and the way it is closed matters
+as much as the closing.
 
-GDPR Art 7(1) puts the burden of demonstrating consent on the controller. For three
-of the four purposes, this build cannot demonstrate anything, and the record says so.
+The four boxes in `AuthPanel.tsx` used to be React state. A person could tick four
+boxes, click Sign in, and leave nothing behind: no purpose, no answer, no time, no
+wording version. Three of the four purposes therefore had no record anywhere, and
+the record said `not_recorded`, which was honest and also the gap.
+
+What happens now:
+
+1. The click persists the four answers, the wording version
+   (`SIGN_IN_NOTICE_VERSION` in `shared/copy/signIn.ts`), and the click time to
+   `sessionStorage`. It cannot write a record: the person is anonymous until the
+   OAuth callback, so there is no account to attach one to.
+2. `src/features/auth/ConsentRecorder.tsx` watches for a session and then calls
+   `recordSignInDecisions` once, with those values, and clears what it persisted.
+   Nothing is persisted means nothing is written, so a person who signed in before
+   this change has no row and none was invented for them.
+3. The mutation takes the account id from `getAuthUserId`. There is no `userId`
+   argument, so nothing in the request can move a record onto somebody else's
+   account.
+4. One row is written per (account, purpose, notice version). The same decision
+   twice updates one row. A wording change adds a row beside the old one rather
+   than overwriting it, so both answers stay readable and the version is what
+   re-asks.
+5. `myConsentRecords` returns the caller's own rows for export.
+
+Two facts about that path stay on this page because they are limits, not details.
+The sign-in wording is not hashed, because this build carries those lines as a
+component rather than as text, and hashing the installer's wording under a sign-in
+notice version would tell a reader they agreed to words they never saw. And
+`decidedAt` is the browser's clock, so the row also carries `recordedAt` from this
+server; the mutation refuses a click time that is not a plausible past or present
+time.
+
+GDPR Art 7(1) puts the burden of demonstrating consent on the controller. For a
+person who signs in today, this build can demonstrate three of the four purposes
+from the database and the fourth from the local ledger. For a person who signed in
+before this change, it can demonstrate nothing about those three, and the record
+still does not pretend otherwise.
 
 ## Integrity
 
@@ -101,8 +167,14 @@ be checked against a ledger read today.
 `renderConsentReceipt` prints the copy a person keeps. It states the notice version,
 the hash of the wording, and the wording itself, because a hash proves two texts are
 the same and does not tell a reader what they agreed to. It names the rights, and it
-says plainly that there is no withdrawal button and no route that serves a record,
-because neither exists.
+says plainly that there is no withdrawal button and no route that serves a record to
+anybody but the person it belongs to, because neither exists.
+
+A receipt for a purpose whose decision lives in the database prints the status and
+then says that this file does not hold the decision and names the table and the
+query. It does not print the sign-in wording, because this build carries it as a
+component rather than as text, and showing a person the installer's lines under a
+sign-in notice version would be a false receipt.
 
 For a purpose whose basis is consent, this receipt is the document GDPR Art 20 asks
 for. That is this product's reading, not a lawyer's. The receipt is deterministic:
@@ -144,13 +216,21 @@ this document.
 
 ## What this lane did not build
 
-- **A consent table.** `convex/schema.ts` has no `consentRecords` table, so there is
-  no server-side record and no withdrawal path. Both would be the natural next step
-  and neither is here.
+- **A withdrawal path.** A refusal is stored and is visible in the export, and a
+  person can record a refusal by ticking differently next time, but nothing turns a
+  stored decision off. There is no button, no route, and no deletion job for
+  `consentRecords`.
+- **An export button.** `myConsentRecords` is a query, not a page. No screen in the
+  product calls it yet, so a person who wants their records asks us and we run the
+  query against their own session.
 - **A receipt at a stable URL.** The receipt is a file a person runs on their own
-  machine. Publishing one at a URL would need a route that resolves a record id, and
-  no route does.
+  machine. Publishing one at a URL would need a route that resolves a record id for
+  the person it belongs to, and no route does.
+- **A wording hash for the sign-in notice.** The wording lives in
+  `shared/copy/signIn.ts` and in a component. Hashing the wrong lines under this
+  version is worse than carrying no hash, so the field is empty and named.
 - **A DPO, a registered entity, or a confirmed region.** Those are facts about the
   world, not about the code.
-- **Art 30(2).** The processor register belongs to Convex, GitHub, Google, Ollama, and
-  the font service. It is named in `docs/PROCESSING-REGISTER.md` and not written here.
+- **Art 30(2).** The processor register belongs to Convex, GitHub, Google, Ollama,
+  and the font service. It is named in `docs/PROCESSING-REGISTER.md` and not written
+  here.
