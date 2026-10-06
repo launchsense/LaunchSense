@@ -227,15 +227,21 @@ describe("a consent record carries the fields ISO/IEC TS 27560:2023 names", () =
     );
   });
 
-  it("mints no record id for a purpose that is asked about and recorded nowhere", async () => {
+  it("mints no record id for a purpose whose decision this file cannot read", async () => {
+    // The explain decision exists, in the Convex table consentRecords. This
+    // generator cannot read that table, so its record is a shape: no id, no event
+    // time, and a status that says why rather than claiming nothing was recorded.
     const record = await buildConsentRecordTemplate("explain");
-    assert.equal(record.record_id, null, "no record exists, so no id is invented");
+    assert.equal(record.record_id, null, "no id is minted from a decision this file does not have");
     assert.equal(record.event.time, null);
-    assert.equal(record.status, "not_recorded");
+    assert.equal(record.status, "recorded_in_database");
     assert.ok(
       record.not_filled.some((gap) => gap.field === "record_id"),
       "and the missing id is named",
     );
+    const named = record.not_filled.map((gap) => gap.why).join(" ");
+    assert.match(named, /consentRecords/, "the gap must name the table the decision is in");
+    assert.match(named, /myConsentRecords/, "and the query that returns it");
   });
 
   it("names the four purposes the sign-in panel asks about, with the same labels", () => {
@@ -255,13 +261,32 @@ describe("a consent record carries the fields ISO/IEC TS 27560:2023 names", () =
     }
   });
 
-  it("says which of the four purposes is actually on record", () => {
-    const recorded = CONSENT_PURPOSES.filter((purpose) => purpose.recorded);
+  it("says where each of the four purposes is recorded, in the ledger or the database", () => {
+    // All four are recorded now: usage in the install.sh ledger, the other three in
+    // the Convex table consentRecords. Which one is which has to be stated, because
+    // the offline generator can only ever print the first kind.
+    for (const purpose of CONSENT_PURPOSES) {
+      assert.equal(purpose.recorded, true, `${purpose.id} has a decision on record somewhere`);
+      assert.equal(purpose.not_recorded_reason, null, `${purpose.id} is recorded, so no gap is claimed`);
+      assert.notEqual(purpose.ledger, null, `${purpose.id} must name where its decision lands`);
+    }
+    const inLedger = CONSENT_PURPOSES.filter((purpose) => purpose.recorded_in === "local_ledger");
     assert.deepEqual(
-      recorded.map((purpose) => purpose.id),
+      inLedger.map((purpose) => purpose.id),
       ["usage"],
-      "only the install.sh question is written down, and the other three say so",
+      "the install.sh question is the one the offline generator can read",
     );
+    const inDatabase = CONSENT_PURPOSES.filter((purpose) => purpose.recorded_in === "convex_database");
+    assert.deepEqual(
+      inDatabase.map((purpose) => purpose.id),
+      ["token", "read", "explain"],
+      "the three sign-in purposes are recorded in the database",
+    );
+    for (const purpose of inDatabase) {
+      assert.match(purpose.ledger, /consentRecords/, `${purpose.id} must name the table it is in`);
+    }
+    // The shape of a not-recorded purpose is still possible and still checked, so a
+    // fifth purpose added without a record would fail here rather than pass silently.
     for (const purpose of CONSENT_PURPOSES.filter((item) => !item.recorded)) {
       assert.ok(purpose.not_recorded_reason, `${purpose.id} must say why nothing records it`);
       assert.match(purpose.not_recorded_reason, /no code writes|recorded nowhere|nothing writes/i);
@@ -379,10 +404,18 @@ describe("the receipt is a stable copy the person can keep", () => {
     );
   });
 
-  it("builds the whole set: every ledger line, then every purpose nothing records", async () => {
+  it("builds the whole set: every ledger line, then a shape for every purpose the ledger cannot answer", async () => {
     const records = await buildConsentRecords([granted, refused]);
-    assert.equal(records.length, 2 + CONSENT_PURPOSES.filter((p) => !p.recorded).length);
+    const shapes = CONSENT_PURPOSES.filter((purpose) => purpose.recorded_in !== "local_ledger");
+    assert.equal(records.length, 2 + shapes.length);
     assert.equal(records.filter((record) => record.status === "recorded").length, 2);
+    // The sign-in purposes are not dropped from the file because their decision
+    // lives in a database this generator cannot read.
+    for (const purpose of shapes) {
+      const record = records.find((item) => item.purpose.id === purpose.id);
+      assert.ok(record, `${purpose.id} must appear in the generated set`);
+      assert.equal(record.status, "recorded_in_database");
+    }
   });
 });
 

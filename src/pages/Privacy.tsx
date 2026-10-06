@@ -123,6 +123,16 @@ export default function Privacy() {
           of up to 1,000 files and about 8MB. Scans you run while signed in are linked to your
           account id in our database. The guest scan does not use your token.
         </p>
+        <p>
+          When you sign in, we write your answers to the four purpose boxes into a table called{" "}
+          <code>consentRecords</code> under your account id. Each row holds which purpose it
+          was, whether you agreed to it, the version of the wording you read, the time you
+          clicked, and the time our server wrote the row. We do not write anything else there: no
+          token, no repository name, and no file paths. We do the same thing if you sign in again
+          under different wording, so both answers stay on file. There is no export button on this
+          site yet. Ask at www.withkeshav.com and we will read your rows back to you, or you can
+          run the query against your own session.
+        </p>
       </section>
 
       <section className="check-section" aria-labelledby="what-an-ai-provider-receives">
@@ -226,6 +236,12 @@ export default function Privacy() {
             the session expires.
           </li>
           <li>
+            Sign-in consent records: one row per purpose per account in{" "}
+            <code>consentRecords</code>, kept while the account exists. Nothing in this
+            repository deletes that table, so a stored decision cannot be taken back from the
+            product today. There is no withdrawal button and no route that turns a decision off.
+          </li>
+          <li>
             Provider call rows from Explain in plain words: kept. Nothing deletes{" "}
             <code>providerCalls</code>.
           </li>
@@ -281,7 +297,10 @@ export default function Privacy() {
         <p>Signing out deletes your GitHub token immediately.</p>
         <p>
           There is no self-service deletion button. Ask at www.withkeshav.com and we delete your
-          scans, findings, evidence, projects, and token rows by hand.
+          scans, findings, evidence, projects, and token rows by hand. We delete your{" "}
+          <code>consentRecords</code> rows the same way, on request. We will not quietly edit a
+          decision instead: if you want a different answer, the record of the old one stays and
+          the new one is written beside it.
         </p>
         <p>
           What we cannot take back: a share link or a passport link you already published stays
@@ -306,6 +325,14 @@ export default function Privacy() {
           route, the footer link, the sign-in purpose boxes, the Connect page disclosure, and the
           default-no question in the local installer. The installer used to write an agreement
           on your behalf before asking anything. It does not any more.
+        </p>
+        <p>
+          6 October 2026. Section 4 now says that your answers to the four purpose boxes are
+          written to <code>consentRecords</code>, and section 8 says that nothing deletes them.
+          Before this, your answers were read by the page, kept in the browser for as long as
+          the page was open, and never written down anywhere. Nobody&apos;s past answers have
+          been reconstructed, so an account that signed in before this has no row and we did not
+          invent one.
         </p>
       </section>
     </SiteFrame>
