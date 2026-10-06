@@ -303,7 +303,7 @@ describe("usage write route", () => {
       "table",
       "perplexity",
       "0.1.0",
-      "1.2.3-beta",
+      "1.2.3",
     ]) {
       assert.equal(mod.isDeclaredValue(good), true, `${good} is a label the installer sends`);
     }
@@ -316,6 +316,9 @@ describe("usage write route", () => {
       "Ada Lovelace",
       "ada/x",
       "ada:x",
+      "1.2-AdaLovelace",
+      "1.2.3-beta",
+      "1.2-" + "a".repeat(200),
     ]) {
       assert.equal(mod.isDeclaredValue(bad), false, `${bad} must not be a declared label`);
     }
