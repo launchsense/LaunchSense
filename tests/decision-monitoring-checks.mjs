@@ -290,6 +290,37 @@ describe("usage write route", () => {
     assert.equal(mod.usageKeyMatches("correct-key", ""), false, "an empty key means closed");
   });
 
+  it("keeps a person's name out of usageDiagnostics: only closed labels pass", async () => {
+    const mod = await loadWithStubs("convex/mcpLimit.ts");
+    assert.equal(typeof mod.isDeclaredValue, "function");
+    for (const good of [
+      "alpha",
+      "pro",
+      "local",
+      "cursor",
+      "claude_code",
+      "codex",
+      "table",
+      "perplexity",
+      "0.1.0",
+      "1.2.3-beta",
+    ]) {
+      assert.equal(mod.isDeclaredValue(good), true, `${good} is a label the installer sends`);
+    }
+    for (const bad of [
+      "AdaLovelace",
+      "Ada-Lovelace",
+      "Ada_Lovelace",
+      "Ada.Lovelace",
+      "ada@example.com",
+      "Ada Lovelace",
+      "ada/x",
+      "ada:x",
+    ]) {
+      assert.equal(mod.isDeclaredValue(bad), false, `${bad} must not be a declared label`);
+    }
+  });
+
   it("checks the key before reading the body and caps writes per caller", () => {
     const keyAt = http.indexOf('path: "/api/mcp/usage"');
     const keyEnd = http.indexOf('path: "/api/mcp/report"');

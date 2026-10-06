@@ -158,9 +158,12 @@ describe("the analytics tables declare no PII column", () => {
       "names",
       "firstname",
       "lastname",
+      "fullname",
       "surname",
       "nickname",
       "username",
+      "handle",
+      "contact",
       "accountname",
       "customername",
       "displayname",
@@ -385,25 +388,26 @@ describe("the write paths cannot put a person's details on an analytics row", ()
     }
   });
 
-  it("refuses a declared usage value that could be a name or an address", () => {
-    assert.match(limit, /export function isDeclaredValue/, "the shape check must be reachable");
-    assert.match(
+  it("keeps only closed labels in usageDiagnostics, so a name or an address cannot land", () => {
+    assert.match(limit, /export function isDeclaredValue/, "the allowlist check must be reachable");
+    // A character shape accepts "AdaLovelace". The fields must use closed sets and
+    // normalize anything outside them, so a name can never be stored raw.
+    assert.doesNotMatch(
       limit,
       /\^\[A-Za-z0-9\._\+\-\]\{1,20\}\$/,
-      "a declared value must be a short token with no at sign, space, slash, or colon",
+      "a character shape accepts a person's name, so it is not the gate",
     );
-    for (const column of ["stage", "tier", "orderSource", "harness", "version"]) {
-      assert.match(
-        limit,
-        new RegExp(`isDeclaredValue\\(args\\.${column}`),
-        `usageDiagnostics.${column} is caller-supplied and must be shape checked`,
-      );
-      assert.doesNotMatch(
-        limit,
-        new RegExp(`${column}: args\\.${column}\\.slice`),
-        `usageDiagnostics.${column} must be refused rather than truncated, so a silent change of shape is visible`,
-      );
-    }
+    assert.match(limit, /const ALLOWED_HARNESS = new Set\(/);
+    assert.match(limit, /const ALLOWED_ORDER_SOURCE = new Set\(/);
+    assert.match(limit, /declaredOr\(args\.stage, ALLOWED_STAGE, "other"\)/);
+    assert.match(limit, /declaredOr\(args\.tier, ALLOWED_TIER, "other"\)/);
+    assert.match(limit, /declaredOr\(args\.harness, ALLOWED_HARNESS, "other"\)/);
+    assert.match(limit, /declaredOr\(args\.orderSource, ALLOWED_ORDER_SOURCE, "unspecified"\)/);
+    assert.doesNotMatch(
+      limit,
+      /harness: args\.harness\b/,
+      "the raw harness value must never be inserted; only the normalized label",
+    );
   });
 
   it("reads no caller network address into any key", () => {
@@ -490,6 +494,17 @@ describe("the notice states the analytics data rule on every surface that carrie
       /no data about you/i,
       /never carries any identifier/i,
       /holds no identifier of any kind/i,
+      // "anonymous" is only an overclaim when it is applied to the analytics or
+      // the numbers. The notice uses it correctly elsewhere ("rather than being
+      // treated as anonymous" about a refused credential), so the patterns are
+      // anchored to the analytics claim and not to the bare word.
+      /anonymous analytics/i,
+      /analytics is anonymous/i,
+      /numbers are anonymous/i,
+      /fully anonymous/i,
+      /no personal data/i,
+      /no identifier of any kind/i,
+      /never store your name/i,
     ];
     for (const [name, text] of surfaces) {
       for (const pattern of overclaims) {

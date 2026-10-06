@@ -264,7 +264,7 @@ http.route({
     if (ruleCounts.length > 4000 || /"path"|"content"|"snippet"|"title"/.test(ruleCounts)) {
       return json({ error: "Usage counts cannot include file text." }, 400);
     }
-    await ctx.runMutation(internal.mcpLimit.recordUsage, {
+    const stored = await ctx.runMutation(internal.mcpLimit.recordUsage, {
       stage: typeof record["stage"] === "string" ? record["stage"] : "alpha",
       tier,
       harness: typeof record["harness"] === "string" ? record["harness"] : "local",
@@ -275,7 +275,7 @@ http.route({
       orderSource: typeof record["orderSource"] === "string" ? record["orderSource"] : "unspecified",
       ruleCounts,
     });
-    return json({ stored: true });
+    return json({ stored });
   }),
 });
 
