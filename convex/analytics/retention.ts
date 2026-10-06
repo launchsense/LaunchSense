@@ -62,6 +62,53 @@ export const purgeUsageEvents = internalMutation({
  * The folded metrics are never deleted. They are the only table a reader touches,
  * they hold no repository name, and this window is the only bound they have.
  */
+/** How long raw visitor ids are kept before this window removes them. */
+export const VISITOR_ID_TTL_DAYS = 30;
+// Same whole-unit rule as above: the claim guard reads the digits, so the
+// multiplier stays written out and the copy can quote 30 days truthfully.
+export const VISITOR_ID_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export const purgeVisitorDays = internalMutation({
+  args: { olderThan: v.number() },
+  returns: v.object({
+    deleted: v.number(),
+    hitBatchCap: v.boolean(),
+    cutoffDay: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const cutoffDay = new Date(args.olderThan).toISOString().slice(0, 10);
+    const stale = await ctx.db
+      .query("visitorDays")
+      .withIndex("by_day", (q) => q.lt("day", cutoffDay))
+      .order("asc")
+      .take(PURGE_BATCH);
+    for (const row of stale) await ctx.db.delete("visitorDays", row._id);
+    return {
+      deleted: stale.length,
+      hitBatchCap: stale.length === PURGE_BATCH,
+      cutoffDay,
+    };
+  },
+});
+
+export const purgeExpiredVisitorIds = internalAction({
+  args: {},
+  returns: v.object({
+    deleted: v.number(),
+    hitBatchCap: v.boolean(),
+    cutoffDay: v.string(),
+  }),
+  handler: async (ctx): Promise<{
+    deleted: number;
+    hitBatchCap: boolean;
+    cutoffDay: string;
+  }> => {
+    return await ctx.runMutation(internal.analytics.retention.purgeVisitorDays, {
+      olderThan: Date.now() - VISITOR_ID_TTL_MS,
+    });
+  },
+});
+
 export const purgeExpiredUsageEvents = internalAction({
   args: {},
   returns: v.object({

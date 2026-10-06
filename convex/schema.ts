@@ -289,11 +289,33 @@ export default defineSchema({
       v.literal("share_cta_clicked"),
       v.literal("referred_visit"),
       v.literal("referred_scan_started"),
+      v.literal("report_feedback"),
     ),
     scanId: v.optional(v.id("scans")),
     shareId: v.optional(v.string()),
     refShareId: v.optional(v.string()),
+    visitorId: v.optional(v.string()),
+    feedbackUseful: v.optional(v.boolean()),
+    feedbackReason: v.optional(
+      v.union(
+        v.literal("found_issue"),
+        v.literal("fix_prompt_helped"),
+        v.literal("too_noisy"),
+        v.literal("confusing"),
+        v.literal("missing_check"),
+        v.literal("other"),
+      ),
+    ),
     createdAt: v.number(),
+  }).index("by_day", ["day"]),
+  // First-seen rows for anonymous visitors. One row per visitor per day, so the
+  // rollup can count distinct visitors without ever storing a per-visitor
+  // dimension on a metric row. Raw ids expire after 30 days like usageEvents;
+  // the folded counts in dailyMetrics persist.
+  visitorDays: defineTable({
+    day: v.string(),
+    visitorId: v.string(),
+    firstSeenAt: v.number(),
   }).index("by_day", ["day"]),
   // Analytics for the hosted MCP surface only. One row per protocol action, so
   // the question "which harness calls us, which tool, how often" has an answer.
