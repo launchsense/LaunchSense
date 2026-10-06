@@ -16,26 +16,24 @@ function sh(command) {
 
 const SHAPE = /^Signed-off-by: .+ <.+@.+>$/m;
 
-const range = sh("git rev-list --no-merges origin/main..HEAD");
-if (range === null) {
-  console.warn("check-dco: no upstream origin/main, checking HEAD only");
-  const single = sh("git log --no-walk --format=%B HEAD");
-  if (single === null || single.length === 0) {
-    console.warn("check-dco: no commits found, skipping");
-    process.exit(0);
+function newCommits() {
+  const range = sh("git rev-list --no-merges origin/main..HEAD");
+  if (range !== null) return range.split("\n").map((line) => line.trim()).filter(Boolean);
+  // No upstream: shallow CI checkouts and fresh clones. If HEAD is a merge
+  // commit (a pull request checkout), the branch side is its second parent.
+  const parents = sh("git rev-list --parents --no-walk HEAD");
+  const parts = parents === null ? [] : parents.split(/\s+/).filter(Boolean);
+  if (parts.length > 2) {
+    const pr = sh(`git rev-list --no-merges ${parts[0]}^2 --not ${parts[0]}^1`);
+    if (pr === null) return null;
+    return pr.split("\n").map((line) => line.trim()).filter(Boolean);
   }
-  if (!SHAPE.test(single)) {
-    console.error("check-dco: HEAD is missing a Signed-off-by trailer");
-    console.error("check-dco: sign with git commit -s, see CONTRIBUTING.md");
-    process.exit(1);
-  }
-  console.log("check-dco: HEAD signed");
-  process.exit(0);
+  return parts.length === 2 ? [parts[0]] : null;
 }
 
-const hashes = range.split("\n").map((line) => line.trim()).filter(Boolean);
-if (hashes.length === 0) {
-  console.log("check-dco: no new commits, nothing to check");
+const hashes = newCommits();
+if (hashes === null) {
+  console.warn("check-dco: history is not walkable here, skipping");
   process.exit(0);
 }
 
