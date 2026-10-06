@@ -81,6 +81,23 @@ export const DIAGNOSTICS_NOTICE_WORDING: readonly string[] = [
  */
 export const DIAGNOSTICS_NOTICE_VERSION = "2026-10-05";
 
+/**
+ * The wording the local review shows before it reads the person's own files and
+ * their agent instructions. This is an acknowledgement, not consent: the default
+ * is yes (operator decision, 2026-10-06), and a pre-answered question is not a
+ * freely given agreement. The record and the register say "acknowledged" for that
+ * reason. Nothing is uploaded; the read happens on the person's machine.
+ */
+export const LOCAL_FILES_NOTICE_WORDING: readonly string[] = [
+  "Allow the local LaunchSense server to read files in this project folder,",
+  "including agent instruction files like AGENTS.md and CLAUDE.md?",
+  "The reads happen on this machine. Nothing is uploaded.",
+  "Default is yes. Press enter to allow, or type no to refuse.",
+];
+
+/** The notice version for the local file-read acknowledgement. */
+export const LOCAL_FILES_NOTICE_VERSION = "2026-10-06";
+
 /** Where the append-only ledger lives, relative to the person's home directory. */
 export const CONSENT_LEDGER_PATH = ".config/launchsense/consent.jsonl";
 
@@ -148,7 +165,7 @@ export interface Retention {
 
 export interface ConsentPurpose {
   /** The id used by AuthPanel, so a copy change and a record change are one change. */
-  id: "token" | "read" | "explain" | "usage";
+  id: "token" | "read" | "explain" | "usage" | "files";
   /** The label the person actually reads on the box. */
   label: string;
   description: string;
@@ -226,8 +243,7 @@ const LOCAL_LEDGER: StorageLocation = {
  * The order matters: it is the order the person reads, and a record set that
  * reordered itself would be a record nobody can compare with the box they ticked.
  */
-export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
-  {
+export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [  {
     id: "token",
     label: "Store my GitHub token so I do not sign in again",
     description: "Keep the GitHub access token for one account so the person is not asked to sign in again.",
@@ -370,6 +386,35 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
     },
     human_oversight_level: null,
   },
+  {
+    id: "files",
+    label: "Read my project files and agent instructions on this machine",
+    description:
+      "The local review reads the checkout, including agent instruction files, so the report knows the project. Nothing is uploaded.",
+    lawful_basis: "dpv:Contract",
+    lawful_basis_citation:
+      "GDPR Art 6(1)(b). The local read is the service the person installed the tool to get. The default is yes and the question is an acknowledgement, so this is stated as contract and not as consent.",
+    recorded: true,
+    not_recorded_reason: null,
+    recorded_in: "local_ledger",
+    notice_version: LOCAL_FILES_NOTICE_VERSION,
+    notice_wording_in_this_build: LOCAL_FILES_NOTICE_WORDING,
+    ledger: LOCAL_LEDGER.system,
+    collection_method: "one_question_before_the_expanded_read_default_is_yes",
+    processing_method: "read_on_the_person's_own_machine_only_never_uploaded",
+    pii_information: [
+      { type: "file_paths", sensitive: false, source: "the person's own checkout" },
+      { type: "file_contents", sensitive: true, source: "the person's own checkout, read on their machine" },
+      { type: "agent_instruction_files", sensitive: false, source: "the person's own checkout, for example AGENTS.md" },
+    ],
+    pii_controllers: [CONTROLLER_PARTY],
+    storage_locations: [LOCAL_LEDGER],
+    retention: {
+      window: "Kept only for the run. Nothing is uploaded, so there is no server copy to delete.",
+      enforced_by: null,
+    },
+    human_oversight_level: null,
+  },
 ];
 
 /** The one purpose with a decision on record. Throws rather than inventing one. */
@@ -378,6 +423,22 @@ export function purposeById(id: ConsentPurpose["id"]): ConsentPurpose {
   if (found === undefined) throw new Error(`no consent purpose with id ${id}`);
   return found;
 }
+
+/**
+ * The four purposes the sign-in panel asks about. The local file read is a fifth
+ * purpose but it is not one of them: it is recorded in the local ledger, not in
+ * the Convex table, so it must never enter the sign-in decision shape. Keeping the
+ * two id sets apart in the type system is what stops the local purpose being
+ * written into a sign-in row, which would be a record of a decision nobody made.
+ */
+export type SignInPurposeId = "token" | "read" | "explain" | "usage";
+
+export const SIGN_IN_PURPOSE_IDS: readonly SignInPurposeId[] = [
+  "token",
+  "read",
+  "explain",
+  "usage",
+];
 
 /**
  * Every field TS 27560 names that this product cannot honestly fill, with the
