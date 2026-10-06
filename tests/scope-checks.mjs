@@ -422,89 +422,29 @@ describe("the guest cap dialog says which case it is", () => {
   });
 });
 
-describe("the live check runs on every path that finishes a scan", () => {
-  const lane = blockOf(guestSource, "async function runLiveCheck", "async function onSubmit");
-
-  it("binds checkLive once and calls it from one function", () => {
-    assert.equal(occurrences(guestSource, "api.scans.livecheck.checkLive"), 1);
-    assert.equal(occurrences(guestSource, "async function runLiveCheck"), 1);
+describe("the live app check is gone from the visitor surface", () => {
+  it("binds no live action and renders no live input in the scan component", () => {
     assert.equal(
-      occurrences(lane, "await checkLive("),
-      1,
-      "checkLive must be called only inside runLiveCheck",
+      occurrences(guestSource, "api.scans.livecheck.checkLive"),
+      0,
+      "the page must not call the live lane",
     );
+    assert.doesNotMatch(guestSource, /async function runLiveCheck/, "the live runner is gone");
+    assert.doesNotMatch(guestSource, /id="guest-live-url"/, "the live URL input is gone");
+    assert.doesNotMatch(guestSource, /Also check my live app/, "the live toggle is gone");
+    assert.doesNotMatch(guestSource, /aria-label="Live app result"/, "the live panel is gone");
   });
 
-  it("runs it on all four completion paths", () => {
-    const submit = blockOf(guestSource, "async function onSubmit", "async function onResume");
-    const resume = blockOf(guestSource, "async function onResume", "async function onShare");
-    const rescan = blockOf(guestSource, "async function onRescan", "async function onExplain");
-    // onSubmit finishes twice: the run that never opened a repository, and the
-    // scan that was analyzed. onResume and onRescan each finish once.
-    assert.equal(occurrences(submit, "await runLiveCheck("), 2, "onSubmit has two completion paths");
-    assert.equal(occurrences(resume, "await runLiveCheck("), 1, "the resume path skips the live check");
-    assert.equal(occurrences(rescan, "await runLiveCheck("), 1, "the rescan path skips the live check");
-    assert.equal(occurrences(guestSource, "await runLiveCheck("), 4, "four completion paths, four calls");
+  it("passes no live row to the report or the panels", () => {
+    assert.match(guestSource, /<ScanReport[\s\S]{0,400}live=\{null\}/);
+    assert.match(guestSource, /<Stage5Panels[\s\S]{0,600}live=\{null\}/);
+    assert.match(guestSource, /liveProvided=\{false\}/);
   });
 
-  it("does nothing when no URL was given", () => {
-    assert.match(lane, /if \(liveUrl\.trim\(\)\.length === 0\) return;/);
-  });
-});
-
-describe("a live failure is reported as a live failure", () => {
-  const lane = blockOf(guestSource, "async function runLiveCheck", "async function onSubmit");
-
-  it("keeps a live throw out of the scan error state", () => {
-    assert.doesNotMatch(lane, /setSubmitError/, "a live throw must not set the scan error");
-    assert.match(lane, /catch \(error\)/);
-    assert.match(lane, /toLiveUserError\(/);
-    assert.match(guestSource, /\{liveError\.length > 0 && <p role="alert">\{liveError\}<\/p>\}/);
-  });
-
-  it("never puts the scan fallback inside the live lane", () => {
-    assert.doesNotMatch(lane, /Could not run the scan/);
-    assert.match(guestSource, /Could not check the live app\. The repository scan is finished\./);
-  });
-
-  it("cannot print a machine status beside a failure notice", () => {
-    assert.match(
-      guestSource,
-      /status !== null && submitError\.length === 0 && liveError\.length === 0/,
-      "Status: completed must not sit next to an alert",
-    );
-  });
-});
-
-describe("the live result survives a scan whose analysis never finished", () => {
-  const lane = blockOf(guestSource, "async function runLiveCheck", "async function onSubmit");
-
-  it("keeps the action's own answer in state, not only in the scan row", () => {
-    // getResults returns the stored live row only once analyzedAt is set, and
-    // the signed-in token gate returns before saveResults. The action's return
-    // value is the one copy of this result that gate cannot drop.
-    assert.match(guestSource, /const \[liveOutcome, setLiveOutcome\] = useState/);
-    assert.match(lane, /setLiveOutcome\(\{ reaches: checked\.reaches, httpStatus: checked\.httpStatus \}\)/);
-  });
-
-  it("shows it when the report itself cannot render", () => {
-    assert.match(guestSource, /liveOutcome !== null && !analyzed/);
-    assert.match(guestSource, /aria-label="Live app result"/);
-  });
-
-  it("drives the not-checked box from the attempt, not from the input box", () => {
-    assert.match(guestSource, /liveProvided=\{liveAttempted\}/);
-    assert.doesNotMatch(
-      guestSource,
-      /liveProvided=\{liveUrl\.trim\(\)\.length > 0\}/,
-      "a typed URL that was never checked still claims the live app was looked at",
-    );
-  });
-
-  it("leaves the signed-in token gate a return, so the live lane is still reached", () => {
+  it("leaves the signed-in token gate a return, so nothing throws where it used to continue", () => {
     const gate = blockOf(analyzeSource, "if (signedRead && token === null)", "const maxFiles");
     assert.match(gate, /status: "failed"/);
-    assert.doesNotMatch(gate, /throw new Error/, "a throw here would skip the live lane entirely");
+    assert.doesNotMatch(gate, /throw new Error/, "a throw here would skip the rest of analysis");
   });
 });
 

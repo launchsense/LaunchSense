@@ -5,7 +5,6 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { buildFixPlan } from "../../../shared/reports/fixPlan";
 import type { PlanFinding } from "../../../shared/reports/fixPlan";
-import { toLiveUserError } from "../../../shared/reports/scope";
 import { GUEST_MAX_BYTES, GUEST_MAX_FILES } from "../../../shared/scanCaps";
 import ScanReport from "../report/ScanReport";
 import { AuthPanel } from "../auth/AuthPanel";
@@ -17,6 +16,7 @@ import { toUserError } from "../../../shared/userError";
 import { useVisitorId } from "./useVisitorId";
 import ReportFeedback from "../report/ReportFeedback";
 import LiteReport from "../report/LiteReport";
+import { readPendingScan, clearPendingScan } from "../auth/signInDecision";
 
 // This project's own public repo, so a first-time visitor can see a real
 // report without needing a repo of their own to hand.
@@ -44,7 +44,6 @@ export default function GuestScan() {
   const hasGitHubToken = useQuery(api.github.sessionToken.hasGitHubToken);
   const runScan = useAction(api.scans.actions.runScan);
   const analyzeScan = useAction(api.scans.analyze.analyzeScan);
-  const checkLive = useAction(api.scans.livecheck.checkLive);
   const rescanScan = useAction(api.scans.rescan.rescanScan);
   const compareScans = useAction(api.scans.rescan.compareScans);
   const createShare = useAction(api.scans.sharing.createShare);
@@ -53,28 +52,15 @@ export default function GuestScan() {
   const logEvent = useMutation(api.scans.queries.logEvent);
   const visitorId = useVisitorId();
   const [repoUrl, setRepoUrl] = useState("");
-  const [liveUrl, setLiveUrl] = useState("");
-  const [mainAction, setMainAction] = useState("");
-  const [scanId, setScanId] = useState<Id<"scans"> | null>(null);
-  const [phase, setPhase] = useState<"idle" | "fetching" | "analyzing" | "live">("idle");
+  // The scan on screen. On a return from sign-in this starts from the scan the
+  // person left, so the OAuth round trip lands back on their own result rather
+  // than an empty box. The stored id is cleared the moment it is used.
+  const [scanId, setScanId] = useState<Id<"scans"> | null>(() => {
+    const stored = readPendingScan(window.sessionStorage ?? { getItem: () => null });
+    return stored === null ? null : (stored as Id<"scans">);
+  });
+  const [phase, setPhase] = useState<"idle" | "fetching" | "analyzing">("idle");
   const [submitError, setSubmitError] = useState("");
-  // The live lane keeps its own error. A live check is a second step after the
-  // repository scan, so its failure is named as its own and never as a scan that
-  // did not run. Rendering it beside the status line would put "completed" next
-  // to a failure notice, which is the same contradiction in a new place.
-  const [liveError, setLiveError] = useState("");
-  // What the live check actually answered. Held here as well as in the scan row
-  // because getResults only returns the stored live row once analyzedAt is set,
-  // and a signed-in scan whose GitHub token has gone is marked failed before
-  // saveResults runs. That gate cannot drop a check that did run.
-  const [liveOutcome, setLiveOutcome] = useState<{
-    reaches: boolean;
-    httpStatus: number | null;
-  } | null>(null);
-  // Whether the live check has run for the scan on screen. The not-checked box
-  // reads this, not the URL input: an address that was typed and never checked
-  // is not a check that ran.
-  const [liveAttempted, setLiveAttempted] = useState(false);
   const [wasCached, setWasCached] = useState(false);
   const [refShare] = useState<string | null>(() => readRef());
 
@@ -83,6 +69,13 @@ export default function GuestScan() {
       void logEvent({ kind: "referred_visit", refShareId: refShare, visitorId });
     }
   }, [refShare, logEvent, visitorId]);
+
+  // A scan restored from a sign-in return is used once and forgotten, so a later
+  // reload does not reopen it. Runs after mount, when the scan is already set.
+  useEffect(() => {
+    if (scanId === null) return;
+    clearPendingScan(window.sessionStorage);
+  }, [scanId]);
   const [shareId, setShareId] = useState<string | null>(null);
   const [passportId, setPassportId] = useState<string | null>(null);
   const [shareError, setShareError] = useState("");
@@ -104,7 +97,6 @@ export default function GuestScan() {
   // Set when the builder confirms their own share link opened. There is no
   // server round trip for someone else's view, so we ask instead of guessing.
   const [shareViewedAt, setShareViewedAt] = useState<number | null>(null);
-  const [showLive, setShowLive] = useState(false);
   const [queueNote, setQueueNote] = useState("");
   // A scan that hit the queue and was not admitted. Held so the visitor can
   // resume it in place rather than starting over at the back of the line.
@@ -128,34 +120,9 @@ export default function GuestScan() {
     comparePair === null ? "skip" : { fromScanId: comparePair.from, toScanId: comparePair.to },
   );
 
-  // The one place the live app is checked. Every path that reaches a finished
-  // scan calls this, so the live app is never checked on one path and silently
-  // skipped on another. The live lane has its own error state: a live failure
-  // must not be reported as a repository scan that did not run.
-  async function runLiveCheck(targetScanId: Id<"scans">) {
-    if (liveUrl.trim().length === 0) return;
-    setLiveAttempted(true);
-    setPhase("live");
-    try {
-      const checked = await checkLive({
-        scanId: targetScanId,
-        url: liveUrl.trim(),
-        mainAction: mainAction.trim().length > 0 ? mainAction.trim() : undefined,
-      });
-      setLiveOutcome({ reaches: checked.reaches, httpStatus: checked.httpStatus });
-      void logEvent({ kind: "live_checked", scanId: targetScanId, visitorId });
-    } catch (error) {
-      setLiveError(toLiveUserError(error, "Could not check the live app. The repository scan is finished."));
-    }
-    setPhase("idle");
-  }
-
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitError("");
-    setLiveError("");
-    setLiveOutcome(null);
-    setLiveAttempted(false);
     setShareError("");
     setShareId(null);
     setPassportId(null);
@@ -187,9 +154,6 @@ export default function GuestScan() {
         void logEvent({ kind: "referred_scan_started", scanId: result.scanId, refShareId: refShare, visitorId });
       }
       if (result.status === "failed") {
-        // The repository never opened, but the live app is a different address
-        // and the check still ran, so the result is shown rather than dropped.
-        await runLiveCheck(result.scanId);
         setPhase("idle");
         return;
       }
@@ -231,7 +195,6 @@ export default function GuestScan() {
         scanId: result.scanId,
         visitorId,
       });
-      await runLiveCheck(result.scanId);
       setPhase("idle");
     } catch (error) {
       setSubmitError(toUserError(error, "Could not run the scan. Try again."));
@@ -277,10 +240,6 @@ export default function GuestScan() {
         scanId: queuedScan.scanId,
         visitorId,
       });
-      // A resumed scan reaches the same finished state as a fresh one, so it
-      // gets the same live check. This is the path a signed-in scan is most
-      // likely to arrive by, because a bigger read holds a slot for longer.
-      await runLiveCheck(queuedScan.scanId);
       setPhase("idle");
     } catch {
       // The scan row or its commit is gone, so there is nothing to resume.
@@ -331,10 +290,6 @@ export default function GuestScan() {
       setExplainNote("");
       setComparePair({ from: base, to: rescan.scanId });
       setRescanRan(true);
-      // The re-scan is a new row and a new report, so the live app is checked
-      // again against the new row. Without this the new report had no live
-      // section while the not-checked box still said the live app was looked at.
-      await runLiveCheck(rescan.scanId);
       setPhase("idle");
     } catch (error) {
       setSubmitError(toUserError(error, "Could not rescan. Try again."));
@@ -387,7 +342,7 @@ export default function GuestScan() {
       : null;
   const status =
     scan?.status ??
-    (phase === "fetching" ? "fetching" : phase === "analyzing" ? "analyzing" : phase === "live" ? "live" : null);
+    (phase === "fetching" ? "fetching" : phase === "analyzing" ? "analyzing" : null);
   const findings: PlanFinding[] = useMemo(
     () =>
       (resultsState?.findings ?? []).map((f) => ({
@@ -461,49 +416,13 @@ export default function GuestScan() {
             ? "Fetching files"
             : phase === "analyzing"
               ? "Analyzing files"
-              : phase === "live"
-                ? "Checking live site"
-                : "Run a sample check"}
+              : "Run a sample check"}
         </button>
         <div className="scan-secondary">
           <button className="ghost" type="button" onClick={() => setRepoUrl(SELF_REPO_URL)}>
             Load this repo
           </button>
-          <button
-            className="ghost"
-            type="button"
-            aria-expanded={showLive}
-            onClick={() => setShowLive((v) => !v)}
-          >
-            {showLive ? "Hide the live app check" : "Also check my live app"}
-          </button>
         </div>
-        {showLive && (
-          <>
-            <label htmlFor="guest-live-url">Live app URL, optional but recommended</label>
-            <input
-              id="guest-live-url"
-              name="liveUrl"
-              type="url"
-              inputMode="url"
-              autoComplete="off"
-              placeholder="https://your-demo-site.com"
-              value={liveUrl}
-              onChange={(e) => setLiveUrl(e.target.value)}
-            />
-            <label htmlFor="guest-main-action">Main action in one sentence, optional</label>
-            <input
-              id="guest-main-action"
-              name="mainAction"
-              type="text"
-              autoComplete="off"
-              maxLength={140}
-              placeholder="Visitors sign up for the waitlist"
-              value={mainAction}
-              onChange={(e) => setMainAction(e.target.value)}
-            />
-          </>
-        )}
       </form>
       <details>
         <summary>Privacy note</summary>
@@ -526,12 +445,11 @@ export default function GuestScan() {
         </div>
       )}
       {submitError.length > 0 && <p role="alert">{submitError}</p>}
-      {liveError.length > 0 && <p role="alert">{liveError}</p>}
       {queueNote.length > 0 && <p role="status">{queueNote}</p>}
       {/* A machine status line is hidden while any failure is on screen. Reading
           "Status: completed" above a red line says the scan failed when it did
           not, which is the contradiction this block exists to prevent. */}
-      {status !== null && submitError.length === 0 && liveError.length === 0 && (
+      {status !== null && submitError.length === 0 && (
         <p role="status">Status: {status}{wasCached ? " (cached)" : ""}</p>
       )}
       {progress !== null && (
@@ -542,9 +460,7 @@ export default function GuestScan() {
               ? "Fetching the file list"
               : phase === "analyzing"
                 ? "Reading files"
-                : phase === "live"
-                  ? "Checking your live app"
-                  : "Working"}{" "}
+                : "Working"}{" "}
             {progress.done} of {progress.total} files
           </p>
         </div>
@@ -560,33 +476,18 @@ export default function GuestScan() {
           {scan.rateLimitResetAt !== undefined && (
             <p>Quota resets at {new Date(scan.rateLimitResetAt).toLocaleTimeString()}.</p>
           )}
-          {/* Shown when the report cannot render at all, which is what a scan
-              marked failed before saveResults leaves behind: analyzedAt is
-              never set, so the stored live row is not returned. The action's own
-              answer is still true, so it is shown here on its own rather than
-              lost. */}
-          {liveOutcome !== null && !analyzed && (
-            <div aria-label="Live app result">
-              <p>
-                Your live app was checked on its own.{" "}
-                {liveOutcome.reaches ? "It answered." : "It did not answer."}
-                {liveOutcome.httpStatus !== null ? ` It answered with HTTP ${liveOutcome.httpStatus}.` : ""}{" "}
-                The repository scan above did not finish, so there is no report to put this beside.
-              </p>
-            </div>
-          )}
           {analyzed && resultsState !== undefined && isAuthenticated && (
             <ScanReport
               findings={resultsState.findings}
               plan={plan}
-              live={resultsState.live}
+              live={null}
               mainAction={scan.mainAction ?? null}
               status={scan.status}
               fetchedFileCount={scan.fetchedFileCount ?? 0}
               skippedFileCount={scan.skippedFileCount ?? 0}
               fileCount={scan.fileCount}
               treeTruncated={scan.truncated === true}
-              liveProvided={liveAttempted}
+              liveProvided={false}
               aiConfigured={providerAnswered}
               signedIn={scan.signedIn === true}
               priorityOrder={scan.priorityOrder ?? []}
@@ -599,6 +500,7 @@ export default function GuestScan() {
               plan={plan}
               coverageNote={scan.coverageNote}
               partial={scan.status === "partial"}
+              scanId={scanId}
             />
           )}
           {analyzed && scanState !== undefined && (
@@ -699,7 +601,7 @@ export default function GuestScan() {
               shareCreated={shareId !== null}
               shareViewed={shareId !== null && shareViewedAt !== null}
               findings={resultsState.findings}
-              live={resultsState.live}
+              live={null}
               partial={scan.status === "partial"}
               coverageNote={scan.coverageNote}
               signedIn={scan.signedIn === true}
@@ -732,7 +634,7 @@ export default function GuestScan() {
         <dialog ref={capDialog} className="cap-dialog" aria-labelledby="limit-signin-title">
           <h2 id="limit-signin-title">{capHeading}</h2>
           <p>{capBody}</p>
-          <AuthPanel />
+          <AuthPanel scanId={scanId} />
         </dialog>
       )}
     </section>

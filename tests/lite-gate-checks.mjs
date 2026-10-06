@@ -66,7 +66,7 @@ describe("lite is a real result, not a blur", () => {
     assert.match(lite, /Start here:/);
     assert.match(lite, /coverageNote/);
     assert.match(lite, /The full report lists \{withheld\}/);
-    assert.match(lite, /<AuthPanel \/>/);
+    assert.match(lite, /<AuthPanel scanId=\{props\.scanId\} \/>/);
   });
 
   it("never renders the full list", () => {
