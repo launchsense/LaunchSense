@@ -12,6 +12,7 @@ import {
 } from "../../shared/analyzers/projectSignals";
 import { codingToolsIn } from "../../shared/reports/codingTool";
 import { canReadScan } from "../../shared/reports/scanAccess";
+import { VISITOR_ID_SHAPE, visitorIdOrNull, VISITOR_DAY_CAP } from "../../shared/visitorId";
 
 const scanStatus = v.union(
   v.literal("validating"),
@@ -92,6 +93,7 @@ export const analyticsKind = v.union(
   v.literal("share_cta_clicked"),
   v.literal("referred_visit"),
   v.literal("referred_scan_started"),
+  v.literal("report_feedback"),
 );
 
 /**
@@ -506,12 +508,24 @@ export const getCapacity = query({
   },
 });
 
+export const feedbackReason = v.union(
+  v.literal("found_issue"),
+  v.literal("fix_prompt_helped"),
+  v.literal("too_noisy"),
+  v.literal("confusing"),
+  v.literal("missing_check"),
+  v.literal("other"),
+);
+
 export const logEvent = mutation({
   args: {
     kind: analyticsKind,
     scanId: v.optional(v.id("scans")),
     shareId: v.optional(v.string()),
     refShareId: v.optional(v.string()),
+    visitorId: v.optional(v.string()),
+    feedbackUseful: v.optional(v.boolean()),
+    feedbackReason: v.optional(feedbackReason),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -534,16 +548,60 @@ export const logEvent = mutation({
     // The two id columns are shape checked here, at the write. publicIdOrNull
     // keeps a value only at the 32-hex shape newPublicId mints, so a
     // caller-supplied string that happens to be an email address is dropped
-    // while the event is still recorded.
+    // while the event is still recorded. visitorIdOrNull does the same for the
+    // anonymous visitor id: only a UUID the server minted is kept. Feedback
+    // travels as a boolean plus one of six closed labels, never as typed
+    // words, so no free text can reach this row from the feedback widget.
     await ctx.db.insert("analyticsEvents", {
       day,
       kind: args.kind,
       scanId: args.scanId,
       shareId: publicIdOrNull(args.shareId),
       refShareId: publicIdOrNull(args.refShareId),
+      visitorId: visitorIdOrNull(args.visitorId),
+      feedbackUseful: args.kind === "report_feedback" ? args.feedbackUseful : undefined,
+      feedbackReason: args.kind === "report_feedback" ? args.feedbackReason : undefined,
       createdAt: now,
     });
     return null;
+  },
+});
+
+/**
+ * Mint one anonymous visitor id. The browser calls this once, keeps the id,
+ * and sends it back with later events. The id is random, carries no personal
+ * information, and exists only to count distinct visitors.
+ *
+ * Abuse bound: new ids per day are capped globally, same pattern as logEvent.
+ * Past the cap the call returns null and the browser proceeds without an id,
+ * so events still log and no count breaks. Raw ids expire after 30 days; the
+ * folded distinct counts in dailyMetrics persist.
+ */
+export const ensureVisitor = mutation({
+  args: {},
+  returns: v.union(v.object({ visitorId: v.string() }), v.null()),
+  handler: async (ctx) => {
+    const now = Date.now();
+    const day = new Date(now).toISOString().slice(0, 10);
+    const limitKey = `visitor:${day}`;
+    const existing = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_key", (q) => q.eq("key", limitKey))
+      .unique();
+    if (existing !== null && existing.count >= VISITOR_DAY_CAP) {
+      return null;
+    }
+    const visitorId = globalThis.crypto?.randomUUID?.().toLowerCase() ?? null;
+    if (visitorId === null || !VISITOR_ID_SHAPE.test(visitorId)) {
+      return null;
+    }
+    if (existing !== null) {
+      await ctx.db.patch("rateLimits", existing._id, { count: existing.count + 1, updatedAt: now });
+    } else {
+      await ctx.db.insert("rateLimits", { key: limitKey, day, count: 1, updatedAt: now });
+    }
+    await ctx.db.insert("visitorDays", { day, visitorId, firstSeenAt: now });
+    return { visitorId };
   },
 });
 
