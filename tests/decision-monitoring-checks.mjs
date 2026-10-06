@@ -319,6 +319,9 @@ describe("usage write route", () => {
       "1.2-AdaLovelace",
       "1.2.3-beta",
       "1.2-" + "a".repeat(200),
+      "1" + "0".repeat(50) + ".0",
+      "12345.12345.12345",
+      "1.2.12345",
     ]) {
       assert.equal(mod.isDeclaredValue(bad), false, `${bad} must not be a declared label`);
     }
