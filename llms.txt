@@ -130,6 +130,14 @@ What is never collected, enforced in code by `convex/analytics/privacy.ts`: file
 
 Names it will not segment on: a repository. The rollup counts distinct repos while it runs and stores only the count, so a stored day cannot be joined back to a repo. Per-rule and per-severity fix breakdowns are not on `dailyMetrics`: `findingTransitions` holds them, and a per-rule dimension would multiply rows for a few hundred numbers.
 
+### The analytics data rule
+
+Analytics holds no personal information. No email address, no network address, and no free text is written to an analytics row. The only label that names anything is the coding tool that sent the call, which is a claim about a tool and not about a person. The only identifier analytics is allowed is the repository identifier, and we use it for technical purposes only: running the scan, linking a rescan, and counting the funnel. Every other value on an analytics row is a count, a code, a time, or one of a closed set of labels.
+
+`convex/analytics/inventory.ts` is that rule as data: every column of `usageEvents`, `dailyMetrics`, `analyticsEvents`, `rateLimits`, `usageDiagnostics`, `providerCalls`, and `findingTransitions`, with its class and the bound that keeps a string column out of free text. `tests/analytics-pii-checks.mjs` parses `convex/schema.ts` and fails if a column appears that the inventory does not classify, if any column is classified PII, or if a string column has no bound. `scans` is listed there too, as a source the fold reads rather than owns: it holds the literal owner and repo because a scan cannot run without them, and the fold drops both before writing anything.
+
+Two write paths took a browser string and stored it before this rule was written down. `logEvent` is a public mutation, so `shareId` and `refShareId` arrived from the URL, and `?ref=ada@example.com` was sliced to 64 characters and written to `analyticsEvents`; both are now kept only when they have the 32 lower-case hex shape `newPublicId` mints, and a malformed one is dropped while the event is still recorded. `usageDiagnostics.stage`, `tier`, `harness`, `version`, and `orderSource` arrived from the usage route body and were sliced and stored; each is now matched against a closed set of the exact labels the installer sends, and anything else is normalized to `other` (or `unspecified` for the order source), so a name can never be stored raw.
+
 ## Do not claim
 
 The review does not say the app will sell. It does not edit the repo. It does not certify anything. It does not treat a source-available license as open source.
