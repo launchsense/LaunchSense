@@ -16,7 +16,7 @@ read checks duplicate files and large files.
 
 The product people keep is the hosted MCP. The website is the front door. It says who the check is for, lets someone taste a public read, and sends them to Connect. It is not a second app, and it does not ask anyone to clone this repo.
 
-The address is `https://harmless-chihuahua-667.convex.site/mcp`. A coding tool sends one JSON-RPC message. `launchsense_scan_public` reads one public GitHub repo on our server. `launchsense_get_report` reads a report by scan id. That call is the same public read as the sample on the site. Alpha is the name of this stage. Alpha has no login on that address. Two scans an hour from one caller, and eight an hour in total, then the route pauses. It does not read a repo that exists only on a laptop.
+The address is `https://harmless-chihuahua-667.convex.site/mcp`. A coding tool sends one JSON-RPC message. `launchsense_scan_public` reads one public GitHub repo on our server. `launchsense_get_report` reads a report by scan id. That call is the same public read as the sample on the site. Alpha is the name of this stage. Alpha has no login on that address. The hosted read keeps 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then the route pauses. A credential, when one resolves, gets 20 scans an hour and 120 in a day against its own bucket. The counter holds no part of your network address. It does not read a repo that exists only on a laptop.
 
 Three ways in, in the order the site uses:
 

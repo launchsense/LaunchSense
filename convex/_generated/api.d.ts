@@ -17,6 +17,7 @@ import type * as adapters_osv from "../adapters/osv.js";
 import type * as adapters_share from "../adapters/share.js";
 import type * as adapters_tarball from "../adapters/tarball.js";
 import type * as analytics_ingest from "../analytics/ingest.js";
+import type * as analytics_inventory from "../analytics/inventory.js";
 import type * as analytics_privacy from "../analytics/privacy.js";
 import type * as analytics_retention from "../analytics/retention.js";
 import type * as analytics_rollup from "../analytics/rollup.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "adapters/share": typeof adapters_share;
   "adapters/tarball": typeof adapters_tarball;
   "analytics/ingest": typeof analytics_ingest;
+  "analytics/inventory": typeof analytics_inventory;
   "analytics/privacy": typeof analytics_privacy;
   "analytics/retention": typeof analytics_retention;
   "analytics/rollup": typeof analytics_rollup;

@@ -82,7 +82,7 @@ What it does not do:
 
 - It does not read a repo that exists only on a laptop.
 - It does not ask deps.dev. OSV still stops at 50 packages.
-- Two scans an hour from one caller, and eight an hour in total, then the route pauses.
+- The hosted read keeps 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then the route pauses. The counter holds no part of your network address.
 - It does not store raw file contents or raw secret values.
 - A model does not add a finding. It may only reorder inside one severity band.
 
