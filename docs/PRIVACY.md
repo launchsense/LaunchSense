@@ -56,6 +56,18 @@ repository archive. Your browser only sends the URL and shows the results.
 First-party analytics writes are limited by event kind and day, so the public endpoint
 cannot write an unbounded stream of rows.
 
+Here is the rule our analytics runs on, in plain words. Analytics holds no personal
+information. No email address, no network address, and no free text is written to an
+analytics row. The only label that names anything is the coding tool that sent the call,
+which is a claim about a tool and not about a person. The only identifier analytics is
+allowed is the repository identifier, and we use it for technical purposes only: running
+the scan, linking a rescan, and counting the funnel. Every other value on an analytics row
+is a count, a code, a time, or one of a closed set of labels.
+
+The list of columns behind that rule, field by field, is in
+`convex/analytics/inventory.ts`, and a test reads the database schema and fails if a
+column appears there that nobody classified.
+
 ## 4. What we store when you sign in
 
 Your GitHub token, stored as a plaintext string at rest. It is not encrypted. The token

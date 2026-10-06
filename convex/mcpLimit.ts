@@ -236,6 +236,26 @@ export const consumeExplain = internalMutation({
   },
 });
 
+/**
+ * The shape a declared value must have before it lands in `usageDiagnostics`.
+ *
+ * The usage route takes its body from whoever holds the deployment key, and the
+ * four declared strings used to be sliced and stored. A slice bounds the length,
+ * not the content, so the route could be made to write a name or an email
+ * address into an analytics row. This refuses the characters that make those
+ * possible: no at sign, no space, no slash, no colon, no address.
+ *
+ * Everything the installer legitimately sends is a short token: stage "alpha",
+ * tier "alpha", harness "local", version "alpha", orderSource "table".
+ */
+const DECLARED_VALUE = /^[A-Za-z0-9._+-]{1,20}$/;
+const DECLARED_VALUE_LONG = /^[A-Za-z0-9._+-]{1,40}$/;
+
+/** True when a short declared token is one analytics is allowed to keep. */
+export function isDeclaredValue(value: string, longer = false): boolean {
+  return (longer ? DECLARED_VALUE_LONG : DECLARED_VALUE).test(value);
+}
+
 export const recordUsage = internalMutation({
   args: {
     stage: v.string(),
@@ -251,14 +271,23 @@ export const recordUsage = internalMutation({
     if (args.tier === "enterprise") return null;
     if (args.ruleCounts.length > 4000) return null;
     if (/\/|function |eval\(|-----BEGIN/.test(args.ruleCounts)) return null;
+    // The four declared strings are caller-supplied, so they are checked rather
+    // than trimmed. Refusing the row is the honest answer here: a row that is
+    // missing is a visible gap, and a row holding somebody's name is not
+    // recoverable by anyone reading it later.
+    if (!isDeclaredValue(args.stage)) return null;
+    if (!isDeclaredValue(args.tier)) return null;
+    if (!isDeclaredValue(args.orderSource)) return null;
+    if (!isDeclaredValue(args.harness, true)) return null;
+    if (!isDeclaredValue(args.version, true)) return null;
     await ctx.db.insert("usageDiagnostics", {
       day: new Date().toISOString().slice(0, 10),
-      stage: args.stage.slice(0, 20),
-      tier: args.tier.slice(0, 20),
-      harness: args.harness.slice(0, 40),
-      version: args.version.slice(0, 40),
+      stage: args.stage,
+      tier: args.tier,
+      harness: args.harness,
+      version: args.version,
       durationMs: args.durationMs,
-      orderSource: args.orderSource.slice(0, 20),
+      orderSource: args.orderSource,
       ruleCounts: args.ruleCounts,
       createdAt: Date.now(),
     });

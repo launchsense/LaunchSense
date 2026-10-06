@@ -85,6 +85,33 @@ export const analyticsKind = v.union(
   v.literal("referred_scan_started"),
 );
 
+/**
+ * The shape of a share link id, the same one `newPublicId` mints.
+ *
+ * Duplicated here rather than imported: `convex/adapters/share.ts` is a
+ * `"use node"` module, and a Convex mutation cannot import one.
+ */
+const PUBLIC_ID_SHAPE = /^[0-9a-f]{32}$/;
+
+/**
+ * Keep a share link id only when it has the shape the server minted.
+ *
+ * `logEvent` is a public mutation, so anything in it arrives from a browser. The
+ * shareId comes from a link the person followed and the refShareId comes straight
+ * out of the query string, so both are whatever the visitor typed. Before this
+ * check a URL like `?ref=ada@example.com` was sliced to 64 characters and stored on
+ * an analytics row, which is the one thing the analytics data rule forbids.
+ *
+ * A value that fails the shape is dropped and the event is still recorded. The
+ * event itself is the measurement: a visit, a scan, a share view. The id is not
+ * what any metric segments on, so dropping a malformed one loses no number and
+ * keeps the funnel honest.
+ */
+export function publicIdOrNull(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return PUBLIC_ID_SHAPE.test(value) ? value : undefined;
+}
+
 const findingFields = {
   ruleId: v.string(),
   fingerprint: v.string(),
@@ -495,12 +522,15 @@ export const logEvent = mutation({
     } else {
       await ctx.db.insert("rateLimits", { key: limitKey, day, count: 1, updatedAt: now });
     }
+    // Belt and braces. The two id columns are shape checked above, so a
+    // caller-supplied string that happens to be an email address cannot reach a
+    // stored row.
     await ctx.db.insert("analyticsEvents", {
       day,
       kind: args.kind,
       scanId: args.scanId,
-      shareId: args.shareId?.slice(0, 64),
-      refShareId: args.refShareId?.slice(0, 64),
+      shareId: publicIdOrNull(args.shareId),
+      refShareId: publicIdOrNull(args.refShareId),
       createdAt: now,
     });
     return null;
