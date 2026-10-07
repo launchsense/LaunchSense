@@ -8,11 +8,10 @@ Short guides for users. Start with HOW-IT-WORKS.
 4. `LIMITS.md`: quotas, caps, and what stays unchecked.
 5. `GLOSSARY.md`: every special word in one plain line.
 6. `ABOUT.md`: who LaunchSense is for and what it will not do.
-7. `SELF-SCAN-LOG.md`: we scan our own repository with LaunchSense after every stage, and publish what it found.
-8. `ROADMAP.md`: what is shipped, what is being built, and what we will not build.
-9. `feature-board.md`: ideas named in chat. A row is not a running feature.
-10. `CONSENT-RECORD.md`: the consent record in the ISO/IEC TS 27560 shape, the receipt you keep, and the fields we cannot fill.
-11. `PROCESSING-REGISTER.md`: the GDPR Article 30 register, generated from the schema and the purge calls. Read it for the retention windows.
-12. `SBOM.md`: the CycloneDX 1.7 bill of materials, generated from the licence inventory, and the four things it deliberately leaves out.
+7. `ROADMAP.md`: what is shipped, what is being built, and what we will not build.
+8. `feature-board.md`: ideas named in chat. A row is not a running feature.
+9. `CONSENT-RECORD.md`: the consent record in the ISO/IEC TS 27560 shape, the receipt you keep, and the fields we cannot fill.
+10. `PROCESSING-REGISTER.md`: the GDPR Article 30 register, generated from the schema and the purge calls. Read it for the retention windows.
+11. `SBOM.md`: the CycloneDX 1.7 bill of materials, generated from the licence inventory, and the four things it deliberately leaves out.
 
 For release history, see `CHANGELOG.md` at the repo root.

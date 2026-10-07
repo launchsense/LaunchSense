@@ -18,6 +18,9 @@ node_modules/
 /.codex
 /docs/SETUP.md
 
+# Local tool state. Never publish.
+.impeccable/
+
 # Private keys, credentials, and local tool/editor state. Never publish.
 *.pem
 *.key
