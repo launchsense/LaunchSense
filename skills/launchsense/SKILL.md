@@ -35,6 +35,7 @@ The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB p
 For an npm project with a committed `package-lock.json`, the review reads the licence every installed package declares, direct and transitive, and writes a third-party notice file from it. That file is deterministic: the same lockfile gives the same bytes. It names each component with its licence, states what that licence text asks for with the clause it came from, and lists what was not read. It is a declaration, not legal advice.
 
 - An Unknown licence stays Unknown. It is never a finding, never a severity, and never folded into a permissive group.
+- The review also suggests one licence for the project, from the ids and counts the repo declares plus the allowlist in `.ls/policy.yaml`. It is a suggestion, not a licence fact, and copyleft or proprietary terms decline because those need a person. A lane may order the candidates; it cannot turn a decline into a pick.
 - An OR expression stays a choice. Ask which one was chosen.
 - yarn.lock, pnpm-lock.yaml, Cargo, Go and PyPI dependency licences, vendored trees and per-file SPDX headers are not read.
 - The guarded AI lookup for an Unknown licence exists, and is refused unless a lane is configured. A lane answer is a suggestion, not a licence fact.

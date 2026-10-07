@@ -64,6 +64,12 @@ export default defineSchema({
     /** Which rung produced the order: jev, perplexity, or table. Never a model name. */
     prioritySource: v.optional(v.string()),
     priorityNote: v.optional(v.string()),
+    /** The suggested project licence id, or "none". A suggestion, never a licence fact. */
+    suggestedLicence: v.optional(v.string()),
+    /** Which rung produced the suggestion: local, jev, perplexity, or table. Never a model name. */
+    suggestionSource: v.optional(v.string()),
+    /** One template-built line naming the pick and its reason. Never free text. */
+    suggestionNote: v.optional(v.string()),
     liveUrl: v.optional(v.string()),
     mainAction: v.optional(v.string()),
     rescanOf: v.optional(v.id("scans")),
