@@ -132,8 +132,8 @@ describe("the refusal path is the default and invents nothing", () => {
 describe("the reorder invariants hold with no provider at all", () => {
   const metrics = reorderMetrics(REORDER_FIXTURE, null, "table", labels());
 
-  it("keeps every actionable finding", () => {
-    assert.deepEqual(metrics.order, tableOrder(actionableFindings(REORDER_FIXTURE)));
+  it("keeps the floor top ten with no provider", () => {
+    assert.deepEqual(metrics.order, tableOrder(actionableFindings(REORDER_FIXTURE)).slice(0, 10));
     assert.equal(metrics.permutationFail, 0);
     assert.equal(metrics.dropped.length, 0);
     assert.equal(metrics.added.length, 0);
@@ -170,16 +170,19 @@ describe("a hostile lane still cannot break the band guard", () => {
     assert.deepEqual(metrics.bands.map((b) => b.severity), ["high", "medium"]);
   });
 
-  it("cannot add or drop a row", () => {
+  it("cannot add a row from nowhere, and stays capped at ten", () => {
     const metrics = reorderMetrics(REORDER_FIXTURE, maxAnswers, "jev", labels());
-    assert.equal(metrics.permutationFail, 0);
-    assert.equal(metrics.order.length, actionableFindings(REORDER_FIXTURE).length);
+    const fullFloor = new Set(tableOrder(actionableFindings(REORDER_FIXTURE)));
+    assert.equal(metrics.order.length, Math.min(10, actionableFindings(REORDER_FIXTURE).length));
+    for (const fp of metrics.order) {
+      assert.ok(fullFloor.has(fp), `${fp} came from nowhere`);
+    }
   });
 
   it("treats a missing answer as no signal rather than as a no", () => {
     const one = { [questionIdFor(REORDER_FIXTURE[0].fingerprint)]: { type: "noul", noul: 0 } };
     const metrics = reorderMetrics(REORDER_FIXTURE, one, "jev", labels());
-    assert.equal(metrics.order.length, actionableFindings(REORDER_FIXTURE).length);
+    assert.equal(metrics.order.length, Math.min(10, actionableFindings(REORDER_FIXTURE).length));
     assert.equal(metrics.bandCrossings, 0);
   });
 
