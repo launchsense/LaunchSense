@@ -65,7 +65,7 @@ export default function LicenceScan() {
       setPhase("analyzing");
       let analyzed = await analyzeScan({ scanId: result.scanId });
       if (analyzed.status === "queued") {
-        setQueueNote("Busy right now. Holding your place in line.");
+        setQueueNote("Busy right now, and your place is held. The local check on your own machine has no line at all.");
         for (let attempt = 0; attempt < 20; attempt++) {
           await new Promise((r) => setTimeout(r, 3000));
           analyzed = await analyzeScan({ scanId: result.scanId });

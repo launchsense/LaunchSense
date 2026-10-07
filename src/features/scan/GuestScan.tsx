@@ -166,14 +166,14 @@ export default function GuestScan() {
       // Queued scans keep their place. We retry while the user waits here.
       if (analyzed.status === "queued") {
         setQueueNote(
-          `Busy right now. You are number ${analyzed.queuePosition ?? 1} in line of ${analyzed.queueLimit ?? 6} slots. Holding your place.`,
+          `Busy right now, and your place is held. You are number ${analyzed.queuePosition ?? 1} in line of ${analyzed.queueLimit ?? 6} slots. In a hurry: the local check on your own machine has no line at all.`,
         );
         for (let attempt = 0; attempt < 20; attempt++) {
           await new Promise((r) => setTimeout(r, 3000));
           analyzed = await analyzeScan({ scanId: result.scanId });
           if (analyzed.status !== "queued") break;
           setQueueNote(
-            `Still waiting. You are number ${analyzed.queuePosition ?? 1} in line. Holding your place.`,
+            `Still waiting, and your place is still held. You are number ${analyzed.queuePosition ?? 1} in line. The local check has no line, if you would rather run it there.`,
           );
         }
         setQueueNote("");
@@ -449,10 +449,10 @@ export default function GuestScan() {
       {queuedScan !== null && (
         <div aria-label="Waiting scan">
           <p>
-            Servers are busy. Your scan is saved in waiting place{" "}
+            Servers are busy, and your scan is saved. It waits in place{" "}
             {queuedScan.position} of {queuedScan.limit}. Press the button below and it
             picks up from that same place. Pressing Run a sample check instead starts a new scan
-            at the back of the line.
+            at the back of the line. In a hurry: the local check on your own machine has no line at all.
           </p>
           <button type="button" disabled={phase !== "idle"} onClick={() => void onResume()}>
             {phase !== "idle" ? "Waiting..." : "Keep waiting in place"}
