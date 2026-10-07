@@ -51,6 +51,7 @@ import type * as scans_rescan from "../scans/rescan.js";
 import type * as scans_sharing from "../scans/sharing.js";
 import type * as scans_snapshot from "../scans/snapshot.js";
 import type * as scans_store from "../scans/store.js";
+import type * as scans_suggestLicence from "../scans/suggestLicence.js";
 
 import type {
   ApiFromModules,
@@ -102,6 +103,7 @@ declare const fullApi: ApiFromModules<{
   "scans/sharing": typeof scans_sharing;
   "scans/snapshot": typeof scans_snapshot;
   "scans/store": typeof scans_store;
+  "scans/suggestLicence": typeof scans_suggestLicence;
 }>;
 
 /**

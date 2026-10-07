@@ -111,6 +111,11 @@ export default function LicenceScan() {
         <LicenseReport
           findings={resultsState.findings}
           coverageNote={resultsState.scan?.coverageNote}
+          suggestion={{
+            suggestedLicence: scanState?.scan?.suggestedLicence,
+            suggestionSource: scanState?.scan?.suggestionSource,
+            suggestionNote: scanState?.scan?.suggestionNote,
+          }}
         />
       )}
       {scanState !== undefined && scanState !== null && <ToolCard tools={scanState.codingTools} />}

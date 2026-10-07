@@ -933,6 +933,24 @@ export const analyzeScan = action({
       // ordered the findings; nothing here can fail the scan.
     }
 
+    // Suggest a project licence from the declared mix. Structured suggestion
+    // only, never a licence fact, and safe to fail: without it the declaration
+    // rows still say everything the lane would have read.
+    try {
+      const mixCounts = new Map<string, number>();
+      for (const component of depLicenses.components) {
+        mixCounts.set(component.spdx, (mixCounts.get(component.spdx) ?? 0) + 1);
+      }
+      await ctx.runAction(internal.scans.suggestLicence.suggestLicence, {
+        scanId: args.scanId,
+        project: licenses.detected[0],
+        mix: [...mixCounts.entries()].map(([id, count]) => ({ id, count })),
+        allowed: [],
+      });
+    } catch {
+      // Nothing to do. The declaration rows stand on their own.
+    }
+
     // Release the slot before returning so a queued scan can start. A failure
     // here cannot un-save the scan: the row above is already written as
     // completed or partial, and convex/scans/queue.ts releases the same slot on
