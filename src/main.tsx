@@ -5,6 +5,7 @@ import { ConvexReactClient } from "convex/react";
 import "./index.css";
 import App from "./App.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { startAnalytics } from "./analytics";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
@@ -17,3 +18,5 @@ createRoot(document.getElementById("root")!).render(
     </ConvexAuthProvider>
   </StrictMode>,
 );
+
+startAnalytics();
