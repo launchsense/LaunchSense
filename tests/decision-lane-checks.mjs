@@ -102,7 +102,7 @@ describe("the lane can never override severity", () => {
     assert.deepEqual(findingsToAsk(one), []);
   });
 
-  it("says a model reordered inside a band and did not choose the findings", () => {
+  it("says which rung answered, and that it did not choose the findings", () => {
     const answers = {
       [questionIdFor("a2")]: { type: "noul", noul: 0.2 },
       [questionIdFor("a4")]: { type: "noul", noul: 0.99 },
@@ -110,15 +110,26 @@ describe("the lane can never override severity", () => {
     const result = rankFromAnswers(SAMPLE, answers, "jev");
     assert.match(result.note, /inside one severity band/);
     assert.match(result.note, /did not choose which findings exist/);
-    assert.doesNotMatch(result.note, /jev|perplexity|chose a check|chose a finding|chooses which/i);
+    assert.match(result.note, /Order source: jev/);
+    assert.doesNotMatch(result.note, /chose a check|chose a finding|chooses which/i);
   });
 
-  it("says findings past the cap stay in severity order", () => {
+  it("caps the ranked list at ten and says so", () => {
     const many = Array.from({ length: 12 }, (_, i) => F(`h${i}`, "high", `rule${i}`, `t${i}`));
     const answers = Object.fromEntries(many.slice(0, 10).map((f) => [questionIdFor(f.fingerprint), { noul: 0.5 }]));
     const result = rankFromAnswers(many, answers, "jev");
     assert.match(result.note, /past the first 10/);
-    assert.equal(result.order.length, 12);
+    assert.equal(result.order.length, 10);
+    assert.match(result.note, /capped at 10/);
+  });
+
+  it("produces the deterministic top ten with no provider key", () => {
+    const many = Array.from({ length: 12 }, (_, i) => F(`h${i}`, "high", `rule${i}`, `t${i}`));
+    const result = rankFromAnswers(many, null, "table");
+    assert.equal(result.order.length, 10);
+    assert.equal(result.source, "table");
+    assert.match(result.note, /Order source: table/);
+    assert.match(result.note, /capped at 10/);
   });
 
   it("always covers every actionable finding, in every branch", () => {

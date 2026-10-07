@@ -28,10 +28,10 @@ export interface RankableFinding {
 }
 
 export interface RankResult {
-  /** Ordered fingerprints, most urgent first. Always covers every actionable finding. */
+  /** Ordered fingerprints, most urgent first. Capped at ten; the rest stay in severity order below. */
   order: string[];
   source: "local" | "jev" | "perplexity" | "table";
-  /** One plain line explaining the ordering, safe to show a user. */
+  /** One plain line explaining the ordering, safe to show a user. Names which rung answered. */
   note: string;
 }
 
@@ -39,6 +39,9 @@ const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2, in
 
 /** Questions sent to the model. Findings past this stay in table order. */
 export const DECISION_QUESTION_CAP = 10;
+
+/** Ranked fingerprints kept on the report and the scan. The rest stay in severity order below. */
+export const TOP_TEN = 10;
 
 const MODEL_DID_NOT_CHOOSE = "The model did not choose which findings exist.";
 
@@ -139,14 +142,16 @@ export function rankFromAnswers(
   const floor = tableOrder(pool);
 
   const capped = reorderableCount(pool) > DECISION_QUESTION_CAP;
+  const listCapped = pool.length > TOP_TEN;
+  const listNote = listCapped ? " Ranked list capped at 10." : "";
   if (pool.length === 0) {
-    return { order: [], source: "table", note: `Nothing actionable to rank. ${MODEL_DID_NOT_CHOOSE}` };
+    return { order: [], source: "table", note: `Nothing actionable to rank. Order source: table. ${MODEL_DID_NOT_CHOOSE}` };
   }
   if (answers === null) {
     return {
-      order: floor,
+      order: floor.slice(0, TOP_TEN),
       source: "table",
-      note: `Ordered by severity and credential risk alone. ${MODEL_DID_NOT_CHOOSE}`,
+      note: `Ordered by severity and credential risk alone. Order source: table. ${MODEL_DID_NOT_CHOOSE}${listNote}`,
     };
   }
 
@@ -173,17 +178,18 @@ export function rankFromAnswers(
 
   const moved = ordered.filter((fp, i) => floor[i] !== fp).length;
   const capNote = capped ? " Findings past the first 10 stay in severity order." : "";
+  const top = ordered.slice(0, TOP_TEN);
   if (moved === 0) {
     return {
-      order: ordered,
+      order: top,
       source,
-      note: `Order is by severity. A model looked inside one severity band and left the order unchanged. ${MODEL_DID_NOT_CHOOSE}${capNote}`,
+      note: `Order is by severity. Order source: ${source}. A model looked inside one severity band and left the order unchanged. ${MODEL_DID_NOT_CHOOSE}${capNote}${listNote}`,
     };
   }
   return {
-    order: ordered,
+    order: top,
     source,
-    note: `Order is by severity. A model reordered some items inside one severity band. ${MODEL_DID_NOT_CHOOSE}${capNote}`,
+    note: `Order is by severity. Order source: ${source}. A model reordered some items inside one severity band. ${MODEL_DID_NOT_CHOOSE}${capNote}${listNote}`,
   };
 }
 

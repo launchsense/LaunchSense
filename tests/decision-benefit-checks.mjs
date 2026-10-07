@@ -289,17 +289,23 @@ function pseudoAnswers(seed, rows) {
   return answers;
 }
 
-test("the lane never crosses a severity band and never adds or drops a finding", () => {
+test("the lane never crosses a severity band and never adds a finding", () => {
   for (const seed of [1, 7, 99, 20251005]) {
     const rows = pseudoFindings(seed, 40);
     const answers = pseudoAnswers(seed, rows);
     const actionable = rows.filter((row) => row.severity !== "info");
-    const floor = tableOrder(actionable);
+    const floor = tableOrder(actionable).slice(0, 10);
     const result = rankFromAnswers(rows, answers, "jev");
 
-    // Info is not an action, so it is absent from both sides by construction.
-    assert.equal(result.order.length, actionable.length, `seed ${seed}: length`);
-    assert.deepEqual(addedOrDropped(floor, result.order), [], `seed ${seed}: add or drop`);
+    // The ranked list is capped at ten. Info is not an action, so it is absent
+    // from both sides by construction. The lane may promote a row into the top
+    // ten, so past-ten drops are expected; what must never happen is a row from
+    // nowhere, or a band crossing.
+    const fullFloor = new Set(tableOrder(actionable));
+    assert.equal(result.order.length, Math.min(10, actionable.length), `seed ${seed}: length`);
+    for (const key of result.order) {
+      assert.ok(fullFloor.has(key), `seed ${seed}: ${key} came from nowhere`);
+    }
 
     // No row may sit under a strictly more severe row.
     const violations = severityOrderViolations(result.order, rows);
@@ -320,10 +326,10 @@ test("the lane never crosses a severity band and never adds or drops a finding",
   }
 });
 
-test("a missing or non-numeric answer is neutral, and returns the table floor", () => {
+test("a missing or non-numeric answer is neutral, and returns the table top ten", () => {
   const rows = pseudoFindings(4242, 24);
   const actionable = rows.filter((row) => row.severity !== "info");
-  const floor = tableOrder(actionable);
+  const floor = tableOrder(actionable).slice(0, 10);
 
   const cases = {
     null: null,
@@ -337,7 +343,7 @@ test("a missing or non-numeric answer is neutral, and returns the table floor", 
 
   for (const [name, answers] of Object.entries(cases)) {
     const result = rankFromAnswers(rows, answers, "jev");
-    assert.deepEqual(result.order, floor, `${name} must equal the table floor`);
+    assert.deepEqual(result.order, floor, `${name} must equal the table top ten`);
     assert.equal(result.note.includes("did not choose"), true, `${name} note`);
   }
 

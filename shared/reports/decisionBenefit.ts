@@ -38,6 +38,7 @@ import {
   questionIdFor,
   rankFromAnswers,
   tableOrder,
+  TOP_TEN,
   type NoulAnswerLike,
   type RankableFinding,
 } from "./priority.ts";
@@ -215,9 +216,9 @@ export interface OrderMetrics {
 export interface Invariants {
   /** Rows that crossed a severity band. Must be empty. */
   bandCrossings: string[];
-  /** Rows the lane added or dropped. Must be empty. */
+  /** Rows the lane added from nowhere. Must be empty. Drops past the top ten are expected. */
   addedOrDropped: string[];
-  /** The lane order is byte-identical to the floor, so it said nothing. */
+  /** The lane order is byte-identical to the floor top ten, so it said nothing. */
   neutral: boolean;
   /** The answers were null, or carried no number at all. */
   uninformative: boolean;
@@ -278,7 +279,10 @@ export function scoreOrders(
   source: RankSource = "local",
 ): ScoredOrders {
   const pool = actionableFindings(findings);
-  const floor = tableOrder(pool);
+  // Both sides of the comparison are the top ten. The ranked list is capped at
+  // ten, so the floor it is measured against is capped the same way. Past ten
+  // both sides agree by construction: severity order, unmeasured.
+  const floor = tableOrder(pool).slice(0, TOP_TEN);
   const effectiveSource: RankSource = answers === null ? "table" : source;
   const ranked = rankFromAnswers(findings, answers, effectiveSource);
   const model = ranked.order;
@@ -299,7 +303,11 @@ export function scoreOrders(
   const table = measure(floor);
   const modelMetrics = measure(model);
   const bandCrossings = severityOrderViolations(model, pool);
-  const lost = addedOrDropped(floor, model);
+  // Adds only. The ranked list is capped at ten, so a row the floor puts at
+  // eleven that the lane promotes into the top ten is the lane doing its job,
+  // not a drop. What must never happen is a row from nowhere.
+  const fullFloor = new Set(tableOrder(pool));
+  const lost = model.filter((key) => !fullFloor.has(key));
   const neutral = floor.length === model.length && floor.every((key, i) => key === model[i]);
   const uninformative = isUninformative(findings, answers);
 
