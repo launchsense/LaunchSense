@@ -94,6 +94,8 @@ export const analyticsKind = v.union(
   v.literal("referred_visit"),
   v.literal("referred_scan_started"),
   v.literal("report_feedback"),
+  v.literal("licence_route_viewed"),
+  v.literal("licence_cta_clicked"),
 );
 
 /**
