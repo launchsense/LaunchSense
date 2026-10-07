@@ -127,6 +127,7 @@ Releases use `npm run deploy` and are done by maintainers only. A git push never
 - `docs/ABOUT.md`: who it is for, why not a skill, and what it will not do.
 - `docs/PRIVACY.md`: what we save and what we never save.
 - `docs/LIMITS.md`: quotas, caps, and everything unchecked.
+- `docs/LOCAL-MCP.md`: run the check on your own machine, and what to paste to your agent.
 - `docs/GLOSSARY.md`: every special word in one plain line.
 - `CHANGELOG.md`: what changed in each release.
 
