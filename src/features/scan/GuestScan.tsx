@@ -50,9 +50,17 @@ export default function GuestScan() {
   const createShare = useAction(api.scans.sharing.createShare);
   const createPassport = useAction(api.scans.sharing.createPassport);
   const explainScan = useAction(api.scans.aiExplain.explainScan);
+  const checkLive = useAction(api.scans.livecheck.checkLive);
   const logEvent = useMutation(api.scans.queries.logEvent);
   const visitorId = useVisitorId();
   const [repoUrl, setRepoUrl] = useState("");
+  // The live app check is optional and off by default. The URL and the main
+  // action are only sent when the person gives one, and the repo report stands
+  // whether the live fetch answers or not.
+  const [liveUrl, setLiveUrl] = useState("");
+  const [mainAction, setMainAction] = useState("");
+  const [liveNote, setLiveNote] = useState("");
+  const [liveChecked, setLiveChecked] = useState(false);
   // The scan on screen. On a return from sign-in this starts from the scan the
   // person left, so the OAuth round trip lands back on their own result rather
   // than an empty box. The stored id is cleared the moment it is used.
@@ -196,6 +204,10 @@ export default function GuestScan() {
         scanId: result.scanId,
         visitorId,
       });
+      // The optional live check runs last, so a slow or refused live fetch never
+      // delays or fails the repo report. It writes its own row and the report
+      // reads it back through getResults.
+      await runLiveCheck(result.scanId);
       setPhase("idle");
     } catch (error) {
       setSubmitError(toUserError(error, "Could not run the scan. Try again."));
@@ -247,6 +259,28 @@ export default function GuestScan() {
       setQueuedScan(null);
       setPhase("idle");
       setSubmitError("That waiting scan is gone. Press Run a sample check to start a new one.");
+    }
+  }
+
+  // Runs the optional live app check after the repo report is saved. A failure
+  // here never fails the scan: the repo report already stands, and the live line
+  // says plainly what happened. Same soft-failure rule as the other lanes.
+  // The result is written to the scan row, and getResults returns it reactively,
+  // so the report reads the stored row rather than a partial local copy.
+  async function runLiveCheck(scanIdForLive: Id<"scans">): Promise<void> {
+    const url = liveUrl.trim();
+    if (url.length === 0) return;
+    setLiveNote("");
+    setLiveChecked(true);
+    try {
+      await checkLive({
+        scanId: scanIdForLive,
+        url,
+        mainAction: mainAction.trim().length > 0 ? mainAction.trim() : undefined,
+      });
+      void logEvent({ kind: "live_checked", scanId: scanIdForLive, visitorId });
+    } catch (error) {
+      setLiveNote(toUserError(error, "The live check did not finish. The repo report stands."));
     }
   }
 
@@ -438,6 +472,49 @@ export default function GuestScan() {
             Load this repo
           </button>
         </div>
+        <label htmlFor="guest-live-url">Live app URL (optional)</label>
+        <input
+          id="guest-live-url"
+          name="liveUrl"
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          placeholder="https://your-app.example"
+          value={liveUrl}
+          onChange={(e) => setLiveUrl(e.target.value)}
+        />
+        <label htmlFor="guest-main-action">Main action on the page (optional)</label>
+        <input
+          id="guest-main-action"
+          name="mainAction"
+          type="text"
+          autoComplete="off"
+          placeholder="Start a scan"
+          value={mainAction}
+          onChange={(e) => setMainAction(e.target.value)}
+        />
+        <p className="scan-secondary">
+          <strong>Also check my live app.</strong> Add a live URL above and the same
+          run reads the served page: HTTPS, reachability, and whether the page carries
+          your action. It reads served HTML and cannot prove how the page looks on a
+          phone.
+        </p>
+        {analyzed && liveUrl.trim().length > 0 && (
+          <div className="scan-secondary">
+            <button
+              type="button"
+              className="ghost"
+              disabled={phase !== "idle"}
+              onClick={() => {
+                if (scan === null || scan._id === undefined) return;
+                setPhase("analyzing");
+                void runLiveCheck(scan._id).finally(() => setPhase("idle"));
+              }}
+            >
+              Also check my live app
+            </button>
+          </div>
+        )}
       </form>
       <details>
         <summary>Privacy note</summary>
@@ -480,6 +557,10 @@ export default function GuestScan() {
           </p>
         </div>
       )}
+      {liveNote.length > 0 && <p role="alert">{liveNote}</p>}
+      {liveChecked && liveNote.length === 0 && (
+        <p role="status">Live app check done. It reads served HTML only.</p>
+      )}
       {scan !== null && (
         <article aria-label="Scan result">
           <p>
@@ -495,14 +576,14 @@ export default function GuestScan() {
             <ScanReport
               findings={resultsState.findings}
               plan={plan}
-              live={null}
+              live={resultsState.live ?? null}
               mainAction={scan.mainAction ?? null}
               status={scan.status}
               fetchedFileCount={scan.fetchedFileCount ?? 0}
               skippedFileCount={scan.skippedFileCount ?? 0}
               fileCount={scan.fileCount}
               treeTruncated={scan.truncated === true}
-              liveProvided={false}
+              liveProvided={resultsState.live !== null}
               aiConfigured={providerAnswered}
               signedIn={scan.signedIn === true}
               priorityOrder={scan.priorityOrder ?? []}
@@ -616,7 +697,7 @@ export default function GuestScan() {
               shareCreated={shareId !== null}
               shareViewed={shareId !== null && shareViewedAt !== null}
               findings={resultsState.findings}
-              live={null}
+              live={resultsState.live ?? null}
               partial={scan.status === "partial"}
               coverageNote={scan.coverageNote}
               signedIn={scan.signedIn === true}

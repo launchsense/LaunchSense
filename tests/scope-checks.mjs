@@ -422,23 +422,25 @@ describe("the guest cap dialog says which case it is", () => {
   });
 });
 
-describe("the live app check is gone from the visitor surface", () => {
-  it("binds no live action and renders no live input in the scan component", () => {
-    assert.equal(
-      occurrences(guestSource, "api.scans.livecheck.checkLive"),
-      0,
-      "the page must not call the live lane",
-    );
-    assert.doesNotMatch(guestSource, /async function runLiveCheck/, "the live runner is gone");
-    assert.doesNotMatch(guestSource, /id="guest-live-url"/, "the live URL input is gone");
-    assert.doesNotMatch(guestSource, /Also check my live app/, "the live toggle is gone");
-    assert.doesNotMatch(guestSource, /aria-label="Live app result"/, "the live panel is gone");
+describe("the live app check is wired into the visitor surface", () => {
+  it("binds the live action and renders the live inputs and the named button", () => {
+    assert.match(guestSource, /api\.scans\.livecheck\.checkLive/, "the page must call the live lane");
+    assert.match(guestSource, /async function runLiveCheck/, "the live runner must exist");
+    assert.match(guestSource, /id="guest-live-url"/, "the live URL input must exist");
+    assert.match(guestSource, /id="guest-main-action"/, "the main action input must exist");
+    assert.match(guestSource, /Also check my live app/, "the live control the docs name must exist");
   });
 
-  it("passes no live row to the report or the panels", () => {
-    assert.match(guestSource, /<ScanReport[\s\S]{0,400}live=\{null\}/);
-    assert.match(guestSource, /<Stage5Panels[\s\S]{0,600}live=\{null\}/);
-    assert.match(guestSource, /liveProvided=\{false\}/);
+  it("passes the stored live row to the report and the panels, and marks it provided", () => {
+    assert.match(guestSource, /<ScanReport[\s\S]{0,400}live=\{resultsState\.live \?\? null\}/);
+    assert.match(guestSource, /<Stage5Panels[\s\S]{0,600}live=\{resultsState\.live \?\? null\}/);
+    assert.match(guestSource, /liveProvided=\{resultsState\.live !== null\}/);
+    assert.doesNotMatch(guestSource, /live=\{null\}/, "no hardcoded null live path may remain");
+  });
+
+  it("keeps the live check optional and soft-failing", () => {
+    assert.match(guestSource, /if \(url\.length === 0\) return;/);
+    assert.match(guestSource, /The live check did not finish\. The repo report stands\./);
   });
 
   it("leaves the signed-in token gate a return, so nothing throws where it used to continue", () => {
