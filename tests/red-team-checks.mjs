@@ -23,10 +23,10 @@
 // built by joining parts, so no provider-shaped literal sits in this file, and
 // none of them is a real key.
 
-import { describe, it, before, after } from "node:test";
+import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -933,13 +933,12 @@ describe("target 5: the fingerprint occurrence number (WS-4)", () => {
 // ---------------------------------------------------------------------------
 // 6. The local server review root (W3-INSTALL-ROOT)
 //
-// This one is driven for real: the Go module is built into a temp folder and
-// the binary is spoken to over stdio, the way an MCP client would. No network
-// is used, and no file in the repository is written.
+// This one is driven for real: the Node server is run with node and spoken to
+// over stdio, the way an MCP client would. No network is used, and no file in
+// the repository is written.
 // ---------------------------------------------------------------------------
 
-const GO_SERVER = join(mkdtempSync("/tmp/opencode/red-team-go-"), "launchsense-mcp");
-let goStatus = "not built";
+const SERVER = join(REPO, "mcp", "server.ts");
 
 // W4-MCP. The MCP stdio transport is newline-delimited JSON with no headers.
 // This used to write an LSP Content-Length frame and the comment above it
@@ -952,7 +951,7 @@ function frame(object) {
 /** One launchsense_scan_repo call over stdio, with the review forced offline. */
 function scanRepoCall(env, cwd) {
   return new Promise((resolve) => {
-    const child = spawn(GO_SERVER, [], {
+    const child = spawn(process.execPath, [SERVER], {
       cwd,
       env: {
         PATH: process.env.PATH,
@@ -1001,28 +1000,7 @@ function plantedTree() {
 const reviewScript = join(REPO, "mcp", "review-entry.ts");
 
 describe("target 6: the local server review root (W3-INSTALL-ROOT)", () => {
-  before(() => {
-    const go = spawnSync("sh", ["-c", "command -v go"], { encoding: "utf8" });
-    if (go.status !== 0) {
-      goStatus = "go is not on PATH";
-      return;
-    }
-    const build = spawnSync("go", ["build", "-o", GO_SERVER, "."], {
-      cwd: join(REPO, "mcp"),
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        GOPROXY: "off",
-        GOFLAGS: "-mod=readonly",
-        GOCACHE: process.env.GOCACHE ?? join("/tmp/opencode", "red-team-gocache"),
-      },
-      timeout: 300_000,
-    });
-    goStatus = build.status === 0 ? "built" : `build failed: ${(build.stderr || "").slice(0, 200)}`;
-  });
-
   it("[DEFENDED] the installed shape reviews the named root even though the process folder is the mcp module", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const tree = plantedTree();
     const result = await scanRepoCall(
       { LAUNCHSENSE_ROOT: tree, LAUNCHSENSE_REVIEW: reviewScript },
@@ -1034,7 +1012,6 @@ describe("target 6: the local server review root (W3-INSTALL-ROOT)", () => {
   });
 
   it("[DEFENDED] a relative LAUNCHSENSE_ROOT is refused by name, so the process folder can no longer pass as the review root", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     // filepath.Abs(".") resolved against the process folder, which the installer
     // sets to the module folder, so the review read mcp/ and reported a confident
     // result on 8 Go files. That is the exact failure this target is about.
@@ -1067,18 +1044,15 @@ describe("target 6: the local server review root (W3-INSTALL-ROOT)", () => {
     );
   });
 
-  it("[DEFENDED] with no LAUNCHSENSE_ROOT the fallback still roots at the binary's folder, and the answer now names that folder", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
-    // A go install-ed binary lands in a bin folder, which is the realistic shape.
-    // The root choice is unchanged, so the review is still of the executable's
-    // folder. What changed is that the answer says so, instead of reporting a
-    // confident review of whatever that folder happened to hold.
-    const binFolder = dirname(GO_SERVER);
+  it("[DEFENDED] with no LAUNCHSENSE_ROOT the fallback roots at the process folder, and the answer names that folder", async function () {
+    // With no LAUNCHSENSE_ROOT the Node server roots at the folder it was
+    // started in, which this test sets to /tmp. What matters is that the answer
+    // names the folder it read, instead of reporting a confident review of
+    // whatever that folder happened to hold.
     const result = await scanRepoCall({ LAUNCHSENSE_REVIEW: reviewScript }, "/tmp");
-    const quoted = binFolder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     assert.match(
       result.text,
-      new RegExp(`Reviewed folder: ${quoted}`),
+      /Reviewed folder: \/tmp/,
       `the answer must name the folder it read; got: ${result.text.slice(0, 300)}`,
     );
     assert.match(
@@ -1086,16 +1060,19 @@ describe("target 6: the local server review root (W3-INSTALL-ROOT)", () => {
       /is not a LaunchSense checkout/,
       "and say the folder is not a checkout, so the reader knows the root is unverified",
     );
-    assert.doesNotMatch(result.text, /go\.sum/, "the review read the bin folder, not the mcp module");
+    assert.doesNotMatch(
+      result.text,
+      /We read \d+ files[^]*Where: mcp\//,
+      "the review did not read the mcp module, which is the bug this target is about",
+    );
     verdict(
       "6 review root",
       "DEFENDED",
-      "the no-env fallback is unchanged (the executable's folder) but the answer opens with Reviewed folder: <path> and says the folder is not a checkout, so a wrong root is visible instead of silent",
+      "the no-env fallback is the process folder but the answer opens with Reviewed folder: <path> and says the folder is not a checkout, so a wrong root is visible instead of silent",
     );
   });
 
   it("[DEFENDED] the reviewed-folder line appears only for a folder that is not a checkout", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     // A checkout is quiet, or the line would be noise on every honest run.
     const checkout = mkdtempSync("/tmp/opencode/red-team-checkout-");
     mkdirSync(join(checkout, "mcp"), { recursive: true });
@@ -1113,7 +1090,6 @@ describe("target 6: the local server review root (W3-INSTALL-ROOT)", () => {
   });
 
   it("[DEFENDED] an unreadable or non-folder LAUNCHSENSE_ROOT fails loudly instead of falling back", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const missing = await scanRepoCall({ LAUNCHSENSE_ROOT: "/tmp/opencode/red-team-does-not-exist" }, join(REPO, "mcp"));
     assert.match(missing.text, /LAUNCHSENSE_ROOT is not readable/, "a bad root is refused, not silently replaced");
     const notAFolder = await scanRepoCall({ LAUNCHSENSE_ROOT: reviewScript }, join(REPO, "mcp"));
@@ -1128,12 +1104,12 @@ describe("target 6: the local server review root (W3-INSTALL-ROOT)", () => {
       "and never the module folder, which is the bug this target is about",
     );
     assert.match(installer, /"LAUNCHSENSE_REVIEW": "\$ROOT\/mcp\/review-entry\.ts"/, "the review script stays absolute");
-    const runner = readRepo("mcp/review_local.go");
-    const resolve = /func reviewScript\(root string\)[\s\S]*?\n\}/.exec(runner)?.[0] ?? "";
+    const runner = readRepo("mcp/lib/review.ts");
+    const resolve = /export function reviewScript\([\s\S]*?\n\}/.exec(runner)?.[0] ?? "";
     assert.match(resolve, /LAUNCHSENSE_REVIEW/, "the script is taken from the environment first");
     assert.doesNotMatch(
-      resolve.split("return named, nil")[0] ?? "",
-      /os\.Stat\(named\)/,
+      resolve.split("return named;")[0] ?? "",
+      /existsSync\(named\)|statSync\(named\)/,
       "and it is never checked for existence, so a stale path fails at node instead of at the check",
     );
     verdict("6 review root", "DEFENDED", "the installer writes an absolute checkout root; a missing root fails loudly. The review script is still unvalidated, noted not a hole");

@@ -20,5 +20,10 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["vite.config.ts", "mcp/review-entry.ts"]
+  "include": [
+    "vite.config.ts",
+    "mcp/review-entry.ts",
+    "mcp/server.ts",
+    "mcp/lib/**/*.ts"
+  ]
 }

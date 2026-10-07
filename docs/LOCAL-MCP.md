@@ -5,7 +5,7 @@ The local check reads the repo on your machine, including work you have not push
 ## What you need
 
 - The repo, cloned: `https://github.com/launchsense/LaunchSense`
-- Go on your PATH. Without Go the installer says so and registers no server.
+- Node 24 or newer on your PATH. Without Node the installer says so and registers no server.
 - Cursor, Claude Code, or Codex. The installer drops the skill into all three.
 
 ## Install
@@ -39,5 +39,5 @@ Set up the local LaunchSense check from https://github.com/launchsense/LaunchSen
 
 ## If it does not start
 
-- `go is not on PATH`: install Go, then run `cd mcp && go run .` from the checkout.
-- An existing `~/.cursor/mcp.json` is left in place. Point its launchsense entry at `cd <checkout>/mcp && go run .` with `LAUNCHSENSE_ROOT=<checkout>`.
+- `node is not on PATH`: install Node 24 or newer, then run `node <checkout>/mcp/server.ts` from the checkout.
+- An existing `~/.cursor/mcp.json` is left in place. Point its launchsense entry at `node <checkout>/mcp/server.ts` with `LAUNCHSENSE_ROOT=<checkout>`.

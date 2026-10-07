@@ -17,16 +17,12 @@ or AGPL in the closure; copyleft present is file-level (MPL-2.0 build
 tooling) plus one CC-BY-4.0 data package, each with its obligation recorded
 in `shared/licensing/obligations.ts`.
 
-## Go modules (mcp/)
+## The local MCP server (mcp/)
 
-`mcp/THIRD-PARTY-GO.csv` is the `go-licenses` output for the built binary,
-regenerated with `GOTOOLCHAIN=go1.23.0 go-licenses csv ./...` from `mcp/`.
-Fifteen rows: fourteen third-party modules, all permissive (MIT,
-BSD-2-Clause, BSD-3-Clause, Unlicense, no GPL, no AGPL), plus our own
-`launchsense/mcp` module row, which `go-licenses` cannot classify and which
-needs no third-party notice. Test-only modules outside the binary (testify
-MIT, go-spew ISC, gock.v1 MIT, check.v1 BSD-2-Clause) are equally
-permissive.
+The local server in `mcp/` is Node shipped in this repository. It imports only
+Node builtins (`node:fs`, `node:path`, `node:child_process`), so it carries no
+third-party dependency and needs no separate notice. It runs the same review
+(`mcp/review-entry.ts`) the npm closure already covers.
 
 ## Skills in the local agent library
 
