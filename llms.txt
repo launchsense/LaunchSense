@@ -22,7 +22,7 @@ The client POSTs one JSON-RPC message. The server returns one JSON answer, or a 
 
 `launchsense_scan_public` takes `repoUrl` like `https://github.com/owner/repo`. It reads that public repo on our server. Guest limits of 200 files and about 2MB apply. OSV covers up to 50 packages. deps.dev is not asked. The hosted read keeps 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then the route pauses. The counter holds no part of your network address. Sending a LaunchSense credential in an `Authorization` header is optional. When one resolves, the per-tool caps are 20 scans an hour and 120 in a day, counted against that credential's own bucket. Those per-tool numbers are a policy choice with no traffic measurement behind them. A credential that is presented and refused gets no scan, rather than being treated as anonymous.
 
-`launchsense_get_report` takes `scanId` and returns the coverage line and the findings.
+`launchsense_get_report` takes `scanId` and returns the coverage line, the findings, the licence suggestion with its source, and one standards summary line (two axes, never merged).
 
 Those two names belong to this address. The local server under Surfaces has its own names, and its `launchsense_scan_public_notice` scans nothing: it only points back here.
 
