@@ -128,7 +128,6 @@ Releases use `npm run deploy` and are done by maintainers only. A git push never
 - `docs/PRIVACY.md`: what we save and what we never save.
 - `docs/LIMITS.md`: quotas, caps, and everything unchecked.
 - `docs/GLOSSARY.md`: every special word in one plain line.
-- `docs/SELF-SCAN-LOG.md`: we scan our own repo with LaunchSense after every stage and publish the result.
 - `CHANGELOG.md`: what changed in each release.
 
 Built with React, Vite, and TypeScript. License: open core, MIT for the paths LICENSE.txt names, proprietary for the rest. The repo is public so the open parts can be read and forked.
