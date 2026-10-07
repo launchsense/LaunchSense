@@ -97,7 +97,7 @@ The findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASV
 - GitHub quota for guest scans is shared, so heavy use can pause those scans until the quota resets.
 - A guest scan reads at most 200 files and 2 MB. Signed in, the cap is 1,000 files and about 8MB. The rest is listed as not checked.
 - Plain words and ordering are described under "AI, and where it is going." When no provider answers, fixed wording is shown, and the fixed table sets the order. The table is always the floor.
-- More detail: `docs/LIMITS.md`. Privacy detail: `docs/PRIVACY.md`.
+- More detail: `docs/LIMITS.md`. Privacy detail: `docs/PRIVACY.md`. What gets counted: `docs/METRICS.md`.
 
 ## Run it locally
 
@@ -128,6 +128,7 @@ Releases use `npm run deploy` and are done by maintainers only. A git push never
 - `docs/PRIVACY.md`: what we save and what we never save.
 - `docs/LIMITS.md`: quotas, caps, and everything unchecked.
 - `docs/LOCAL-MCP.md`: run the check on your own machine, and what to paste to your agent.
+- `docs/METRICS.md`: what gets counted, and what cannot be counted.
 - `docs/GLOSSARY.md`: every special word in one plain line.
 - `CHANGELOG.md`: what changed in each release.
 
