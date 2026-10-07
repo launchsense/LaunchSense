@@ -298,6 +298,8 @@ export default defineSchema({
       v.literal("referred_visit"),
       v.literal("referred_scan_started"),
       v.literal("report_feedback"),
+      v.literal("licence_route_viewed"),
+      v.literal("licence_cta_clicked"),
     ),
     scanId: v.optional(v.id("scans")),
     shareId: v.optional(v.string()),
