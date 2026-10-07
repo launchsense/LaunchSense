@@ -1,38 +1,37 @@
-// W4-MCP. Conformance tests for the local Go MCP server, driven the way an MCP
-// client drives it: one JSON message per line on stdin, one JSON message per
+// W4-MCP. Conformance tests for the local Node MCP server, driven the way an
+// MCP client drives it: one JSON message per line on stdin, one JSON message per
 // line on stdout.
 //
-// The server under test is the built binary, not a mock, so a framing mistake
-// cannot hide behind a helper that agrees with it. Every session writes real
-// MCP bytes: `JSON.stringify(message) + "\n"`, no headers, which is what the
+// The server under test is the real one, run with node, not a mock, so a framing
+// mistake cannot hide behind a helper that agrees with it. Every session writes
+// real MCP bytes: `JSON.stringify(message) + "\n"`, no headers, which is what the
 // MCP stdio transport specifies and what the official SDK writes.
 //
 // No network is used. LAUNCHSENSE_API_URL points at a port nothing listens on,
 // so a tool that reached the API would fail loudly instead of answering from
 // the real deployment. HOME is a temp folder, so no local config is read.
 
-import { describe, it, before } from "node:test";
+import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
-const BUILT = mkdtempSync("/tmp/opencode/w4-mcp-");
-const GO_SERVER = join(BUILT, "launchsense-mcp");
+const SERVER = join(REPO, "mcp", "server.ts");
 const HOME = mkdtempSync("/tmp/opencode/w4-home-");
 // Port 1 refuses, so an accidental API call fails instead of leaving the
 // machine.
 const DEAD_API = "http://127.0.0.1:1";
 
-let goStatus = "not built";
+after(() => rmSync(HOME, { recursive: true, force: true }));
 
 /** One stdio session. `input` is written raw, so a test can send bad bytes. */
 function session(input, { env = {}, timeoutMs = 60_000 } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(GO_SERVER, [], {
+    const child = spawn(process.execPath, [SERVER], {
       cwd: join(REPO, "mcp"),
       env: { PATH: process.env.PATH, HOME, LAUNCHSENSE_API_URL: DEAD_API, ...env },
       stdio: ["pipe", "pipe", "pipe"],
@@ -112,33 +111,7 @@ function fixture(handler) {
 }
 
 describe("W4-MCP: the local server speaks MCP on stdio", () => {
-  before(() => {
-    const go = spawnSync("sh", ["-c", "command -v go"], { encoding: "utf8" });
-    if (go.status !== 0) {
-      goStatus = "go is not on PATH";
-      return;
-    }
-    const build = spawnSync("go", ["build", "-o", GO_SERVER, "."], {
-      cwd: join(REPO, "mcp"),
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        GOPROXY: "off",
-        GOFLAGS: "-mod=readonly",
-        GOCACHE: process.env.GOCACHE ?? join("/tmp/opencode", "w4-mcp-gocache"),
-      },
-      timeout: 300_000,
-    });
-    goStatus =
-      build.status === 0
-        ? "built"
-        : `build failed: ${(build.stderr || "").slice(0, 200)}`;
-    if (build.status !== 0) return;
-    return () => rmSync(BUILT, { recursive: true, force: true });
-  });
-
   it("[transport] a newline message gets a newline answer, with no Content-Length header anywhere", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const result = await session(frames(request(1, "initialize", { protocolVersion: "2025-06-18" })));
     assert.equal(result.lines.length, 1, `one message in, one message out; got: ${result.stdout}`);
     assert.match(result.stdout, /\n$/, "the answer ends with a newline, so the next message can start");
@@ -151,7 +124,6 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[transport] two messages written in one write are each answered once, matched by id", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const result = await session(
       frames(
         request(1, "initialize", { protocolVersion: "2025-06-18" }),
@@ -173,14 +145,12 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[transport] a blank line is ignored and invents no reply", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const result = await session(`\n\n${frame(request(7, "ping"))}\n`);
     assert.equal(result.lines.length, 1, `only the ping is answered; got: ${result.stdout}`);
     assert.equal(result.replies[0].id, 7);
   });
 
   it("[parse error] malformed JSON answers -32700 with id null, and the session survives", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const result = await session(`{not json at all\n${frame(request(3, "ping"))}\n`);
     assert.equal(result.replies.length, 2, `the bad line and the ping both answer; got: ${result.stdout}`);
     // The parse error is answered on the reader loop with a null id, so it is
@@ -194,7 +164,6 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[size limit] a line over the cap is refused with a JSON-RPC error, no crash, session survives", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const oversized = { ...request(4, "ping"), pad: "a".repeat(5 * 1024 * 1024) };
     const result = await session(`${frame(oversized)}${frame(request(5, "ping"))}`);
     assert.equal(result.replies.length, 2, `the oversize line is answered, not dropped; got ${result.stdout.slice(0, 200)}`);
@@ -210,7 +179,6 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[tool names] no local tool claims the hosted public-repo scan", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const result = await session(
       frames(
         request(1, "initialize", { protocolVersion: "2025-06-18" }),
@@ -238,7 +206,6 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[tool names] every published schema closes its argument list", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const result = await session(HELLO + frame(request(1, "tools/list")));
     for (const tool of replyFor(result, 1).result.tools) {
       assert.equal(
@@ -250,7 +217,6 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[arguments] an unknown tool is a protocol error, not a result with isError", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const result = await session(
       HELLO + frame(request(9, "tools/call", { name: "launchsense_nope", arguments: {} })),
     );
@@ -261,7 +227,6 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[arguments] a missing required field, a wrong type, and an undeclared field are three different errors", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const missing = await session(
       HELLO + frame(request(1, "tools/call", { name: "launchsense_report", arguments: {} })),
     );
@@ -294,7 +259,6 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[truncation] a report body over 1 MiB comes back as partial, never as a whole report", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     const body = "R".repeat(2 * 1024 * 1024);
     const host = await fixture((req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
@@ -316,7 +280,6 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
   });
 
   it("[timeout] an endpoint that accepts and never answers is abandoned, and the next call still works", async function () {
-    if (goStatus !== "built") return this.skip(`go build unavailable: ${goStatus}`);
     // This one really waits for the client timeout, so the test budget is wide.
     const host = await fixture(() => {
       // Accepted, then nothing. Never ends the response.

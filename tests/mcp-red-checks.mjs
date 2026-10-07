@@ -1,4 +1,4 @@
-// Red-team checks for the fixed local MCP server (mcp/server.go).
+// Red-team checks for the fixed local MCP server (mcp/server.ts).
 //
 // These tests attack the server and record what it actually does. Every test
 // asserts the CURRENT behaviour, and the name says whether that behaviour is a
@@ -8,47 +8,46 @@
 // server is fixed, which is the point. Fixing an OPEN hole means flipping the
 // assertion to the required behaviour, not deleting the test.
 //
-// The server under test is the built binary, driven over real pipes with real
+// The server under test is the real one, run with node over real pipes with real
 // bytes. No network is used: LAUNCHSENSE_API_URL points at a loopback fixture,
 // or at 127.0.0.1:1 which refuses, so nothing can reach the real deployment.
 // HOME is a temp folder, so no gh login is read and no token is touched.
 //
 // Labels in the source this file was written against:
-//   server.go:22       maxMessageBytes = 4 MiB, counted on the line including
+//   lib/limits.ts      maxMessageBytes = 4 MiB, counted on the line including
 //                      its newline
-//   server.go:26       maxReportBytes  = 1 MiB
-//   server.go:32       apiTimeout      = 8s
-//   server.go:88-133   serve: read a line, answer a line, one at a time
-//   server.go:139-163  readMessage: reassemble, refuse oversize, drain
-//   server.go:165-204  handle: no session state, no envelope check
-//   review_local.go:18 reviewTimeout  = 10 minutes, same single loop
+//   lib/limits.ts      maxReportBytes  = 1 MiB
+//   lib/limits.ts      apiTimeoutMs    = 8s
+//   server.ts          serve: read a line, answer a line
+//   lib/framing.ts     LineReader: reassemble, refuse oversize, drain
+//   server.ts          begin: envelope and lifecycle checks, in arrival order
+//   lib/review.ts      reviewTimeoutMs = 10 minutes, off the read path
 //
 // W41-MCP moved the lifecycle, the envelope, the version negotiation and the
-// write guard into server.go, and made the loop concurrent. Rows 6.1 to 6.10 and
+// write guard into the server, and made the loop concurrent. Rows 6.1 to 6.10 and
 // 4.3 below were flipped from OPEN to DEFENDED against that change; every other
 // row was re-run unchanged, because a session change can break a framing row
 // that has nothing to do with it.
 
-import { describe, it, before } from "node:test";
+import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
-const BUILT = mkdtempSync("/tmp/opencode/w4-red-checks-");
+const SERVER = join(REPO, "mcp", "server.ts");
 const HOME = mkdtempSync("/tmp/opencode/w4-red-home-");
-const BIN = join(BUILT, "launchsense-mcp");
 
-// The two bounds in force, read from the source constants above.
+// The two bounds in force, read from lib/limits.ts.
 const CAP = 4 << 20; // maxMessageBytes
 const REPORT_CAP = 1 << 20; // maxReportBytes
 // Port 1 refuses, so an accidental real call fails instead of leaving the box.
 const DEAD_API = "http://127.0.0.1:1";
 
-let goStatus = "not built";
+after(() => rmSync(HOME, { recursive: true, force: true }));
 
 /**
  * One stdio session. `steps` is written in order, with a number meaning "wait
@@ -61,7 +60,7 @@ let goStatus = "not built";
 function session(steps, { env = {}, killAfterMs = 60_000, keepOpen = false } = {}) {
   const input = Array.isArray(steps) ? steps : [steps];
   return new Promise((resolve) => {
-    const child = spawn(BIN, [], {
+    const child = spawn(process.execPath, [SERVER], {
       cwd: join(REPO, "mcp"),
       env: { PATH: process.env.PATH, HOME, LAUNCHSENSE_API_URL: DEAD_API, ...env },
       stdio: ["pipe", "pipe", "pipe"],
@@ -191,44 +190,19 @@ function lineOfBytes(totalBytes, id, fill = "a") {
   return line;
 }
 
-/** Asserts the server is up, or skips the test with the reason. */
-function needGo() {
-  if (goStatus !== "built") throw new Error(`go build unavailable: ${goStatus}`);
+/** Asserts the server is up. The server is a Node script and always present, so
+ *  this is a named call site rather than a build gate. */
+function needServer() {
+  // Nothing to build: the server runs from source with node.
 }
 
 describe("Red team: the local MCP server", () => {
-  before(() => {
-    const go = spawnSync("sh", ["-c", "command -v go"], { encoding: "utf8" });
-    if (go.status !== 0) {
-      goStatus = "go is not on PATH";
-      return;
-    }
-    const build = spawnSync("go", ["build", "-o", BIN, "."], {
-      cwd: join(REPO, "mcp"),
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        GOPROXY: "off",
-        GOFLAGS: "-mod=readonly",
-        GOCACHE: process.env.GOCACHE ?? join("/tmp/opencode", "w4-red-gocache"),
-      },
-      timeout: 300_000,
-    });
-    goStatus =
-      build.status === 0 ? "built" : `build failed: ${(build.stderr || "").slice(0, 300)}`;
-    if (build.status !== 0) return;
-    return () => {
-      rmSync(BUILT, { recursive: true, force: true });
-      rmSync(HOME, { recursive: true, force: true });
-    };
-  });
-
   // ------------------------------------------------------------------
   // Target 1: transport framing
   // ------------------------------------------------------------------
   describe("target 1: transport", () => {
     it("[DEFENDED] 1.1 an LSP Content-Length frame is one parse error, and the messages after it still answer", async () => {
-      needGo();
+      needServer();
       const body = JSON.stringify(request(1, "initialize", { protocolVersion: "2024-11-05" }));
       const lsp = `Content-Length: ${body.length}\r\n\r\n${body}\n`;
       const result = await session(lsp + PING);
@@ -251,7 +225,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.2 a final line with no trailing newline is still a message", async () => {
-      needGo();
+      needServer();
       const result = await session(JSON.stringify(request(5, "ping")));
       assert.equal(result.replies.length, 1, `one answer: ${result.stdout}`);
       assert.equal(result.replies[0].id, 5, "the unterminated last line was not dropped");
@@ -260,7 +234,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.3 a message with an embedded newline answers one parse error per fragment and the session survives", async () => {
-      needGo();
+      needServer();
       // A real newline inside a JSON string. The transport says messages must
       // not contain one, so this is undefined by the spec; the point is that
       // the server stays usable rather than hanging or dying.
@@ -277,7 +251,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.4 a fragment that happens to be a complete message is served, which is what line framing means", async () => {
-      needGo();
+      needServer();
       // An unterminated string leaves a tail that is a whole valid request. The
       // server treats every line as a message, so the tail is answered. This is
       // inherent to newline framing, not a bypass: whoever writes those bytes
@@ -302,7 +276,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.5 a partial line is reassembled across three writes, then the next message answers", async () => {
-      needGo();
+      needServer();
       // The split line is the handshake itself, so no separate initialize is
       // needed and the reassembled message is still the one under test.
       const result = await session(
@@ -329,7 +303,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.6 a partial line then EOF is a parse error, not silence and not a crash", async () => {
-      needGo();
+      needServer();
       const result = await session('{"jsonrpc":"2.0","id":12,"method":"pi');
       assert.equal(result.replies.length, 1, `the half message is answered: ${result.stdout}`);
       assert.equal(result.replies[0].error.code, -32700, "an unfinished message is a parse error");
@@ -340,7 +314,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.7 two messages in one write are each answered once, matched by id", async () => {
-      needGo();
+      needServer();
       const result = await session(
         frames(
           request(1, "initialize", { protocolVersion: "2025-06-18" }),
@@ -363,7 +337,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.8 a zero-length line and a whitespace-only line invent no reply", async () => {
-      needGo();
+      needServer();
       const result = await session(`\n\n\r\n   \t \n${PING}\n\n`);
       assert.equal(result.replies.length, 1, `only the ping is answered: ${result.stdout}`);
       assert.equal(result.replies[0].id, 999);
@@ -371,7 +345,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.9 a CRLF session answers every message", async () => {
-      needGo();
+      needServer();
       const result = await session(
         '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}\r\n' +
           '{"jsonrpc":"2.0","id":2,"method":"tools/list"}\r\n' +
@@ -390,7 +364,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 1.10 an answer whose text holds real newlines stays one stdout line", async () => {
-      needGo();
+      needServer();
       const result = await session(
         frames(request(0, "initialize", { protocolVersion: "2025-06-18" })) +
           callTool(1, "launchsense_scan_public_notice", {}),
@@ -421,7 +395,7 @@ describe("Red team: the local MCP server", () => {
   // ------------------------------------------------------------------
   describe("target 2: size limit", () => {
     it("[DEFENDED] 2.1 the cap is enforced at the line length, and the boundary is exact both ways", async () => {
-      needGo();
+      needServer();
       // server.go counts the newline as part of the line, so a line of exactly
       // the cap is served and one byte more is refused. That makes the largest
       // servable JSON body cap-1 bytes. The refusal text says the limit is
@@ -449,7 +423,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 2.2 a line one byte over the cap is refused with a protocol error, and nothing runs", async () => {
-      needGo();
+      needServer();
       const result = await session(lineOfBytes(CAP + 1, 30) + PING, { killAfterMs: 30_000 });
       assert.equal(result.replies.length, 2, `the oversize line is answered, not dropped: ${result.stdout.slice(0, 120)}`);
       const refused = result.replies.find((r) => r.error?.code === -32600);
@@ -464,7 +438,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 2.3 a multi-byte line is measured in bytes, and the boundary does not split a character", async () => {
-      needGo();
+      needServer();
       // 3-byte characters, so a line at the byte cap is well under a third of
       // the cap in characters. If the server counted runes, or split a
       // character across its 64 KiB read buffer, this answer would not come
@@ -491,7 +465,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 2.4 a 64 MiB line is refused fast, with no out of memory and no lost session", async () => {
-      needGo();
+      needServer();
       const head = '{"jsonrpc":"2.0","id":50,"method":"ping","pad":"';
       const chunk = "a".repeat(1 << 20);
       const parts = [head];
@@ -513,7 +487,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 2.5 an oversize line with no trailing newline, then EOF, is still refused", async () => {
-      needGo();
+      needServer();
       const head = '{"jsonrpc":"2.0","id":60,"method":"ping","pad":"';
       const line = head + "a".repeat(CAP + 4096) + '"}';
       assert.ok(Buffer.byteLength(line) > CAP);
@@ -534,7 +508,7 @@ describe("Red team: the local MCP server", () => {
     const R = "R";
 
     it("[DEFENDED] 3.1 a body of exactly 1 MiB comes back whole, as a success", async () => {
-      needGo();
+      needServer();
       const host = await fixture((req, res) => {
         const body = Buffer.alloc(REPORT_CAP, 0x52);
         res.writeHead(200, { "content-type": "application/json", "content-length": String(body.length) });
@@ -554,7 +528,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 3.2 a body one byte over 1 MiB comes back as partial, never as a clipped success", async () => {
-      needGo();
+      needServer();
       const host = await fixture((req, res) => {
         const body = Buffer.alloc(REPORT_CAP + 1, 0x52);
         res.writeHead(200, { "content-type": "application/json", "content-length": String(body.length) });
@@ -576,7 +550,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 3.3 a chunked body of exactly 1 MiB is whole too, so the cap does not lean on content-length", async () => {
-      needGo();
+      needServer();
       const host = await fixture((req, res) => {
         res.writeHead(200, { "content-type": "application/json" }); // chunked, no length
         res.write(Buffer.alloc(REPORT_CAP, 0x52));
@@ -595,7 +569,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 3.4 an upstream that promises more than it sends is an error, not a short report", async () => {
-      needGo();
+      needServer();
       const host = await fixture((req, res) => {
         res.writeHead(200, { "content-type": "application/json", "content-length": String(4 * REPORT_CAP) });
         res.write(Buffer.alloc(REPORT_CAP, 0x52));
@@ -621,7 +595,7 @@ describe("Red team: the local MCP server", () => {
   // ------------------------------------------------------------------
   describe("target 4: timeout", () => {
     it("[DEFENDED] 4.1 a host that accepts and never answers is abandoned at about 8 s, and the queued ping still answers", async () => {
-      needGo();
+      needServer();
       const host = await fixture(() => {
         // Accepted, then nothing. Never ends the response.
       });
@@ -649,7 +623,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 4.2 a host that sends headers then stalls the body is abandoned too", async () => {
-      needGo();
+      needServer();
       const host = await fixture((req, res) => {
         res.writeHead(200, { "content-type": "application/json", "content-length": String(2 * REPORT_CAP) });
         res.write(Buffer.alloc(16, 0x52));
@@ -674,8 +648,8 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 4.3 a review subprocess that never finishes does not block any later message", async () => {
-      needGo();
-      // review_local.go:18 sets reviewTimeout to 10 minutes, so a review that
+      needServer();
+      // lib/review.ts sets reviewTimeoutMs to 10 minutes, so a review that
       // never exits is still running ten minutes later. What changed is that it no
       // longer runs on the read loop: each message is handled in its own
       // goroutine, so ping and every other request are answered while the review
@@ -731,7 +705,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 4.4 ten concurrent pings all answer while one slow tool call is in flight", async () => {
-      needGo();
+      needServer();
       // The defect was a serialised loop, so this is the shape that broke it: one
       // request that takes its time and a pile of cheap ones behind it. Each gets
       // its own answer and no two answers share a line.
@@ -791,7 +765,7 @@ describe("Red team: the local MCP server", () => {
     };
 
     it("[DEFENDED] 5.1 the hosted tool name called locally is a protocol error, not a scan that reports nothing", async () => {
-      needGo();
+      needServer();
       const reply = await ask("launchsense_scan_public", { repoUrl: "https://github.com/octocat/Hello-World" });
       assert.ok(!("result" in reply), "a name this server does not have never returns a result");
       assert.equal(reply.error.code, -32602, "it is Invalid params");
@@ -805,7 +779,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 5.2 an unknown tool name is -32602 with no result member", async () => {
-      needGo();
+      needServer();
       const reply = await ask("launchsense_nope", {});
       assert.equal(reply.error.code, -32602);
       assert.match(reply.error.message, /launchsense_nope/);
@@ -813,7 +787,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 5.3 a missing required argument names the field", async () => {
-      needGo();
+      needServer();
       for (const args of [{}, { scanId: null }, { scanId: "   " }]) {
         const reply = await ask("launchsense_report", args);
         assert.equal(reply.error.code, -32602, `for ${JSON.stringify(args)}`);
@@ -823,7 +797,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 5.4 a wrong type is a type error, naming the field, the type wanted and the type given", async () => {
-      needGo();
+      needServer();
       for (const [value, got] of [[42, "number"], [true, "boolean"], [["a"], "array"], [{}, "object"]]) {
         const reply = await ask("launchsense_report", { scanId: value });
         assert.equal(reply.error.code, -32602, `for ${JSON.stringify(value)}`);
@@ -837,7 +811,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 5.5 an undeclared argument is refused by name and lists what is declared", async () => {
-      needGo();
+      needServer();
       const extra = await ask("launchsense_report", { scanId: "x", bogusProp: "y" });
       assert.equal(extra.error.code, -32602);
       assert.match(extra.error.message, /unexpected property bogusProp/);
@@ -852,7 +826,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 5.6 malformed params and calls are protocol errors, never a result", async () => {
-      needGo();
+      needServer();
       const cases = [
         ["arguments as a string", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report","arguments":"scanId=x"}}\n', -32602, /must be a JSON object/],
         ["arguments as an array", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report","arguments":["scanId"]}}\n', -32602, /must be a JSON object/],
@@ -878,7 +852,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 5.7 a null params names the envelope problem, not a tool that does not exist", async () => {
-      needGo();
+      needServer();
       // Fixed 2026-10-06. A null params unmarshals into an empty tool call, and
       // the answer used to be "Unknown tool: " with a blank name, which pointed
       // the reader at the tool list instead of at the bad message. It now names
@@ -916,7 +890,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 5.8 multi-byte text survives the round trip through a tool answer", async () => {
-      needGo();
+      needServer();
       // reviewRoot() puts LAUNCHSENSE_ROOT into the message with %q, so this
       // text crosses the JSON encoder and the decoder twice.
       const dir = mkdtempSync("/tmp/opencode/w4-red-root-");
@@ -943,7 +917,7 @@ describe("Red team: the local MCP server", () => {
     // W41-MCP flipped 6.1 to 6.5, 6.7, 6.9 and 6.10. 6.8, a JSON-RPC batch, is
     // still OPEN and still measured below.
     it("[DEFENDED] 6.1 tools/list before initialize is refused with -32002 and no tool list comes back", async () => {
-      needGo();
+      needServer();
       const result = await session(frame(request(1, "tools/list")));
       assert.equal(result.replies.length, 1, `one answer: ${result.stdout.slice(0, 160)}`);
       const reply = result.replies[0];
@@ -955,7 +929,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 6.2 a tools/call before initialize does not run the tool", async () => {
-      needGo();
+      needServer();
       const result = await session(callTool(1, "launchsense_scan_public_notice", {}));
       assert.equal(result.replies.length, 1);
       assert.ok(!("result" in result.replies[0]), "no result: the tool was not run");
@@ -969,7 +943,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 6.3 a second initialize is refused, and the session keeps working", async () => {
-      needGo();
+      needServer();
       const result = await session(
         frames(
           request(1, "initialize", { protocolVersion: "2024-11-05" }),
@@ -989,7 +963,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 6.4 a wrong or missing jsonrpc member is refused with -32600 and nothing runs", async () => {
-      needGo();
+      needServer();
       for (const [name, input] of [
         ["jsonrpc 1.0", '{"jsonrpc":"1.0","id":1,"method":"tools/list"}\n'],
         ["no jsonrpc member", '{"id":2,"method":"tools/list"}\n'],
@@ -1009,7 +983,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 6.5 protocolVersion is negotiated among the four the hosted surface serves", async () => {
-      needGo();
+      needServer();
       // The hosted list, read from its own source so the two surfaces cannot drift
       // apart without this failing.
       const hosted = readFileSync(join(REPO, "convex", "mcpHttp.ts"), "utf8");
@@ -1048,7 +1022,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 6.6 a notification carries no id and is correctly not answered", async () => {
-      needGo();
+      needServer();
       const result = await session(
         frames({ jsonrpc: "2.0", method: "notifications/initialized" }, { jsonrpc: "2.0", method: "ping" }),
       );
@@ -1057,7 +1031,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 6.7 an explicit \"id\": null is a request and is answered with id null", async () => {
-      needGo();
+      needServer();
       // JSON-RPC 2.0: a missing id member means a notification. An id that is
       // present and null is a request, and the answer must carry the same null id.
       // The server used to drop both, which left a client that sent id null
@@ -1074,7 +1048,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[OPEN] 6.8 a JSON-RPC batch is answered as a parse error", async () => {
-      needGo();
+      needServer();
       // Still OPEN, and still measured. W41-MCP fixed the session state and the
       // envelope for single messages. A batch is a different shape: it is a
       // well-formed JSON array of messages, and this server runs one message per
@@ -1100,7 +1074,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 6.9 a jsonrpc member of the wrong JSON type is Invalid Request, not a parse error", async () => {
-      needGo();
+      needServer();
       const result = await session('{"jsonrpc":2.0,"id":1,"method":"ping"}\n');
       assert.equal(result.replies.length, 1, `one answer: ${result.stdout}`);
       assert.equal(
@@ -1114,7 +1088,7 @@ describe("Red team: the local MCP server", () => {
     });
 
     it("[DEFENDED] 6.10 a non-scalar id is refused, while string, number and null ids are echoed", async () => {
-      needGo();
+      needServer();
       for (const [name, id] of [
         ["an object", '{"a":1}'],
         ["an array", "[1]"],

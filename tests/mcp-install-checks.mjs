@@ -7,9 +7,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 // W3-INSTALL-FIX. install.sh used to write a Cursor server that could not
-// start: {"command":"go","args":["run","./mcp"],"cwd":"$ROOT"}. There is no
-// go.mod at the repo root, only mcp/go.mod, so that command fails. The
-// working command is `go run .` with cwd mcp. llms.txt repeated the dead
+// start: it pointed at a command that fails from the folder it was given. The
+// working command now runs the Node server by absolute path, which does not
+// depend on the folder a client starts it in. llms.txt repeated the dead
 // command. These tests run the real installer against an isolated HOME in a
 // temp dir. They never touch the real HOME.
 
@@ -38,10 +38,10 @@ function withHome(body) {
   }
 }
 
-// A PATH holding only the coreutils the installer needs, and no go. Used to
+// A PATH holding only the coreutils the installer needs, and no node. Used to
 // prove the installer skips a server it cannot start.
-function withoutGo(home) {
-  const bin = join(home, "bin-without-go");
+function withoutNode(home) {
+  const bin = join(home, "bin-without-node");
   mkdirSync(bin, { recursive: true });
   for (const tool of ["dirname", "mkdir", "cp", "cat"]) {
     symlinkSync(`/usr/bin/${tool}`, join(bin, tool));
@@ -54,27 +54,27 @@ function readCursorConfig(home) {
 }
 
 describe("install.sh writes a cursor server that can start", () => {
-  it("sets cwd to the mcp folder and args to run the module in place", () => {
+  it("runs the Node server by absolute path, so no folder has to be right", () => {
     withHome((home) => {
       const result = runInstaller(home);
       const output = `${result.stdout}\n${result.stderr}`;
       assert.equal(result.status, 0, `installer must succeed; output was:\n${output}`);
       const server = readCursorConfig(home).mcpServers.launchsense;
-      assert.equal(server.command, "go");
+      assert.equal(server.command, "node");
       assert.deepEqual(
         server.args,
-        ["run", "."],
-        `go run ./mcp fails: no go.mod at the repo root. args were ${JSON.stringify(server.args)}`,
+        [join(ROOT, "mcp", "server.ts")],
+        `the server must run by absolute path; args were ${JSON.stringify(server.args)}`,
       );
-      assert.ok(
-        server.cwd.endsWith("/mcp"),
-        `cwd must be the mcp module folder; cwd was ${server.cwd}`,
+      assert.equal(
+        server.cwd,
+        undefined,
+        "no cwd is written, so the command does not depend on where the client starts",
       );
-      assert.equal(server.cwd, join(ROOT, "mcp"));
     });
   });
 
-  it("keeps the review script an absolute path, because cwd is now mcp", () => {
+  it("keeps the review script an absolute path", () => {
     withHome((home) => {
       const result = runInstaller(home);
       const output = `${result.stdout}\n${result.stderr}`;
@@ -119,9 +119,9 @@ describe("install.sh writes a cursor server that can start", () => {
 });
 
 describe("install.sh skips a server it cannot start", () => {
-  it("prints a clear line and writes no cursor config when go is not on PATH", () => {
+  it("prints a clear line and writes no cursor config when node is not on PATH", () => {
     withHome((home) => {
-      const result = runInstaller(home, { PATH: withoutGo(home) });
+      const result = runInstaller(home, { PATH: withoutNode(home) });
       const output = `${result.stdout}\n${result.stderr}`;
       assert.equal(result.status, 0, `installer must not fail; output was:\n${output}`);
       assert.ok(
@@ -129,8 +129,8 @@ describe("install.sh skips a server it cannot start", () => {
         `installer must not write a config it cannot start; output was:\n${output}`,
       );
       assert.ok(
-        /\bgo\b/.test(output) && /not (on |found on )?(your )?PATH/i.test(output),
-        `installer must say plainly that go is missing; output was:\n${output}`,
+        /\bnode\b/.test(output) && /not (on |found on )?(your )?PATH/i.test(output),
+        `installer must say plainly that node is missing; output was:\n${output}`,
       );
       // The skill and the alpha config still land, so only the server is skipped.
       assert.ok(existsSync(join(home, ".cursor", "skills", "launchsense", "SKILL.md")));
@@ -140,27 +140,27 @@ describe("install.sh skips a server it cannot start", () => {
 });
 
 describe("llms.txt names a command that can run", () => {
-  it("does not tell an agent to run go run ./mcp", () => {
+  it("does not tell an agent to build or run a Go server", () => {
     const text = readFileSync(LLMS, "utf8");
     assert.ok(
-      !text.includes("go run ./mcp"),
-      "llms.txt must not document go run ./mcp: no go.mod at the repo root",
+      !text.includes("go run"),
+      "llms.txt must not document a Go run command: the server is Node now",
     );
   });
 
   it("names the command the installer writes", () => {
     const text = readFileSync(LLMS, "utf8");
     assert.ok(
-      text.includes("cd mcp && go run ."),
-      "llms.txt must name the runnable local command: cd mcp && go run .",
+      text.includes("node mcp/server.ts"),
+      "llms.txt must name the runnable local command: node mcp/server.ts",
     );
   });
 });
 
-// W3-INSTALL-ROOT. cwd is the mcp module folder, so a server that took the
-// process folder as the review root read mcp/ instead of the checkout. The
-// server now reads LAUNCHSENSE_ROOT, and the installer must set it, or the
-// shipped server is back to reviewing a handful of Go files.
+// W3-INSTALL-ROOT. A server that took the process folder as the review root
+// read mcp/ instead of the checkout. The server now reads LAUNCHSENSE_ROOT, and
+// the installer must set it, or the shipped server is back to reviewing a
+// handful of its own files.
 describe("install.sh points the server at the checkout", () => {
   it("writes LAUNCHSENSE_ROOT as the repo root, not the mcp folder", () => {
     withHome((home) => {
@@ -180,25 +180,24 @@ describe("install.sh points the server at the checkout", () => {
     });
   });
 
-  it("the server resolves the review root through LAUNCHSENSE_ROOT, not the process folder", () => {
-    const server = readFileSync(join(ROOT, "mcp", "server.go"), "utf8");
+  it("the server resolves the review root through LAUNCHSENSE_ROOT before any process folder", () => {
+    const review = readFileSync(join(ROOT, "mcp", "lib", "review.ts"), "utf8");
     assert.ok(
-      /LAUNCHSENSE_ROOT/.test(server) && /func reviewRoot\(\)/.test(server),
-      "mcp/server.go must resolve the review root through reviewRoot() and LAUNCHSENSE_ROOT",
+      /export function reviewRoot\(/.test(review) && /LAUNCHSENSE_ROOT/.test(review),
+      "mcp/lib/review.ts must resolve the review root through reviewRoot() and LAUNCHSENSE_ROOT",
     );
     assert.ok(
-      !/func \(s \*server\) scanRepo\(string\) \(string, error\) \{\s*root, err := os\.Getwd\(\)/.test(server),
-      "scanRepo must not take the process folder as the review root; cwd is the mcp module",
+      review.indexOf("LAUNCHSENSE_ROOT") < review.indexOf("process.cwd()"),
+      "LAUNCHSENSE_ROOT must be checked before the process folder is used",
     );
-    const runner = readFileSync(join(ROOT, "mcp", "review_local.go"), "utf8");
     assert.ok(
-      !/filepath\.Join\("mcp", "review-entry\.ts"\)/.test(runner),
+      /join\(root, "mcp", "review-entry\.ts"\)/.test(review),
       "the default review script must resolve against the review root, not the process folder",
     );
   });
 
-  // W41-MCP. The installer wrote LAUNCHSENSE_AUTH_REQUIRED=0 and no Go file read
-  // it: the server reads three variables and that was not one of them. A key in
+  // W41-MCP. The installer wrote LAUNCHSENSE_AUTH_REQUIRED=0 and no server file
+  // read it: the server reads three variables and that was not one of them. A key in
   // a shipped config that nothing reads is a promise the installer cannot keep,
   // and the reader of the config cannot tell a real switch from a dead one.
   it("writes only the environment variables the server actually reads", () => {
@@ -215,21 +214,24 @@ describe("install.sh points the server at the checkout", () => {
       );
       assert.ok(
         !("LAUNCHSENSE_AUTH_REQUIRED" in env),
-        "no Go file reads LAUNCHSENSE_AUTH_REQUIRED, so it must not be written",
+        "no server file reads LAUNCHSENSE_AUTH_REQUIRED, so it must not be written",
       );
     });
   });
 
-  it("every key the installer writes is read by the Go server", () => {
-    const go = readFileSync(join(ROOT, "mcp", "server.go"), "utf8") +
-      readFileSync(join(ROOT, "mcp", "review_local.go"), "utf8");
+  it("every key the installer writes is read by the server", () => {
+    const read = (rel) => readFileSync(join(ROOT, rel), "utf8");
+    const source =
+      read("mcp/server.ts") +
+      read("mcp/lib/review.ts") +
+      read("mcp/lib/api.ts");
     withHome((home) => {
       runInstaller(home);
       const env = readCursorConfig(home).mcpServers.launchsense.env ?? {};
       for (const name of Object.keys(env)) {
         assert.ok(
-          go.includes(name),
-          `install.sh writes ${name} but no Go file reads it: a dead key in a shipped config is a promise nothing keeps`,
+          source.includes(name),
+          `install.sh writes ${name} but no server file reads it: a dead key in a shipped config is a promise nothing keeps`,
         );
       }
     });

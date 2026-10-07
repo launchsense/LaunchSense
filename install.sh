@@ -298,33 +298,32 @@ do
   cp "$SKILL_SRC" "$dest/SKILL.md"
 done
 
-# The server is a Go module in mcp/. There is no go.mod at the repo root, so
-# `go run ./mcp` cannot start. cwd must be the module folder and args must run
-# the module in place. Without go on PATH, write no server at all rather than
-# a config that cannot start.
-if ! command -v go > /dev/null 2>&1; then
-  echo "go is not on PATH, so the local MCP server was not registered."
-  echo "Install Go, then run: cd $ROOT/mcp && go run ."
-  echo "The skill and the config above are installed. The hosted address does not need Go."
+# The server is a Node module in mcp/. It runs in place with node, the same
+# runtime the review already needs, so there is no second toolchain to install.
+# Without node on PATH, write no server at all rather than a config that cannot
+# start.
+if ! command -v node > /dev/null 2>&1; then
+  echo "node is not on PATH, so the local MCP server was not registered."
+  echo "Install Node 24 or newer, then run: node $ROOT/mcp/server.ts"
+  echo "The skill and the config above are installed. The hosted address does not need Node."
   exit 0
 fi
 
 mkdir -p "$HOME/.cursor" "$CONFIG_DIR"
 CURSOR_CONFIG="$HOME/.cursor/mcp.json"
 if [ ! -f "$CURSOR_CONFIG" ]; then
-  # cwd is the module folder, so LAUNCHSENSE_ROOT names the checkout to review.
-  # Without it the server would read the mcp folder instead of the checkout.
-  # These two keys are the whole contract with the server: it reads
-  # LAUNCHSENSE_ROOT, LAUNCHSENSE_REVIEW and LAUNCHSENSE_API_URL, and nothing
-  # else. A key written here that no Go file reads is a promise the installer
-  # cannot keep, so there are no others.
+  # LAUNCHSENSE_ROOT names the checkout to review. LAUNCHSENSE_REVIEW names the
+  # review script and stays absolute, so it does not depend on the folder the
+  # server was started in. These two keys are the whole contract with the server:
+  # it reads LAUNCHSENSE_ROOT, LAUNCHSENSE_REVIEW and LAUNCHSENSE_API_URL, and
+  # nothing else. A key written here that the server does not read is a promise
+  # the installer cannot keep, so there are no others.
   cat > "$CURSOR_CONFIG" <<EOF
 {
   "mcpServers": {
     "launchsense": {
-      "command": "go",
-      "args": ["run", "."],
-      "cwd": "$ROOT/mcp",
+      "command": "node",
+      "args": ["$ROOT/mcp/server.ts"],
       "env": {
         "LAUNCHSENSE_ROOT": "$ROOT",
         "LAUNCHSENSE_REVIEW": "$ROOT/mcp/review-entry.ts"
@@ -335,7 +334,7 @@ if [ ! -f "$CURSOR_CONFIG" ]; then
 EOF
   echo "Wrote $CURSOR_CONFIG"
 else
-  echo "Left existing $CURSOR_CONFIG in place. Point launchsense at: cd $ROOT/mcp && go run ."
+  echo "Left existing $CURSOR_CONFIG in place. Point launchsense at: node $ROOT/mcp/server.ts"
   echo "Set LAUNCHSENSE_ROOT=$ROOT in that entry so the server reviews the checkout, not the mcp folder."
 fi
 
