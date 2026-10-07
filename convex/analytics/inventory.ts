@@ -218,8 +218,8 @@ export const ANALYTICS_TABLES: readonly InventoryTable[] = [
       {
         field: "kind",
         klass: "technical",
-        why: "Which product event happened. A closed union of eleven values.",
-        boundedBy: "v.union of eleven literals.",
+        why: "Which product event happened. A closed union of thirteen values.",
+        boundedBy: "v.union of thirteen literals.",
       },
       {
         field: "scanId",
