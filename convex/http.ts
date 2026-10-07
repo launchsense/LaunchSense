@@ -277,6 +277,9 @@ http.route({
       // A caller that sends no source is not counted as a table answer. The row
       // stores "unspecified" so a missing value cannot inflate the table count.
       orderSource: typeof record["orderSource"] === "string" ? record["orderSource"] : "unspecified",
+      orderMoved: numOrZero(record["orderMoved"]),
+      laneAnswered: record["laneAnswered"] === true,
+      suggestionSource: typeof record["suggestionSource"] === "string" ? record["suggestionSource"] : "none",
       ruleCounts,
       govDetected: record["govDetected"] === true,
       govRefused: typeof record["govRefused"] === "string" ? record["govRefused"] : "none",

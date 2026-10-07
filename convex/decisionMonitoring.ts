@@ -35,6 +35,11 @@ export const decisionSourceDistribution = internalQuery({
       // fallback rate: it includes scans where no rung was configured or called at
       // all, so it cannot say a rung tried and lost. Named for what it counts.
       tableOrderRows: v.number(),
+      // Rows where a rung other than the table answered.
+      laneAnsweredRows: v.number(),
+      // Rows where the lane moved at least one position, and the total positions moved.
+      movedRows: v.number(),
+      movedPositions: v.number(),
       medianDurationMs: v.number(),
       maxDurationMs: v.number(),
     })),
@@ -43,6 +48,11 @@ export const decisionSourceDistribution = internalQuery({
     totalsBySource: v.array(sourceCounts),
     // Rows where the table supplied the order. Not a rung failure count.
     tableOrderRows: v.number(),
+    laneAnsweredRows: v.number(),
+    movedRows: v.number(),
+    movedPositions: v.number(),
+    // Which rung produced the licence suggestion, across the window.
+    totalsBySuggestionSource: v.array(sourceCounts),
     // Fields this table does not store, named so a reader does not go looking.
     notMeasured: v.array(v.string()),
   }),
@@ -73,10 +83,18 @@ export const decisionSourceDistribution = internalQuery({
     const dayBlocks = ordered.map(([day, bucket]) => {
       const sources = new Map<string, number>();
       let table = 0;
+      let laneAnswered = 0;
+      let movedRows = 0;
+      let movedPositions = 0;
       const durations: number[] = [];
       for (const row of bucket) {
         sources.set(row.orderSource, (sources.get(row.orderSource) ?? 0) + 1);
         if (row.orderSource === "table") table += 1;
+        if (row.laneAnswered === true) laneAnswered += 1;
+        if (row.orderMoved > 0) {
+          movedRows += 1;
+          movedPositions += row.orderMoved;
+        }
         durations.push(row.durationMs);
       }
       durations.sort((a, b) => a - b);
@@ -88,6 +106,9 @@ export const decisionSourceDistribution = internalQuery({
           .map(([source, scans]) => ({ source, scans }))
           .sort((a, b) => b.scans - a.scans),
         tableOrderRows: table,
+        laneAnsweredRows: laneAnswered,
+        movedRows,
+        movedPositions,
         medianDurationMs: durations.length % 2 === 0
           ? (durations[middle - 1] ?? 0) / 2 + (durations[middle] ?? 0) / 2
           : durations[middle] ?? 0,
@@ -96,10 +117,20 @@ export const decisionSourceDistribution = internalQuery({
     });
 
     const totalSources = new Map<string, number>();
+    const suggestionSources = new Map<string, number>();
     let totalTable = 0;
+    let totalLaneAnswered = 0;
+    let totalMovedRows = 0;
+    let totalMovedPositions = 0;
     for (const row of inWindow) {
       totalSources.set(row.orderSource, (totalSources.get(row.orderSource) ?? 0) + 1);
       if (row.orderSource === "table") totalTable += 1;
+      if (row.laneAnswered === true) totalLaneAnswered += 1;
+      if (row.orderMoved > 0) {
+        totalMovedRows += 1;
+        totalMovedPositions += row.orderMoved;
+      }
+      suggestionSources.set(row.suggestionSource, (suggestionSources.get(row.suggestionSource) ?? 0) + 1);
     }
 
     return {
@@ -109,9 +140,15 @@ export const decisionSourceDistribution = internalQuery({
         .map(([source, scans]) => ({ source, scans }))
         .sort((a, b) => b.scans - a.scans),
       tableOrderRows: totalTable,
+      laneAnsweredRows: totalLaneAnswered,
+      movedRows: totalMovedRows,
+      movedPositions: totalMovedPositions,
+      totalsBySuggestionSource: [...suggestionSources.entries()]
+        .map(([source, scans]) => ({ source, scans }))
+        .sort((a, b) => b.scans - a.scans),
       notMeasured: [
         "Rung accuracy against the rule table. No owner labels are stored, so there is nothing to score against.",
-        "Reorder counts. How many findings a rung actually moved is not stored.",
+        "Whether a move was an improvement. movedPositions says a rung reordered rows; it does not say the new order was better, because there is no owner label to compare against.",
         "Swap consistency. Both presentation orders are not run yet, so there is no rate to report.",
         "Which rung failed and why per call. Attempts are logged per call but not persisted here.",
         "Whether a table row means a rung lost. A stored table row can also be a scan where no rung ran, so tableOrderRows is a count of rows and not a failure count.",

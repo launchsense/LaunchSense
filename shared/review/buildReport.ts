@@ -85,6 +85,10 @@ export interface ReviewReport {
   prompts: string[];
   orderSource: "local" | "jev" | "perplexity" | "table";
   orderNote: string;
+  /** Positions the decision lane moved inside a severity band. 0 means it changed nothing. */
+  orderMoved: number;
+  /** True when a rung other than the table named the order. */
+  laneAnswered: boolean;
   lockNote: string;
   sbom: { tool: string; components: number; omissions: string[] } | null;
   /**
@@ -514,6 +518,8 @@ export function buildLocalReport(
     prompts: promptLines,
     orderSource: "table",
     orderNote: "Ordered by severity and credential risk alone. The model did not choose which findings exist.",
+    orderMoved: 0,
+    laneAnswered: false,
     lockNote: inventory.note,
     sbom,
     licenseDeclaration,

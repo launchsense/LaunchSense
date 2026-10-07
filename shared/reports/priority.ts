@@ -33,6 +33,14 @@ export interface RankResult {
   source: "local" | "jev" | "perplexity" | "table";
   /** One plain line explaining the ordering, safe to show a user. Names which rung answered. */
   note: string;
+  /**
+   * How many positions the lane moved inside a severity band, over the table
+   * floor. Zero means the lane answered and changed nothing. Present so a report
+   * can say whether a model actually helped, without scoring it.
+   */
+  moved: number;
+  /** True when a rung other than the table answered. */
+  laneAnswered: boolean;
 }
 
 const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2, info: 3 };
@@ -145,13 +153,15 @@ export function rankFromAnswers(
   const listCapped = pool.length > TOP_TEN;
   const listNote = listCapped ? " Ranked list capped at 10." : "";
   if (pool.length === 0) {
-    return { order: [], source: "table", note: `Nothing actionable to rank. Order source: table. ${MODEL_DID_NOT_CHOOSE}` };
+    return { order: [], source: "table", note: `Nothing actionable to rank. Order source: table. ${MODEL_DID_NOT_CHOOSE}`, moved: 0, laneAnswered: false };
   }
   if (answers === null) {
     return {
       order: floor.slice(0, TOP_TEN),
       source: "table",
       note: `Ordered by severity and credential risk alone. Order source: table. ${MODEL_DID_NOT_CHOOSE}${listNote}`,
+      moved: 0,
+      laneAnswered: false,
     };
   }
 
@@ -184,12 +194,16 @@ export function rankFromAnswers(
       order: top,
       source,
       note: `Order is by severity. Order source: ${source}. A model looked inside one severity band and left the order unchanged. ${MODEL_DID_NOT_CHOOSE}${capNote}${listNote}`,
+      moved: 0,
+      laneAnswered: true,
     };
   }
   return {
     order: top,
     source,
     note: `Order is by severity. Order source: ${source}. A model reordered some items inside one severity band. ${MODEL_DID_NOT_CHOOSE}${capNote}${listNote}`,
+    moved,
+    laneAnswered: true,
   };
 }
 

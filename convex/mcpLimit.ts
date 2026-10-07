@@ -255,6 +255,7 @@ const ALLOWED_HARNESS = new Set([
   "unknown",
 ]);
 const ALLOWED_ORDER_SOURCE = new Set(["local", "jev", "perplexity", "table", "unspecified"]);
+const ALLOWED_SUGGESTION_SOURCE = new Set(["local", "jev", "perplexity", "table", "none"]);
 const ALLOWED_GOV_REFUSED = new Set([
   "none",
   "unreadable",
@@ -322,6 +323,9 @@ export const recordUsage = internalMutation({
     version: v.string(),
     durationMs: v.number(),
     orderSource: v.string(),
+    orderMoved: v.optional(v.number()),
+    laneAnswered: v.optional(v.boolean()),
+    suggestionSource: v.optional(v.string()),
     ruleCounts: v.string(),
     govDetected: v.optional(v.boolean()),
     govRefused: v.optional(v.string()),
@@ -346,6 +350,9 @@ export const recordUsage = internalMutation({
     const version = declaredVersion(args.version);
     const orderSource = declaredOr(args.orderSource, ALLOWED_ORDER_SOURCE, "unspecified");
     const govRefused = typeof args.govRefused === "string" ? declaredOr(args.govRefused, ALLOWED_GOV_REFUSED, "none") : "none";
+    const suggestionSource = typeof args.suggestionSource === "string"
+      ? declaredOr(args.suggestionSource, ALLOWED_SUGGESTION_SOURCE, "none")
+      : "none";
     await ctx.db.insert("usageDiagnostics", {
       day: new Date().toISOString().slice(0, 10),
       stage,
@@ -354,6 +361,9 @@ export const recordUsage = internalMutation({
       version,
       durationMs: args.durationMs,
       orderSource,
+      orderMoved: govCount(args.orderMoved),
+      laneAnswered: args.laneAnswered === true,
+      suggestionSource,
       ruleCounts: args.ruleCounts,
       govDetected: args.govDetected === true,
       govRefused,

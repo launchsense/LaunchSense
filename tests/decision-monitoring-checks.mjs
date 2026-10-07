@@ -207,7 +207,9 @@ describe("decision-source monitoring", () => {
     assert.match(raw, /notMeasured/);
     assert.match(raw, /Rung accuracy against the rule table/);
     assert.match(raw, /Swap consistency/);
-    assert.match(raw, /Reorder counts/);
+    // Reorder counts are now stored, so the old "not measured" line is gone and
+    // the honest limits replace it.
+    assert.match(raw, /Whether a move was an improvement/);
   });
 
   it("treats an unobserved rung as unobserved, not as a failing one", () => {

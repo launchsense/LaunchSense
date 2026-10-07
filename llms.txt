@@ -55,7 +55,7 @@ License lines are signals, not legal advice. Unknown stays unknown. A model may 
 Three paths reach a model, and all three need a configured key, so the fixed paths are what run by default.
 
 - `explain` rewrites a finding in plainer language. `convex/adapters/ai.ts`, `convex/scans/aiExplain.ts`, `shared/ai/deterministic.ts`.
-- `ordering` reorders findings that already exist, inside one severity band. `convex/adapters/decision.ts`, `shared/reports/priority.ts`, `convex/scans/rankScan.ts`.
+- `ordering` reorders findings that already exist, inside one severity band. `convex/adapters/decision.ts`, `shared/reports/priority.ts`, `convex/scans/rankScan.ts`. The local review's own report states the provenance in plain words: `Checks: fixed rules. No model decides a finding or a severity.` then the order source, the count of positions a model moved, and the licence suggestion with its source. How much the decision lane helped is stored as counts and closed labels only (`usageDiagnostics.orderMoved`, `laneAnswered`, `suggestionSource`), read by `convex/decisionMonitoring.ts`. It records that a rung reordered rows; it does not claim the new order was better, because no owner label is stored to compare against.
 - `licence_lookup` suggests an id for an Unknown licence, refused unless a lane is supplied, never a licence fact. `shared/licensing/lookup.ts`.
 
 The `humanOversightLevel` is `prompt_guided` in every case, which in C2PA Technical Specification 2.4 means a person provided the request and nobody approved the output. No path here is `fully_autonomous` and none is `human_validated`. The vocabulary is borrowed from C2PA 2.4 and this is not a conformance claim: we are not a claim generator and hold no certificate chain.

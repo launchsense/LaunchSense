@@ -279,6 +279,12 @@ export default defineSchema({
     version: v.string(),
     durationMs: v.number(),
     orderSource: v.string(),
+    /** How many positions the decision lane moved inside a severity band. A count. */
+    orderMoved: v.number(),
+    /** True when a rung other than the table named the order. */
+    laneAnswered: v.boolean(),
+    /** Which rung produced the licence suggestion. A closed label. */
+    suggestionSource: v.string(),
     ruleCounts: v.string(),
     govDetected: v.boolean(),
     govRefused: v.string(),
