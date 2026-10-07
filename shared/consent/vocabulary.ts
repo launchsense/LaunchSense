@@ -353,7 +353,7 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [  {
   {
     id: "usage",
     label: "Send anonymous usage counts from the coding tool connection",
-    description: "Send rule id counts, the harness name, the version, the run duration, and the order source.",
+    description: "Send rule id counts, governance counts, the harness name, the version, the run duration, and the order source.",
     lawful_basis: "dpv:Consent",
     lawful_basis_citation: "GDPR Art 6(1)(a). The counts are optional and default to off.",
     recorded: true,
@@ -366,6 +366,7 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [  {
     processing_method: "transmitted_over_tls_to_our_own_server",
     pii_information: [
       { type: "rule_id_counts", sensitive: false, source: "the local review, counted on the person's machine" },
+      { type: "governance_counts", sensitive: false, source: "the local review, counted on the person's machine, never a path or a reason text" },
       { type: "harness_label", sensitive: false, source: "the person's own configuration, so a claim" },
       { type: "tool_version", sensitive: false, source: "the local review" },
       { type: "run_duration", sensitive: false, source: "the local review" },
