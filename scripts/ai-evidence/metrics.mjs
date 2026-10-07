@@ -14,7 +14,7 @@
 //            bands. These are pass/fail invariants, not scores.
 
 import { kendallTau, hingeLoss, swapDistance, topKHits, zeroMissViolations } from "../../shared/reports/ranking.ts";
-import { actionableFindings, findingsToAsk, rankFromAnswers, tableOrder } from "../../shared/reports/priority.ts";
+import { actionableFindings, findingsToAsk, rankFromAnswers, tableOrder, TOP_TEN } from "../../shared/reports/priority.ts";
 
 /**
  * Everyday words a non-developer already knows. Fixed here on purpose: a
@@ -216,15 +216,17 @@ export function share(numerator, denominator) {
  *
  *   bandCrossings  the severity sequence of the returned order differs from the
  *                   floor's severity sequence, so at least one row changed band
- *   permutationFail the order is not a permutation of the actionable set, so a
- *                   row was added or dropped
+ *   permutationFail the order holds a row from nowhere, or is not the floor top
+ *                   ten. Promotion inside the top ten is the lane doing its job.
  *
  * The rest are scores, and they are reported with the floor's own score beside
- * them so the delta is the lane's contribution and not an absolute.
+ * them so the delta is the lane's contribution and not an absolute. Both sides
+ * are the top ten: the ranked list is capped at ten, so the floor it is measured
+ * against is capped the same way.
  */
 export function reorderMetrics(findings, answers, source, labels) {
   const pool = actionableFindings(findings);
-  const floor = tableOrder(pool);
+  const floor = tableOrder(pool).slice(0, TOP_TEN);
   const result = rankFromAnswers(findings, answers, source);
   const order = result.order;
 
