@@ -50,6 +50,7 @@ const EXCLUDED = [
   "tests/decision-monitoring-checks.mjs",
   "tests/identity-attribution-checks.mjs",
   "tests/livecheck-ownership-checks.mjs",
+  "tests/mcp-provenance-checks.mjs",
   "tests/mcp-remote-checks.mjs",
   "tests/red-team-checks.mjs",
   "tests/signin-resume-checks.mjs",
@@ -142,7 +143,7 @@ describe("the MIT grant matches the tree", () => {
     assert.match(license, /apply ONLY to the files under these paths/);
   });
 
-  it("names the open paths and all nine exclusions", () => {
+  it("names the open paths and every exclusion", () => {
     for (const path of [...OPEN_DIRS, ...OPEN_FILES]) {
       assert.ok(license.includes(path), `LICENSE.txt Section 1 is missing ${path}`);
     }

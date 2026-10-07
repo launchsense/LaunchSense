@@ -174,6 +174,26 @@ export function wantsEventStream(accept: string): boolean {
   return accept.includes("text/event-stream") && !accept.includes("application/json");
 }
 
+/**
+ * One standards summary line, given the already-computed counts. A string in,
+ * a string out, so this module keeps no import and stays loadable as plain
+ * protocol code. The counts come from standardsCoverage in the caller.
+ */
+export function standardsLine(counts: {
+  partial: number;
+  notAutomatable: number;
+  signalFound: number;
+  noSignal: number;
+  notChecked: number;
+} | null): string {
+  if (counts === null) return "Standards: not computed for this scan.";
+  return (
+    `Standards: ${counts.partial} checkable, ${counts.notAutomatable} not-automatable. ` +
+    `This scan: ${counts.signalFound} signal, ${counts.noSignal} no-signal, ${counts.notChecked} not-checked. ` +
+    "Two axes, never merged."
+  );
+}
+
 export function formatPublicScan(report: {
   scanId: string;
   status: string;
@@ -181,6 +201,18 @@ export function formatPublicScan(report: {
   errorMessage: string | null;
   findingCount: number;
   findings: Array<{ ruleId: string; severity: string; title: string; path: string; line: number | null }>;
+  /** The stored licence suggestion pick, or "none". A suggestion, never a fact. */
+  suggestedLicence?: string | null;
+  /** Which rung produced the suggestion. A closed label. */
+  suggestionSource?: string | null;
+  /** Standards counts, computed by the caller. Null means not computed. */
+  standards?: {
+    partial: number;
+    notAutomatable: number;
+    signalFound: number;
+    noSignal: number;
+    notChecked: number;
+  } | null;
 }): string {
   const lines = [
     `Scan ${report.scanId}`,
@@ -193,6 +225,8 @@ export function formatPublicScan(report: {
     const line = finding.line === null ? "" : `:${finding.line}`;
     lines.push(`- ${finding.severity} ${finding.ruleId} ${finding.path}${line} ${finding.title}`);
   }
+  lines.push(`Licence suggestion: ${report.suggestedLicence ?? "none"} (source: ${report.suggestionSource ?? "none"}). A suggestion, not a licence fact.`);
+  lines.push(standardsLine(report.standards ?? null));
   lines.push("A partial result is not a pass.");
   return lines.join("\n");
 }
@@ -205,6 +239,15 @@ export function formatReport(report: {
   errorMessage: string | null;
   findingCount: number;
   findings: Array<{ ruleId: string; severity: string; title: string; path: string; line: number | null }>;
+  suggestedLicence?: string | null;
+  suggestionSource?: string | null;
+  standards?: {
+    partial: number;
+    notAutomatable: number;
+    signalFound: number;
+    noSignal: number;
+    notChecked: number;
+  } | null;
 }): string {
   const lines = [
     `Scan ${report.scanId}`,
@@ -218,6 +261,8 @@ export function formatReport(report: {
     const line = finding.line === null ? "" : `:${finding.line}`;
     lines.push(`- ${finding.severity} ${finding.ruleId} ${finding.path}${line} ${finding.title}`);
   }
+  lines.push(`Licence suggestion: ${report.suggestedLicence ?? "none"} (source: ${report.suggestionSource ?? "none"}). A suggestion, not a licence fact.`);
+  lines.push(standardsLine(report.standards ?? null));
   lines.push("A partial result is not a pass.");
   return lines.join("\n");
 }

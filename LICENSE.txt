@@ -27,6 +27,7 @@ Section 3 with the surfaces they verify:
   tests/decision-monitoring-checks.mjs
   tests/identity-attribution-checks.mjs
   tests/livecheck-ownership-checks.mjs
+  tests/mcp-provenance-checks.mjs
   tests/mcp-remote-checks.mjs
   tests/red-team-checks.mjs
   tests/signin-resume-checks.mjs

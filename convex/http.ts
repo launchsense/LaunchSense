@@ -15,6 +15,36 @@ import {
 import { USAGE_KEY_HEADER, usageKeyMatches } from "./mcpLimit";
 import { repoKeyFor } from "./analytics/privacy";
 import { parseGitHubRepoUrl } from "../shared/githubUrl";
+import { buildStandards, standardsCoverage } from "../shared/reports/standards";
+import type { MappingInput } from "../shared/reports/standards";
+
+/** The one-line standards summary for the MCP text, computed from the findings. */
+function standardsCountsFor(
+  findings: Array<{ ruleId: string; severity: string }>,
+  fetchedFileCount: number,
+  coverageNote: string | null,
+): {
+  partial: number;
+  notAutomatable: number;
+  signalFound: number;
+  noSignal: number;
+  notChecked: number;
+} {
+  const input: MappingInput = {
+    findings,
+    analyzedFiles: fetchedFileCount,
+    liveChecked: false,
+    coverageNote,
+  };
+  const coverage = standardsCoverage(buildStandards(input));
+  return {
+    partial: coverage.coverage.partial,
+    notAutomatable: coverage.coverage.notAutomatable,
+    signalFound: coverage.status.signalFound,
+    noSignal: coverage.status.noSignal,
+    notChecked: coverage.status.notChecked,
+  };
+}
 import {
   MCP_ALLOWED_HEADERS_VALUE,
   bearerTokenFromHeader,
@@ -446,6 +476,13 @@ async function scanPublicTool(
         path: finding.path,
         line: finding.line,
       })),
+      suggestedLicence: report.scan?.suggestedLicence ?? null,
+      suggestionSource: report.scan?.suggestionSource ?? null,
+      standards: standardsCountsFor(
+        report.findings.map((finding) => ({ ruleId: finding.ruleId, severity: finding.severity })),
+        report.scan?.fetchedFileCount ?? 0,
+        report.scan?.coverageNote ?? null,
+      ),
     }),
     isError: false,
     repoKey,
@@ -474,6 +511,13 @@ async function reportTool(
         path: finding.path,
         line: finding.line,
       })),
+      suggestedLicence: report.scan.suggestedLicence ?? null,
+      suggestionSource: report.scan.suggestionSource ?? null,
+      standards: standardsCountsFor(
+        report.findings.map((finding) => ({ ruleId: finding.ruleId, severity: finding.severity })),
+        report.scan.fetchedFileCount ?? 0,
+        report.scan.coverageNote ?? null,
+      ),
     }),
     isError: false,
   };
