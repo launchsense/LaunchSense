@@ -9,6 +9,7 @@ import CaseStudies from "./pages/CaseStudies";
 import WhyPolicy from "./pages/WhyPolicy";
 import ResearchPost from "./pages/ResearchPost";
 import Privacy from "./pages/Privacy";
+import LicencePage from "./pages/LicencePage";
 
 function pagePath(): string {
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
@@ -25,6 +26,7 @@ export default function App() {
   if (path === "/how") return <How />;
   if (path === "/connect") return <Connect />;
   if (path === "/privacy") return <Privacy />;
+  if (path === "/licence") return <LicencePage />;
   if (path === "/blog/why-policy") return <WhyPolicy />;
   if (path === "/blog/what-the-research-says") return <ResearchPost />;
   if (path === "/case-studies") return <CaseStudies />;
