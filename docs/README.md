@@ -14,5 +14,6 @@ Short guides for users. Start with HOW-IT-WORKS.
 10. `CONSENT-RECORD.md`: the consent record in the ISO/IEC TS 27560 shape, the receipt you keep, and the fields we cannot fill.
 11. `PROCESSING-REGISTER.md`: the GDPR Article 30 register, generated from the schema and the purge calls. Read it for the retention windows.
 12. `SBOM.md`: the CycloneDX 1.7 bill of materials, generated from the licence inventory, and the four things it deliberately leaves out.
+13. `GRADING.md`: how to grade the scanner's own findings, and the three defects the harness fixed in its own first pass.
 
 For release history, see `CHANGELOG.md` at the repo root.
