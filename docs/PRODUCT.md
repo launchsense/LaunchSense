@@ -11,7 +11,7 @@ prompt to paste. It never edits your code and never blocks a deploy.
 
 Policy means those rules for the codebase. A license is one rule inside the
 layer, not the name of the product. The lines sit on OWASP Top 10, OWASP ASVS,
-OSV, and CWE. They are signals with a caveat, not a certification. The public
+OSV, CWE, CWE Top 25, NIST SSDF, and SLSA. Licensed frameworks (ISO, SOC 2, PCI, SIG, CAIQ) are cited by name only, never embedded. They are signals with a caveat, not a certification. The public
 read checks duplicate files and large files.
 
 The product people keep is the hosted MCP. The website is the front door. It says who the check is for, lets someone taste a public read, and sends them to Connect. It is not a second app, and it does not ask anyone to clone this repo.
