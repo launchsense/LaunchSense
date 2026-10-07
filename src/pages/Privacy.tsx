@@ -227,7 +227,9 @@ export default function Privacy() {
           <li>
             Usage counts from the local installer: written to <code>usageDiagnostics</code>{" "}
             only after you answer yes at the install question. That table has no deletion
-            window today. Nothing in this repository deletes it.
+            window today. Nothing in this repository deletes it. The governance file is
+            gitignored, so it is invisible to the hosted scan. Adoption is measured only
+            from opted-in local diagnostics.
           </li>
           <li>
             Your GitHub token: kept until you sign out from the menu. It is not deleted when
