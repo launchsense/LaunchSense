@@ -8,9 +8,15 @@ import { buildNotCheckedList } from "../../../shared/reports/scope";
 export default function LicenseReport(props: {
   findings: ReportFinding[];
   coverageNote: string | undefined;
+  suggestion?: { suggestedLicence?: string; suggestionSource?: string; suggestionNote?: string };
 }) {
   const view = licenseView(props.findings);
   const notChecked = buildNotCheckedList({ aiConfigured: false, liveProvided: false });
+  const suggestion = props.suggestion ?? {};
+  const suggestionLine =
+    suggestion.suggestionNote !== undefined && suggestion.suggestionNote.length > 0
+      ? suggestion.suggestionNote
+      : "No licence suggestion was stored for this scan.";
   return (
     <div aria-label="Licence report" className="paste">
       <section aria-label="Licence findings">
@@ -22,6 +28,10 @@ export default function LicenseReport(props: {
         {view.coverage === "no_licence_findings" && (
           <p>This scan found no licence rows in the files it read. Other rule families did flag rows, and those rows are not shown on this page. The files it did not read are listed below.</p>
         )}
+        <article aria-label="Licence suggestion">
+          <p><strong>Licence suggestion: {suggestion.suggestedLicence ?? "none"}</strong></p>
+          <p>{suggestionLine}</p>
+        </article>
         {view.declaration !== null && (
           <article aria-label="Licence declaration">
             <p><strong>{view.declaration.title}</strong></p>

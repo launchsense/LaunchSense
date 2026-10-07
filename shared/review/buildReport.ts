@@ -14,6 +14,8 @@ import { tableOrder } from "../reports/priority.ts";
 import type { RankableFinding } from "../reports/priority.ts";
 import { buildTopPrompt } from "../reports/topPrompt.ts";
 import type { PromptFinding } from "../reports/topPrompt.ts";
+import { suggestProjectLicence } from "../licensing/suggest.ts";
+import type { LicenceSuggestion } from "../licensing/suggest.ts";
 import { clashSignal } from "./clash.ts";
 import { countNamedHosts, deadCopies, generatedMarkers, modelCards, networkHints, repeatedFunctions, NETWORK_HINT_CAP } from "./extraChecks.ts";
 import { inventoryNpmLock } from "./lockfile.ts";
@@ -91,6 +93,8 @@ export interface ReviewReport {
    * so a person can commit it without running anything else.
    */
   licenseDeclaration: LicenseDeclaration | null;
+  /** The structured licence suggestion. A suggestion, never a licence fact. */
+  licenseSuggestion: LicenceSuggestion;
 }
 
 /** What the licence lane measured, and the file it can hand the builder. */
@@ -225,6 +229,7 @@ export function buildLocalReport(
   registry: RegistryFact[] | null,
   advisories: AdvisoryCoverage | null = null,
   lockFileInHand: ReviewFile | undefined = undefined,
+  allowedLicences: readonly string[] = [],
 ): ReviewReport {
   const paths = files.map((file) => file.path);
   const secrets = scanSecrets(files);
@@ -317,6 +322,15 @@ export function buildLocalReport(
     notCovered: artifact.notCovered,
     suggestions: lookup.suggestions,
   };
+  const mixCounts = new Map<string, number>();
+  for (const component of declarationInventory.components) {
+    mixCounts.set(component.spdx, (mixCounts.get(component.spdx) ?? 0) + 1);
+  }
+  const licenseSuggestion = suggestProjectLicence({
+    project: licenses.detected[0] ?? null,
+    mix: [...mixCounts.entries()].map(([id, count]) => ({ id, count })),
+    allowed: allowedLicences,
+  });
   for (const item of declarationInventory.notCovered) {
     notChecked.push({ scope: "dependency licences", reason: `${item.charAt(0).toUpperCase()}${item.slice(1)}.` });
   }
@@ -503,5 +517,6 @@ export function buildLocalReport(
     lockNote: inventory.note,
     sbom,
     licenseDeclaration,
+    licenseSuggestion,
   };
 }

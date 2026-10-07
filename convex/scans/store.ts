@@ -51,6 +51,9 @@ const fullScanDoc = v.object({
   priorityOrder: v.optional(v.array(v.string())),
   prioritySource: v.optional(v.string()),
   priorityNote: v.optional(v.string()),
+  suggestedLicence: v.optional(v.string()),
+  suggestionSource: v.optional(v.string()),
+  suggestionNote: v.optional(v.string()),
   liveUrl: v.optional(v.string()),
   mainAction: v.optional(v.string()),
   rescanOf: v.optional(v.id("scans")),
@@ -739,6 +742,34 @@ export const savePriority = internalMutation({
       priorityOrder: args.order,
       prioritySource: args.source,
       priorityNote: args.note,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+/**
+ * Persist the licence suggestion.
+ *
+ * Only the pick, its provenance, and one template-built line are stored. The
+ * suggestion never becomes a finding, a severity, or a licence fact, and the
+ * declaration rows it was read from are untouched.
+ */
+export const saveLicenceSuggestion = internalMutation({
+  args: {
+    scanId: v.id("scans"),
+    suggestedLicence: v.string(),
+    suggestionSource: v.string(),
+    suggestionNote: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.suggestedLicence.length > 80 || args.suggestionSource.length > 20) return null;
+    if (args.suggestionNote.length > 500) return null;
+    await ctx.db.patch("scans", args.scanId, {
+      suggestedLicence: args.suggestedLicence,
+      suggestionSource: args.suggestionSource,
+      suggestionNote: args.suggestionNote,
       updatedAt: Date.now(),
     });
     return null;

@@ -226,6 +226,22 @@ function argRoot(): string {
   return value !== undefined && value.length > 0 ? value : process.cwd();
 }
 
+/**
+ * The repo's licence allowlist from `.ls/policy.yaml`, if it parses. Absent or
+ * refused means an empty allowlist, which simply ranks no id as allowed. Only
+ * licence ids come back, so no other field of the file is read here.
+ */
+function readLicenceAllow(root: string): string[] {
+  const path = join(root, ".ls", "policy.yaml");
+  try {
+    if (!existsSync(path)) return [];
+    const parsed = parseGovernance(readFileSync(path, "utf8"));
+    return parsed.ok ? parsed.policy.licenceAllow : [];
+  } catch {
+    return [];
+  }
+}
+
 function readConfig(): LocalConfig {
   const home = process.env["HOME"];
   if (home === undefined) return {};
@@ -526,6 +542,7 @@ function render(report: ReviewReport, diagnosticsSent: boolean, quote: string | 
     lines.push("Not checked:");
     for (const item of report.notChecked.slice(0, 30)) lines.push(`- ${item.scope}: ${item.reason}`);
   }
+  lines.push(`Licence suggestion: ${report.licenseSuggestion.pick ?? "none"}. ${report.licenseSuggestion.note}`);
   lines.push(diagnosticsSent ? "Usage counts were sent. No file text was included." : "Usage counts were not sent.");
   return lines.join("\n");
 }
@@ -542,7 +559,9 @@ async function main(): Promise<void> {
     ? null
     : await lookupPackages(inventory.packages.filter((pkg) => !pkg.dev).slice(0, 15));
   const advisories = await queryLockAdvisories(inventory, offline);
-  const report = buildLocalReport(files, skipped, registry, advisories, lock);
+  // The repo's own allowlist, read before analysis so the licence suggestion can
+  // weigh it. Only licence ids travel into the suggestion, never file text.
+  const report = buildLocalReport(files, skipped, registry, advisories, lock, readLicenceAllow(root));
   // The repo's own governance file, `.ls/policy.yaml`. It is read after analysis
   // and applied to the findings, so an accepted finding is not raised again. A
   // file that is wrong is refused whole and nothing is suppressed; the refusal is
