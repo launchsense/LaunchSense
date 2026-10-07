@@ -183,7 +183,7 @@ A window with no job behind it is stated as a gap rather than as a promise.
   daily counts folded from them are kept, and hold no repository name.
 - Usage counts from the local installer: written to `usageDiagnostics` only after you
   answer yes at the install question. That table has no deletion window today. Nothing in
-  this repository deletes it.
+  this repository deletes it. The governance file is gitignored, so it is invisible to the hosted scan. Adoption is measured only from opted-in local diagnostics.
 - Your GitHub token: kept until you sign out from the menu. It is not deleted when the
   session expires.
 - Sign-in consent records: one row per purpose per account in `consentRecords`, kept

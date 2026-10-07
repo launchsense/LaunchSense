@@ -8,7 +8,8 @@ import type { DecisionQuestion } from "../convex/adapters/decision.ts";
 import { queryOsvBatch } from "../convex/adapters/osv.ts";
 import { buildLocalReport } from "../shared/review/buildReport.ts";
 import type { AdvisoryCoverage, NotChecked, ReviewFile, ReviewReport } from "../shared/review/buildReport.ts";
-import { diagnosticPayload, diagnosticsAllowed } from "../shared/review/diagnostics.ts";
+import { diagnosticPayload, diagnosticsAllowed, emptyGovOutcome } from "../shared/review/diagnostics.ts";
+import type { GovOutcome } from "../shared/review/diagnostics.ts";
 import { LOCAL_FILES_NOTICE_VERSION } from "../shared/consent/vocabulary.ts";
 import { applyGovernance, parseGovernance } from "../shared/review/governance.ts";
 import { inventoryNpmLock } from "../shared/review/lockfile.ts";
@@ -89,26 +90,34 @@ function isIgnoredBy(policy: { ignorePaths: Array<{ path: string }> }, finding: 
     (entry) => finding.path === entry.path || finding.path.startsWith(`${entry.path}/`),
   );
 }
-function applyGovernanceFile(root: string, report: ReviewReport, acknowledged: boolean): void {
+function applyGovernanceFile(root: string, report: ReviewReport, acknowledged: boolean): GovOutcome {
+  const outcome: GovOutcome = emptyGovOutcome();
   const path = join(root, ".ls", "policy.yaml");
   let text: string;
   try {
-    if (!existsSync(path)) return;
+    if (!existsSync(path)) return outcome;
     text = readFileSync(path, "utf8");
   } catch {
     report.notChecked.push({ scope: ".ls/policy.yaml", reason: "A governance file exists but could not be read. Nothing was suppressed." });
-    return;
+    outcome.detected = true;
+    outcome.refused = "unreadable";
+    return outcome;
   }
 
+  outcome.detected = true;
   const parsed = parseGovernance(text);
   if (!parsed.ok) {
     report.notChecked.push({
       scope: ".ls/policy.yaml",
       reason: `Governance file refused (${parsed.reason}): ${parsed.detail}. Nothing was suppressed.`,
     });
-    return;
+    outcome.refused = parsed.reason;
+    return outcome;
   }
   const policy = parsed.policy;
+  if (policy.consentNoticeVersion !== null && policy.consentNoticeVersion !== LOCAL_FILES_NOTICE_VERSION) {
+    outcome.stale = true;
+  }
 
   // Apply once, and only if the file is not a sandbag. The check covers ignored
   // paths as well as acceptances, so a file cannot hide a repo through a long
@@ -119,8 +128,41 @@ function applyGovernanceFile(root: string, report: ReviewReport, acknowledged: b
       scope: ".ls/policy.yaml",
       reason: "Governance file refused: it would silence too many findings. Nothing was suppressed.",
     });
-    return;
+    outcome.refused = "sandbag";
+    outcome.sandbag = true;
+    outcome.ignored = policy.ignorePaths.length;
+    return outcome;
   }
+  outcome.ignored = policy.ignorePaths.length;
+  const suppressedByFingerprint = new Set<string>();
+  const suppressedByRulePath = new Set<string>();
+  const suppressedByRule = new Set<string>();
+  for (const accept of policy.accepts) {
+    if (accept.fingerprint !== null) {
+      for (const finding of applied.suppressed) {
+        if (finding.fingerprint === accept.fingerprint) suppressedByFingerprint.add(finding.fingerprint);
+      }
+    } else if (accept.ruleId !== null && accept.path !== null) {
+      for (const finding of applied.suppressed) {
+        if (finding.ruleId === accept.ruleId && finding.path === accept.path) {
+          suppressedByRulePath.add(finding.fingerprint);
+        }
+      }
+    } else if (accept.ruleId !== null) {
+      for (const finding of applied.suppressed) {
+        if (
+          finding.ruleId === accept.ruleId &&
+          !suppressedByFingerprint.has(finding.fingerprint) &&
+          !suppressedByRulePath.has(finding.fingerprint)
+        ) {
+          suppressedByRule.add(finding.fingerprint);
+        }
+      }
+    }
+  }
+  outcome.suppressedFingerprint = suppressedByFingerprint.size;
+  outcome.suppressedRulePath = suppressedByRulePath.size;
+  outcome.suppressedRule = suppressedByRule.size;
 
   if (policy.ignorePaths.length > 0) {
     for (const entry of policy.ignorePaths) {
@@ -142,7 +184,7 @@ function applyGovernanceFile(root: string, report: ReviewReport, acknowledged: b
   // A timestamped copy of the report, kept next to the policy, so the repo has
   // its own record of what was found and when. Written only when the expanded
   // local read is acknowledged, because it is a file the review writes.
-  if (!acknowledged) return;
+  if (!acknowledged) return outcome;
   try {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const dir = join(root, ".ls", "reports");
@@ -152,6 +194,7 @@ function applyGovernanceFile(root: string, report: ReviewReport, acknowledged: b
   } catch {
     report.notChecked.push({ scope: ".ls/reports", reason: "The report copy could not be written." });
   }
+  return outcome;
 }
 
 /**
@@ -402,7 +445,13 @@ async function maybeQuote(report: ReviewReport): Promise<{ id: string; quote: st
   return { id: answer.choice, quote };
 }
 
-async function sendDiagnostics(report: ReviewReport, config: LocalConfig, started: number, suggestionId: string | null): Promise<boolean> {
+async function sendDiagnostics(
+  report: ReviewReport,
+  config: LocalConfig,
+  started: number,
+  suggestionId: string | null,
+  gov: GovOutcome,
+): Promise<boolean> {
   if (!diagnosticsAllowed(config)) return false;
   const counts: Record<string, number> = {};
   for (const item of report.findings) counts[item.ruleId] = (counts[item.ruleId] ?? 0) + 1;
@@ -415,6 +464,14 @@ async function sendDiagnostics(report: ReviewReport, config: LocalConfig, starte
     durationMs: Date.now() - started,
     orderSource: report.orderSource,
     ruleCounts: counts,
+    govDetected: gov.detected,
+    govRefused: gov.refused,
+    govStale: gov.stale,
+    govSuppressedFingerprint: gov.suppressedFingerprint,
+    govSuppressedRulePath: gov.suppressedRulePath,
+    govSuppressedRule: gov.suppressedRule,
+    govIgnored: gov.ignored,
+    govSandbag: gov.sandbag,
   });
   if (payload === null) return false;
   const base = process.env["LAUNCHSENSE_API_URL"];
@@ -490,7 +547,7 @@ async function main(): Promise<void> {
   // and applied to the findings, so an accepted finding is not raised again. A
   // file that is wrong is refused whole and nothing is suppressed; the refusal is
   // disclosed rather than silently obeyed or silently ignored.
-  applyGovernanceFile(root, report, filesReadAcknowledged(config));
+  const gov = applyGovernanceFile(root, report, filesReadAcknowledged(config));
   // Offline with a complete lockfile in hand: the inventory says how many exact
   // versions were available to check and none of them were. Say so here, in the
   // caller's own words, rather than leaving the flat "not queried" line to imply
@@ -511,7 +568,7 @@ async function main(): Promise<void> {
     await maybeRank(report);
   }
   const quoted = offline ? null : await maybeQuote(report);
-  const sent = await sendDiagnostics(report, config, started, quoted?.id ?? null);
+  const sent = await sendDiagnostics(report, config, started, quoted?.id ?? null, gov);
   if (process.argv.includes("--json")) {
     // One JSON document per line, terminated. Piping this into jq or a file
     // needs the last line to have a terminator like any other line.

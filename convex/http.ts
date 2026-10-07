@@ -264,6 +264,10 @@ http.route({
     if (ruleCounts.length > 4000 || /"path"|"content"|"snippet"|"title"/.test(ruleCounts)) {
       return json({ error: "Usage counts cannot include file text." }, 400);
     }
+    const numOrZero = (value: unknown): number => {
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return 0;
+      return Math.min(value, 100000);
+    };
     const stored = await ctx.runMutation(internal.mcpLimit.recordUsage, {
       stage: typeof record["stage"] === "string" ? record["stage"] : "alpha",
       tier,
@@ -274,6 +278,14 @@ http.route({
       // stores "unspecified" so a missing value cannot inflate the table count.
       orderSource: typeof record["orderSource"] === "string" ? record["orderSource"] : "unspecified",
       ruleCounts,
+      govDetected: record["govDetected"] === true,
+      govRefused: typeof record["govRefused"] === "string" ? record["govRefused"] : "none",
+      govStale: record["govStale"] === true,
+      govSuppressedFingerprint: numOrZero(record["govSuppressedFingerprint"]),
+      govSuppressedRulePath: numOrZero(record["govSuppressedRulePath"]),
+      govSuppressedRule: numOrZero(record["govSuppressedRule"]),
+      govIgnored: numOrZero(record["govIgnored"]),
+      govSandbag: record["govSandbag"] === true,
     });
     return json({ stored });
   }),
