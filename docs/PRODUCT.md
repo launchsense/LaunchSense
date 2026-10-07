@@ -30,6 +30,7 @@ The same frame is on every page. The menu is LaunchSense, Why, How, Connect, and
 - `/why` is who it is for, what the check names, and what it will not say. It does not say the app will sell.
 - `/how` is the two paths in order, then the caps. A partial result is not a pass.
 - `/connect` is the MCP address, the Cursor block, the Claude line, and what that call does and does not do.
+- `/licence` runs the same scan as the home page and renders only the licence rows, with a named count of what it did not show. Same caps, same queue. No limiter, no email gate.
 - `/blog` lists two posts: the policy essay, and what the research says. `/case-studies` says none are published yet.
 - The sample opens a report. `/s/<id>` is a share link. `/p/<id>` is a passport. Those pages keep their jobs. They do not grow marketing sections.
 
