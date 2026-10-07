@@ -33,6 +33,12 @@ const ASVS = "OWASP ASVS 5.0.0";
 const ASVS_SOURCE = "https://owasp.org/www-project-application-security-verification-standard/";
 const TOP10 = "OWASP Top 10:2025";
 const TOP10_SOURCE = "https://owasp.org/Top10/2025/";
+const TOP25 = "CWE Top 25 (2024)";
+const TOP25_SOURCE = "https://cwe.mitre.org/top25/";
+const SSDF = "NIST SSDF 1.1";
+const SSDF_SOURCE = "https://csrc.nist.gov/projects/ssdf";
+const SLSA = "SLSA 1.0";
+const SLSA_SOURCE = "https://slsa.dev/";
 
 const CREDENTIAL_RULES = [
   "secret.tracked-env",
@@ -323,6 +329,134 @@ const RULES: Rule[] = [
     caveat:
       "Label on wildcard CORS we already scan. A star origin is not always a vulnerability, but it is a permissive policy.",
     kind: "evidence",
+  },
+  {
+    id: "Top25-CWE-79",
+    title: "Cross-site scripting sink (Top 25)",
+    version: TOP25,
+    source: TOP25_SOURCE,
+    coverage: "partial",
+    rules: ["code.inner-html"],
+    caveat:
+      "Top 25 label on innerHTML assignments we already scan. Identifies a potential XSS sink, not proof of XSS.",
+    kind: "evidence",
+  },
+  {
+    id: "Top25-CWE-89",
+    title: "SQL-shaped strings (Top 25)",
+    version: TOP25,
+    source: TOP25_SOURCE,
+    coverage: "partial",
+    rules: ["secret.sql-pattern", "code.sql-pattern"],
+    caveat: "Top 25 label on the SQL-shaped pattern we already scan. Not a new check.",
+    kind: "evidence",
+  },
+  {
+    id: "Top25-CWE-78",
+    title: "Command execution surface (Top 25)",
+    version: TOP25,
+    source: TOP25_SOURCE,
+    coverage: "partial",
+    rules: ["code.child-process"],
+    caveat:
+      "Top 25 label on child_process use we already scan. Identifies a potential command-injection vector, not proof of injection.",
+    kind: "evidence",
+  },
+  {
+    id: "Top25-CWE-798",
+    title: "Hard-coded credentials (Top 25)",
+    version: TOP25,
+    source: TOP25_SOURCE,
+    coverage: "partial",
+    rules: CREDENTIAL_RULES,
+    caveat: "Top 25 label on credential patterns we already scan. Not a new check.",
+    kind: "evidence",
+  },
+  {
+    id: "PW.7.2",
+    title: "Review and analyze human-readable code",
+    version: SSDF,
+    source: SSDF_SOURCE,
+    coverage: "partial",
+    rules: [
+      "secret.tracked-env",
+      "secret.client-exposure",
+      "secret.credential-pattern",
+      "secret.private-key",
+      "secret.aws-key",
+      "secret.github-token",
+      "secret.eval-use",
+      "secret.sql-pattern",
+      "code.eval-use",
+      "code.sql-pattern",
+      "code.inner-html",
+      "code.child-process",
+      "code.weak-crypto",
+      "code.cors-wildcard",
+    ],
+    caveat: "Automated static patterns only. No manual review, no design review.",
+    kind: "evidence",
+  },
+  {
+    id: "PW.4.4",
+    title: "Verify third-party components against known vulnerabilities",
+    version: SSDF,
+    source: SSDF_SOURCE,
+    coverage: "partial",
+    rules: ["deps.vulnerability"],
+    caveat:
+      "OSV advisories for exact versions only, at most 50 packages. If the OSV window is unknown, a quiet row is not a pass.",
+    kind: "supply-chain",
+  },
+  {
+    id: "PW.4.1",
+    title: "Acquire vetted components and track their versions",
+    version: SSDF,
+    source: SSDF_SOURCE,
+    coverage: "partial",
+    rules: ["deps.unpinned-version", "deps.install-script"],
+    caveat: "Manifest signals only. No vetting of a component security posture.",
+    kind: "evidence",
+  },
+  {
+    id: "PS.3.2",
+    title: "Collect and share provenance for each release",
+    version: SSDF,
+    source: SSDF_SOURCE,
+    coverage: "not-automatable",
+    rules: [],
+    caveat: "We write a local CycloneDX SBOM but verify no provenance and sign nothing.",
+    kind: "always-not-checked",
+  },
+  {
+    id: "SLSA Build L1",
+    title: "Build provenance exists",
+    version: SLSA,
+    source: SLSA_SOURCE,
+    coverage: "not-automatable",
+    rules: [],
+    caveat: "We check no build provenance. A lockfile inventory is not a build attestation.",
+    kind: "always-not-checked",
+  },
+  {
+    id: "SLSA Build L2",
+    title: "Signed build provenance",
+    version: SLSA,
+    source: SLSA_SOURCE,
+    coverage: "not-automatable",
+    rules: [],
+    caveat: "We check no signatures. Nothing here is signed.",
+    kind: "always-not-checked",
+  },
+  {
+    id: "SLSA Build L3",
+    title: "Hardened build platform",
+    version: SLSA,
+    source: SLSA_SOURCE,
+    coverage: "not-automatable",
+    rules: [],
+    caveat: "We observe no build platform. This scan reads files after the fact.",
+    kind: "always-not-checked",
   },
   {
     id: "deps.dev",
