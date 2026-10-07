@@ -55,7 +55,7 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 ## Not built yet
 
 - No saved projects, no history, no rescan across sessions.
-- The hosted MCP reads one public GitHub repo on our server. The Connect page shows the address. It does not read a repo that exists only on a laptop. Two scans an hour from one caller, and eight an hour in total, then that route pauses.
+- The hosted MCP reads one public GitHub repo on our server. The Connect page shows the address. It does not read a repo that exists only on a laptop. The hosted read keeps 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then that route pauses. A resolved credential gets 20 scans an hour and 120 in a day against its own bucket. The counter holds no part of your network address.
 - No monitoring and no scheduled scans.
 - No GitHub App installation scan yet. That connected read is on the roadmap, see `ROADMAP.md`. Sign-in today downloads one archive with the person's token.
 - No runtime performance data. GitHub does not expose it.

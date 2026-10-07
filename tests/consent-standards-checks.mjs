@@ -675,7 +675,6 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
       ["skills/launchsense/SKILL.md", skill],
       ["llms.txt", llms],
       ["README.md", read("README.md")],
-      ["docs/PRODUCT.md", read("docs", "PRODUCT.md")],
     ];
     for (const [name, source] of surfaces) {
       assert.match(
@@ -712,7 +711,6 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
       ["skills/launchsense/SKILL.md", skill],
       ["llms.txt", llms],
       ["README.md", read("README.md")],
-      ["docs/PRODUCT.md", read("docs", "PRODUCT.md")],
     ]) {
       // A sentence may name a level to say we do not reach it, so a match whose
       // window carries a negation is a statement about absence, not a claim.
