@@ -18,7 +18,7 @@ The review reads a governance file at `.ls/policy.yaml` under `LAUNCHSENSE_ROOT`
 - A finding is only ever hidden when an acceptance names it, by fingerprint, by rule and path, or by rule alone. Nothing else is hidden.
 - A wrong file is refused whole and nothing is suppressed. A file that would silence too much is refused whole too. A refusal is stated in the not-checked list.
 - An accepted finding is named in the not-checked list as accepted, so a reader can always see what was hidden and why.
-- The folder is gitignored and stays on the machine. Do not commit it unless the repo owner says to.
+- The folder is gitignored and stays on the machine. Do not commit it unless the repo owner says to. The governance file is gitignored, so it is invisible to the hosted scan. Adoption is measured only from opted-in local diagnostics.
 
 When the person accepts a finding, write the acceptance into `.ls/policy.yaml` with their reason. Do not write the file silently: show them the entry and let them confirm. Never remove an acceptance they made without asking.
 

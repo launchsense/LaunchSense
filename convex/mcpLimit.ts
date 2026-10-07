@@ -255,6 +255,25 @@ const ALLOWED_HARNESS = new Set([
   "unknown",
 ]);
 const ALLOWED_ORDER_SOURCE = new Set(["local", "jev", "perplexity", "table", "unspecified"]);
+const ALLOWED_GOV_REFUSED = new Set([
+  "none",
+  "unreadable",
+  "sandbag",
+  "not_a_mapping",
+  "tab_indentation",
+  "anchors_not_supported",
+  "multi_document_not_supported",
+  "unsupported_version",
+  "unknown_key",
+  "accept_without_fingerprint_or_rule",
+  "accept_wildcard",
+  "accept_without_reason",
+  "accept_unknown_rule",
+  "accept_malformed_fingerprint",
+  "ignore_all_paths",
+  "ignore_without_reason",
+  "line_unreadable",
+]);
 // A plain version only, and short. A pre-release suffix is a free string, so it is
 // refused: "1.2-AdaLovelace" is a name wearing a version's clothes. Each numeric
 // part is bounded, so the column is bounded too and a caller cannot mint a new
@@ -285,8 +304,14 @@ export function isDeclaredValue(value: string): boolean {
     ALLOWED_TIER.has(v) ||
     ALLOWED_HARNESS.has(v) ||
     ALLOWED_ORDER_SOURCE.has(v) ||
+    ALLOWED_GOV_REFUSED.has(v) ||
     declaredVersion(v) === v
   );
+}
+
+function govCount(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return 0;
+  return Math.min(value, 100000);
 }
 
 export const recordUsage = internalMutation({
@@ -298,6 +323,14 @@ export const recordUsage = internalMutation({
     durationMs: v.number(),
     orderSource: v.string(),
     ruleCounts: v.string(),
+    govDetected: v.optional(v.boolean()),
+    govRefused: v.optional(v.string()),
+    govStale: v.optional(v.boolean()),
+    govSuppressedFingerprint: v.optional(v.number()),
+    govSuppressedRulePath: v.optional(v.number()),
+    govSuppressedRule: v.optional(v.number()),
+    govIgnored: v.optional(v.number()),
+    govSandbag: v.optional(v.boolean()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -312,6 +345,7 @@ export const recordUsage = internalMutation({
     const harness = declaredOr(args.harness, ALLOWED_HARNESS, "other");
     const version = declaredVersion(args.version);
     const orderSource = declaredOr(args.orderSource, ALLOWED_ORDER_SOURCE, "unspecified");
+    const govRefused = typeof args.govRefused === "string" ? declaredOr(args.govRefused, ALLOWED_GOV_REFUSED, "none") : "none";
     await ctx.db.insert("usageDiagnostics", {
       day: new Date().toISOString().slice(0, 10),
       stage,
@@ -321,6 +355,14 @@ export const recordUsage = internalMutation({
       durationMs: args.durationMs,
       orderSource,
       ruleCounts: args.ruleCounts,
+      govDetected: args.govDetected === true,
+      govRefused,
+      govStale: args.govStale === true,
+      govSuppressedFingerprint: govCount(args.govSuppressedFingerprint),
+      govSuppressedRulePath: govCount(args.govSuppressedRulePath),
+      govSuppressedRule: govCount(args.govSuppressedRule),
+      govIgnored: govCount(args.govIgnored),
+      govSandbag: args.govSandbag === true,
       createdAt: Date.now(),
     });
     return true;
