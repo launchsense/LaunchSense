@@ -129,6 +129,8 @@ Two tables, and one nightly fold. Plus first-seen rows for visitors.
 - `purgeExpiredUsageEvents` runs at 03:40 UTC and deletes `usageEvents` rows past 30 days, bounded at 500 rows a run and reporting when it hits that bound. `purgeExpiredVisitorIds` runs at 03:50 UTC and does the same for `visitorDays`. Separate from the fold because a Convex mutation cannot call another mutation.
 - `scans.surface` is written on both paths: `web` for the browser flow, `mcp_hosted` for the hosted MCP route and the JSON API. `scans.channel` separates the two hosted doors, `mcp` for `/mcp` and `api` for `/api/mcp/scan`.
 
+The website visitor counter is PostHog, and it is separate from every row above. It runs on the website only. PostHog runs cookieless: no cookie, no browser storage, and identity is a privacy hash it computes on its own servers, so no table here ever holds it. Session replay, autocapture, surveys, and person profiles are off, and only a page view and a page leave leave the browser. The MCP surface loads no browser script.
+
 The north star is `repos_with_proven_fix`: distinct repositories where a `findingTransitions` row says `state=fixed` and `cause=code_change` and both endpoint scans reached `status=completed`. A fix counted as `advisory_update` or `analyzer_update` is this product shipping a rule pack, so those are three separate metrics from day one and never folded in.
 
 Two guardrails. `partial_coverage_rate` is partial over all analyzed, split by `truncated`, `tree_truncated`, and `errorKind`. `regression_after_fix_rate` is the share of proven fixes whose `ruleId` came back in the next completed scan of the same repo. Both are lower bounds where the read window runs out, and the code says so.

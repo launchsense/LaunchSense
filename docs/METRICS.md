@@ -17,9 +17,9 @@ Use those three when you want a download-side read. Do not present them as per-p
 
 Visitor counts come only from PostHog, Plausible, GA4, or Datafast, and only with read-only access. No write keys, no session replay owned by us.
 
-Today none of the four is wired. The site loads no analytics script. So there is no visitor number from our own stack today. The usage read we do have is the hosted funnel we already store: scans submitted and analyzed, shares, rescans, and the MCP protocol counts in `dailyMetrics`.
+The website is wired to PostHog, the first of the four. It runs cookieless: it sets no cookie, writes nothing to your browser's storage, and identifies a visitor with a privacy hash PostHog computes on its own servers, so we hold no visitor identifier. Session replay, autocapture, surveys, and person profiles are all off, and only a page view and a page leave are sent. The build holds a public client key, which is a read key for the dashboard, not a write key for the site.
 
-When a visitor counter is wired, it gets its own privacy line before it ships, and the key it uses stays read-only.
+The hosted and local checks are unchanged. Their counts are the funnel already stored in `dailyMetrics` and the protocol counts on the MCP surface, and the MCP surface loads no browser script. When another visitor counter is added, it gets its own privacy line before it ships.
 
 ## What this means for the next three weeks
 

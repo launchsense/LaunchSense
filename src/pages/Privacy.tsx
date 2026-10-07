@@ -182,8 +182,13 @@ export default function Privacy() {
         <h2 id="fonts-and-browser">7. Fonts and what the browser sends without asking</h2>
         <p>
           The site loads two font families from Google Fonts, so your browser contacts Google
-          with your IP address before the page finishes drawing. We load no analytics script, no
-          chat widget, and no advertising tag.
+          with your IP address before the page finishes drawing. It also loads one analytics
+          script, PostHog, from our own bundle, which counts page views. PostHog runs here in
+          cookieless mode: it sets no cookie and writes nothing to your browser's storage, and it
+          identifies a visitor with a privacy hash it computes on its own servers, which we never
+          see or store. Session replay, click capture, surveys, and person profiles are all off,
+          so the count is of visits and not of people. There is no chat widget and no advertising
+          tag.
         </p>
         <p>
           Our own server sees your IP address on every request, as any web server does, and it
