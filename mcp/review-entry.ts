@@ -436,6 +436,8 @@ async function maybeRank(report: ReviewReport): Promise<void> {
   const top = buildTopPrompt(promptsIn, buildFixPlan(report.findings).steps, [], 3, ranked.order);
   report.orderSource = ranked.source;
   report.orderNote = ranked.note;
+  report.orderMoved = ranked.moved;
+  report.laneAnswered = ranked.laneAnswered;
   report.lead = top.lead?.prompt ?? report.lead;
   report.prompts = top.prompts
     .filter((item) => item.ruleId !== top.lead?.ruleId)
@@ -479,6 +481,9 @@ async function sendDiagnostics(
     version: "alpha",
     durationMs: Date.now() - started,
     orderSource: report.orderSource,
+    orderMoved: report.orderMoved,
+    laneAnswered: report.laneAnswered,
+    suggestionSource: report.licenseSuggestion.source,
     ruleCounts: counts,
     govDetected: gov.detected,
     govRefused: gov.refused,
@@ -515,7 +520,11 @@ function render(report: ReviewReport, diagnosticsSent: boolean, quote: string | 
     "LaunchSense alpha review. The job runs on the files on this machine.",
     report.coverageNote,
     `Auth slot: present, not enforced. Alpha does not check a key.`,
-    `Order: ${report.orderSource}. ${report.orderNote}`,
+    // The provenance block, in plain words. It names both lanes and says what
+    // each one did. The checks decide; a model explains, orders inside a
+    // severity band, and suggests a licence. The model never decides a finding.
+    `Checks: fixed rules. No model decides a finding or a severity.`,
+    `Order source: ${report.orderSource}. Model moved ${report.orderMoved} item(s) inside a severity band. ${report.orderNote}`,
     "",
     report.lead,
     ...report.prompts.map((line) => line),
@@ -542,7 +551,7 @@ function render(report: ReviewReport, diagnosticsSent: boolean, quote: string | 
     lines.push("Not checked:");
     for (const item of report.notChecked.slice(0, 30)) lines.push(`- ${item.scope}: ${item.reason}`);
   }
-  lines.push(`Licence suggestion: ${report.licenseSuggestion.pick ?? "none"}. ${report.licenseSuggestion.note}`);
+  lines.push(`Licence suggestion: ${report.licenseSuggestion.pick ?? "none"} (source: ${report.licenseSuggestion.source}). ${report.licenseSuggestion.note}`);
   lines.push(diagnosticsSent ? "Usage counts were sent. No file text was included." : "Usage counts were not sent.");
   return lines.join("\n");
 }

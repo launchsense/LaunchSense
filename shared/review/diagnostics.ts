@@ -38,6 +38,12 @@ export interface DiagnosticPayload {
   version: string;
   durationMs: number;
   orderSource: "local" | "jev" | "perplexity" | "table";
+  /** How many positions the decision lane moved inside a severity band. */
+  orderMoved: number;
+  /** True when a rung other than the table named the order. */
+  laneAnswered: boolean;
+  /** Which rung produced the licence suggestion. A closed label. */
+  suggestionSource: "local" | "jev" | "perplexity" | "table" | "none";
   ruleCounts: Record<string, number>;
   govDetected: boolean;
   govRefused: GovRefusedReason;
@@ -70,6 +76,8 @@ const GOV_REFUSED = new Set<string>([
   "ignore_without_reason",
   "line_unreadable",
 ]);
+
+const ALLOWED_SUGGESTION_SOURCE = new Set(["local", "jev", "perplexity", "table", "none"]);
 
 function govCount(value: unknown): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return 0;
@@ -104,6 +112,14 @@ export function diagnosticPayload(input: DiagnosticPayload): DiagnosticPayload |
     version: input.version.slice(0, 40),
     durationMs: Math.max(0, Math.min(input.durationMs, 3_600_000)),
     orderSource: input.orderSource,
+    // The decision-model help, as counts and one closed label. A count of moved
+    // positions and a label say how often a lane was used and whether it changed
+    // anything. They never carry a title, a path, or free text.
+    orderMoved: govCount(input.orderMoved),
+    laneAnswered: input.laneAnswered === true,
+    suggestionSource: ALLOWED_SUGGESTION_SOURCE.has(input.suggestionSource)
+      ? input.suggestionSource
+      : "none",
     ruleCounts,
     govDetected: input.govDetected === true,
     govRefused: GOV_REFUSED.has(input.govRefused) ? input.govRefused : "none",

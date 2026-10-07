@@ -365,6 +365,24 @@ export const ANALYTICS_TABLES: readonly InventoryTable[] = [
         boundedBy: "Closed set: local, jev, perplexity, table, unspecified. Anything else is normalized to unspecified.",
       },
       {
+        field: "orderMoved",
+        klass: "technical",
+        why: "How many positions the decision lane moved inside a severity band. A count, never an item, a title, or a path.",
+        boundedBy: "A number.",
+      },
+      {
+        field: "laneAnswered",
+        klass: "technical",
+        why: "Whether a rung other than the table named the order. A boolean.",
+        boundedBy: "A boolean.",
+      },
+      {
+        field: "suggestionSource",
+        klass: "technical",
+        why: "Which rung produced the licence suggestion. A closed label, never a licence name or a reason.",
+        boundedBy: "Closed set: local, jev, perplexity, table, none. Anything else is normalized to none.",
+      },
+      {
         field: "ruleCounts",
         klass: "technical",
         why: "How many times each rule id fired. Counts and rule ids, never code, a path, a title, or a snippet.",
