@@ -84,6 +84,39 @@ describe("a leaked credential is not a cryptographic failure", () => {
     assert.deepEqual(byId.get("CWE-327")?.evidenceRuleIds, ["code.weak-crypto"]);
     assert.deepEqual(byId.get("CWE-942")?.evidenceRuleIds, ["code.cors-wildcard"]);
   });
+
+  it("labels the Top 25 rows the checks back, and nothing else as Top 25", () => {
+    const byId = new Map(rows().map((row) => [row.requirementId, row]));
+    assert.deepEqual(byId.get("Top25-CWE-79")?.evidenceRuleIds, ["code.inner-html"]);
+    assert.deepEqual(byId.get("Top25-CWE-89")?.evidenceRuleIds, ["secret.sql-pattern", "code.sql-pattern"]);
+    assert.deepEqual(byId.get("Top25-CWE-78")?.evidenceRuleIds, ["code.child-process"]);
+    assert.ok((byId.get("Top25-CWE-798")?.evidenceRuleIds.length ?? 0) > 0);
+    for (const row of rows()) {
+      if (row.version !== "CWE Top 25 (2024)") continue;
+      assert.ok(row.evidenceRuleIds.length > 0, `${row.requirementId} is Top 25 with no backing check`);
+    }
+  });
+
+  it("maps the SSDF practices to the checks that back them, and nothing unverified", () => {
+    const byId = new Map(rows().map((row) => [row.requirementId, row]));
+    assert.equal(byId.get("PW.7.2")?.coverage, "partial");
+    assert.deepEqual(byId.get("PW.4.4")?.evidenceRuleIds, ["deps.vulnerability"]);
+    assert.ok((byId.get("PW.4.1")?.evidenceRuleIds.length ?? 0) > 0);
+    assert.equal(byId.get("PS.3.2")?.coverage, "not-automatable");
+    for (const row of rows()) {
+      if (row.version !== "NIST SSDF 1.1" || row.coverage !== "partial") continue;
+      assert.ok(row.evidenceRuleIds.length > 0, `${row.requirementId} is partial with no backing check`);
+    }
+  });
+
+  it("keeps SLSA rows not-checked: no build provenance is verified", () => {
+    for (const id of ["SLSA Build L1", "SLSA Build L2", "SLSA Build L3"]) {
+      const row = rows().find((r) => r.requirementId === id);
+      assert.ok(row, `${id} must exist`);
+      assert.equal(row.coverage, "not-automatable");
+      assert.deepEqual(row.evidenceRuleIds, []);
+    }
+  });
 });
 
 describe("the coverage metric counts two axes, never merged", () => {
