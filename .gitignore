@@ -34,3 +34,6 @@ secrets*.json
 
 # LaunchSense governance. Kept on this machine only.
 .ls/
+
+# Local research notes. Never publish.
+/research/
