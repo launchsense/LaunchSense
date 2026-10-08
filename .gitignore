@@ -1,16 +1,29 @@
-# Dependencies and build output.
-node_modules/
-dist/
-*.tsbuildinfo
+# The engine repo holds only the engine and the basics a local run and the
+# licence need. Everything else on this machine is local-only: notes, agent
+# instructions, tool state, and the operator's private folders. None of it is
+# ever committed here.
+#
+# This is a whitelist, not a list of things to ignore. Ignore every top-level
+# entry, then re-include the engine and its basics. A new top-level file or
+# folder is ignored until it is named here on purpose, so nothing internal can
+# be swept in by a broad `git add`.
 
-# Local machine configuration and secrets. Never committed.
-.env
-.env.*
-!.env.example
+/*
+!/.gitignore
+!/.ignore
+!/LICENSE.txt
+!/README.md
+!/llms.txt
+!/install.sh
+!/mcp/
+!/public/
+!/shared/
+!/skills/
+
+# Secrets are never committed, even inside a re-included path.
 *.pem
 *.key
 credentials*.json
 secrets*.json
-
-# LaunchSense governance. Kept on this machine only.
-.ls/
+.env
+.env.*

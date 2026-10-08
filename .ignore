@@ -6,3 +6,13 @@ dist/
 venv/
 site-packages/
 __pycache__/
+
+# Local-only folders. Not part of the engine, never committed.
+.progress/
+state/
+.agents/
+.codex/
+AGENTS.md
+.impeccable/
+.code-review-graph/
+research/
