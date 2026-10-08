@@ -33,6 +33,7 @@ import type * as identity_attribution from "../identity/attribution.js";
 import type * as identity_credential from "../identity/credential.js";
 import type * as identity_quotaKey from "../identity/quotaKey.js";
 import type * as identity_store from "../identity/store.js";
+import type * as mcpPolicy from "../mcpPolicy.js";
 import type * as projects from "../projects.js";
 
 import type {
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   "identity/credential": typeof identity_credential;
   "identity/quotaKey": typeof identity_quotaKey;
   "identity/store": typeof identity_store;
+  mcpPolicy: typeof mcpPolicy;
   projects: typeof projects;
 }>;
 
