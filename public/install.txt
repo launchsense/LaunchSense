@@ -18,9 +18,9 @@ THEN DO THIS, IN ORDER.
    - Antigravity: add both blocks to the mcpServers object in ~/.gemini/config/mcp_config.json. Local entry uses command, args, env. Policy entry uses serverUrl.
    - Grok Build: add both blocks to ~/.grok/config.toml under [mcp_servers.*]. On grok.com web, only the policy URL can be added, via connectors, Custom. Say so when you run there.
    - Another tool: any stdio entry running node LSDIR/mcp/server.ts with LAUNCHSENSE_ROOT set, or run the review directly with node --experimental-strip-types LSDIR/mcp/review-entry.ts --root <repo>.
-4. Verify. List tools on both servers. Confirm launchsense_scan_repo and all five launchsense_get_* tools answer. Confirm LAUNCHSENSE_ROOT names the person's repo, not LSDIR.
+4. Verify. List tools on both servers. Confirm launchsense_scan_repo and the launchsense_get_policy tool answer. Confirm LAUNCHSENSE_ROOT names the person's repo, not LSDIR.
 5. Fetch the policy bundle once with launchsense_get_policy on the policy source, and store it next to the installed skill. Later runs read that copy and make no policy calls.
-6. Run the first audit now, on the person's open repo, with launchsense_scan_repo. Show them the report. Setup is not done until they have seen one real result.
+6. Run the first audit now, on the person's open repo, with launchsense_scan_repo (the whole-tree default; a later run can pass mode change to review only what changed since the base of the branch, where a newly added .ls/policy.yaml acceptance shows up as one info row). Show them the report. Setup is not done until they have seen one real result.
 7. Report done in three lines: what you installed, what you registered, and the top finding. Then wait for their next instruction.
 
-RULES. Never send their code anywhere. Never invent findings. The not-checked list goes back line for line, never summarised. A partial result is never a pass. Skill version: compare the policy bundle version with the Skill version line in the installed skill copy; when online is newer, follow online.
+RULES. Never send their code anywhere. Never invent findings. The not-checked list goes back line for line, never summarised. A partial result is never a pass: quote the report's own completeness line (`Review complete.` or `Review incomplete: ...`) as it is, and never invent one. Skill version: compare the policy bundle version with the Skill version line in the installed skill copy; when online is newer, follow online.

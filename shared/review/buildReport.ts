@@ -76,9 +76,21 @@ export interface ReviewReport {
   stage: "alpha";
   authRequired: false;
   status: "complete" | "partial";
+  /**
+   * The plain-words reason behind status, printed right after the coverage
+   * line. It is not a second status: the single field is status, and this is
+   * its explanation. The local review replaces this provisional line after
+   * governance runs, because a governance refusal is not known here.
+   */
+  statusNote: string;
   filesRead: number;
   filesSkipped: number;
   coverageNote: string;
+  /**
+   * What was reviewed: the whole working tree, or a change from a named base.
+   * The base is always named in change mode, never left as HEAD.
+   */
+  scopeNote: string;
   notChecked: NotChecked[];
   findings: ReviewFinding[];
   lead: string;
@@ -217,16 +229,75 @@ function finding(
 }
 
 /** Lockfiles this review reads but cannot inventory. Naming them beats claiming none was read. */
-const OTHER_LOCKFILES = new Set([
+export const OTHER_LOCKFILES = new Set([
   "cargo.lock", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "gemfile.lock",
   "composer.lock", "packages.lock.json", "pipfile.lock", "mix.lock", "pubspec.lock",
-  "gradle.lockfile", "go.sum",
+  "gradle.lockfile", "go.sum", "npm-shrinkwrap.json", "uv.lock",
 ]);
 
 function listNames(paths: string[]): string {
   const named = paths.map((path) => path.split("/").pop() ?? path);
   if (named.length === 1) return named[0] ?? "";
   return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+}
+
+/**
+ * The ordered plan, the lead prompt, and the two follow-up prompts, derived from
+ * a finding set. Extracted so the local review can rebuild them after a change
+ * run scopes the findings to the diff; otherwise the report would still
+ * recommend fixes for findings it no longer lists.
+ */
+function derivePlanAndPrompts(findings: ReviewFinding[]): {
+  plan: ReviewReport["plan"];
+  lead: string;
+  prompts: string[];
+} {
+  const rankable: RankableFinding[] = findings.map((item) => ({
+    fingerprint: item.fingerprint,
+    severity: item.severity,
+    ruleId: item.ruleId,
+    title: item.title,
+  }));
+  const order = tableOrder(rankable);
+  const promptsIn: PromptFinding[] = findings.map((item) => ({
+    ruleId: item.ruleId,
+    fingerprint: item.fingerprint,
+    path: item.path,
+    line: item.line,
+    severity: item.severity,
+    title: item.title,
+    why: item.why,
+  }));
+  const plan = buildFixPlan(findings);
+  const top = buildTopPrompt(promptsIn, plan.steps, [], 3, order);
+  const lead = top.lead?.prompt ?? "Nothing was flagged in the files we read. This is not a clean bill of health.";
+  const prompts = top.prompts
+    .filter((item) => item.ruleId !== top.lead?.ruleId)
+    .slice(0, 2)
+    .map((item) => item.prompt);
+  return {
+    plan: plan.steps.map((step) => ({
+      order: step.order,
+      title: step.title,
+      why: step.why,
+      files: step.files,
+      checklist: step.checklist,
+    })),
+    lead,
+    prompts,
+  };
+}
+
+/**
+ * Rebuild the plan, lead, and prompts from the report's current findings. The
+ * local review calls this after scoping a change run, so the recommended fixes
+ * match the findings the report actually lists.
+ */
+export function refreshDerivations(report: ReviewReport): void {
+  const derived = derivePlanAndPrompts(report.findings);
+  report.plan = derived.plan;
+  report.lead = derived.lead;
+  report.prompts = derived.prompts;
 }
 
 export function buildLocalReport(
@@ -467,34 +538,24 @@ export function buildLocalReport(
     findings.push(finding("hygiene.no-readme", "(repo)", 1, "No README in the files read", "A README was not in this read.", "no readme"));
   }
 
-  const rankable: RankableFinding[] = findings.map((item) => ({
-    fingerprint: item.fingerprint,
-    severity: item.severity,
-    ruleId: item.ruleId,
-    title: item.title,
-  }));
-  const order = tableOrder(rankable);
-  const promptsIn: PromptFinding[] = findings.map((item) => ({
-    ruleId: item.ruleId,
-    fingerprint: item.fingerprint,
-    path: item.path,
-    line: item.line,
-    severity: item.severity,
-    title: item.title,
-    why: item.why,
-  }));
-  const plan = buildFixPlan(findings);
-  const top = buildTopPrompt(promptsIn, plan.steps, [], 3, order);
-  const lead = top.lead?.prompt ?? "Nothing was flagged in the files we read. This is not a clean bill of health.";
-  const promptLines = top.prompts
-    .filter((item) => item.ruleId !== top.lead?.ruleId)
-    .slice(0, 2)
-    .map((item) => item.prompt);
+  const derived = derivePlanAndPrompts(findings);
+  const plan = derived.plan;
+  const lead = derived.lead;
+  const promptLines = derived.prompts;
 
   const filesSkipped = skipped.length;
-  const osvOpen = advisories === null || advisories.timedOut || advisories.skipped > 0;
-  const status = filesSkipped > 0 || !inventory.complete || registry === null || osvOpen ? "partial" : "complete";
   const coverageNote = `We read ${files.length} files. ${filesSkipped} skips are listed. A partial result is not a pass.`;
+  // The local review overrides this in change mode. Whole-tree stays the
+  // default here, so a caller that does not set a scope still names one.
+  const scopeNote = `Reviewed: whole working tree, ${files.length} files.`;
+  // Completeness is NOT decided here. A governance refusal and the walk's
+  // explicit flags are not known in this builder, and inferring status from the
+  // shared skipped list is exactly the shortcut this feature removes. The local
+  // review computes the real status after governance and overwrites both
+  // fields. The provisional value is partial, so an unrefined report never
+  // reads as a pass.
+  const status: ReviewReport["status"] = "partial";
+  const statusNote = "Review incomplete. Every reason is in the not-checked list.";
 
   const sbom = inventory.packages.length === 0
     ? null
@@ -512,20 +573,16 @@ export function buildLocalReport(
     stage: "alpha",
     authRequired: false,
     status,
+    statusNote,
     filesRead: files.length,
     filesSkipped,
     coverageNote,
+    scopeNote,
     notChecked,
     findings,
     lead,
     prompts: promptLines,
-    plan: plan.steps.map((step) => ({
-      order: step.order,
-      title: step.title,
-      why: step.why,
-      files: step.files,
-      checklist: step.checklist,
-    })),
+    plan,
     orderSource: "table",
     orderNote: "Ordered by severity and credential risk alone. The model did not choose which findings exist.",
     orderMoved: 0,

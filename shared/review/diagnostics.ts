@@ -1,5 +1,7 @@
 // Usage diagnostics. Counts and names only. Never code, paths, or titles.
 // Governance signals are counts and a closed reason enum, never a path or a reason text.
+// Completeness is not here: it is stated in the report body and JSON, where a
+// harness reads it, and it is not a usage count.
 
 export type GovRefusedReason =
   | "none"

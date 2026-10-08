@@ -13,7 +13,7 @@ There is one way to run this check: on the machine it is installed on, against t
 
 ## How it runs
 
-The server is `mcp/server.ts` in the checkout, started with `node mcp/server.ts`. It speaks MCP over stdio as newline-delimited JSON: one JSON message per line, no length header. One message may not pass 4 MiB; a longer line is answered with an error and nothing runs. A report body over 1 MiB comes back marked partial. A partial result is not a pass.
+The server is `mcp/server.ts` in the checkout, started with `node mcp/server.ts`. It speaks MCP over stdio as newline-delimited JSON: one JSON message per line, no length header. One message may not pass 4 MiB; a longer line is answered with an error and nothing runs. A saved report over 1 MiB is refused with an error rather than returned whole. A partial result is not a pass.
 
 ## Policy source
 
@@ -21,7 +21,7 @@ The policy source is online at `https://harmless-chihuahua-667.convex.site/mcp`.
 
 Fetch it once, at install, and keep the copy in this skill folder. Later runs read that local copy and make no policy calls, so a normal session asks for no approvals. Re-fetch only when the person asks, or when the bundle version online is newer than the copy you hold.
 
-Local reads the files. Online serves the policies. Read the rules, run `launchsense_scan_repo` here with no arguments, and write the audit locally. A policy change reaches you on the next fetch. Nothing to reinstall.
+Local reads the files. Online serves the policies. Read the rules, run `launchsense_scan_repo` here, and write the audit locally. It takes one optional argument, `mode`: `tree` (the default) reviews the whole working tree, and `change` reviews only what changed since the base of the branch (the whole tree is still read for context), named in the report. A policy change reaches you on the next fetch. Nothing to reinstall.
 
 ## First run after install
 
@@ -33,7 +33,11 @@ Your installed copy of this skill can go stale. Compare the bundle version you s
 
 ## When to call the review
 
-Call `launchsense_scan_repo` when the person wants to know what is wrong before they share. It reviews the checkout under `LAUNCHSENSE_ROOT` and takes no arguments. A `repoUrl` is refused, because the server reads files on this machine and never downloads GitHub.
+Call `launchsense_scan_repo` when the person wants to know what is wrong before they share. It reviews the checkout under `LAUNCHSENSE_ROOT` and takes one optional `mode` argument: `tree` (the default) reads the whole working tree, and `change` reviews only what changed since the base of the branch (the whole tree is still read for context), named in the report. A `repoUrl` is refused, because the server reads files on this machine and never downloads GitHub.
+
+## Completeness, and how to quote it
+
+Every report states its own completeness in one line right after the coverage line: `Review complete.` or `Review incomplete: <reasons in words>`. Quote that line as it is. Never invent a completeness line, and never call an incomplete review a pass. The reasons name the checks that applied and did not run; a check that does not apply to this repo is not a reason. Over MCP the same facts arrive as report text, so an incomplete review is not an error: `isError` is reserved for a review that could not run at all.
 
 ## The `.ls` files
 
@@ -43,7 +47,8 @@ The review keeps its own state in a `.ls` folder under `LAUNCHSENSE_ROOT`. The f
 
 The review reads a governance file at `.ls/policy.yaml`, if one exists. It is the repo's own memory: the findings the person already looked at and accepted, each with a reason, so a later review does not raise them again. It is declarative only. It cannot run code, disable a rule, or change a severity.
 
-- A finding is only ever hidden when an acceptance names it, by fingerprint, by rule and path, or by rule alone. Nothing else is hidden.
+- A finding is only ever hidden when an acceptance names it, by fingerprint, by rule and path, or by rule alone, or when an ignored path covers it. Nothing else is hidden.
+- On a `change` run, an acceptance added since the last report is reported as one info row naming the rule and the path. It is a disclosure, never above info, and never a block.
 - A wrong file is refused whole and nothing is suppressed. A file that would silence too much is refused whole too. A refusal is stated in the not-checked list.
 - An accepted finding is named in the not-checked list as accepted, so a reader can always see what was hidden and why.
 - Do not commit it unless the repo owner says to.

@@ -54,8 +54,15 @@ export function toolDefs(): ToolDef[] {
     {
       name: "launchsense_scan_repo",
       description:
-        "Review the files already on this machine, under LAUNCHSENSE_ROOT. Does not download GitHub. Alpha has no login.",
-      inputSchema: objectSchema({}),
+        "Review files already on this machine, under LAUNCHSENSE_ROOT. mode tree reviews the whole working tree (default); mode change reviews only what changed since the base of the branch. Does not download GitHub. Alpha has no login.",
+      inputSchema: objectSchema({
+        mode: {
+          type: "string",
+          enum: ["tree", "change"],
+          description:
+            "tree reviews the whole working tree (default). change reviews the files changed since the branch base.",
+        },
+      }),
     },
   ];
 }
@@ -120,6 +127,10 @@ export function validateArgs(
     const got = jsonTypeOf(values[name]);
     if (typeof wanted === "string" && got !== wanted) {
       return `${name} must be a ${wanted}, got ${got}`;
+    }
+    const allowed = (declared as Record<string, unknown>).enum;
+    if (Array.isArray(allowed) && !allowed.includes(values[name])) {
+      return `${name} must be one of: ${allowed.join(", ")}`;
     }
   }
 

@@ -4,13 +4,14 @@
 import type { Account } from "./github.ts";
 import { accountText } from "./github.ts";
 import { reviewRoot, reviewRootNote } from "./review.ts";
+import type { ReviewMode } from "./review.ts";
 import { maxReportBytes } from "./limits.ts";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export interface ToolRuntime {
   apiURL: string;
-  review: (root: string) => Promise<string>;
+  review: (root: string, mode: ReviewMode) => Promise<string>;
   account: () => Promise<Account>;
 }
 
@@ -25,7 +26,7 @@ const NOTICE =
 // is a result and not a protocol error.
 export async function callTool(
   name: string,
-  _args: Record<string, unknown>,
+  args: Record<string, unknown>,
   runtime: ToolRuntime,
 ): Promise<string> {
   switch (name) {
@@ -37,10 +38,18 @@ export async function callTool(
     case "launchsense_github":
       return accountText(await runtime.account());
     case "launchsense_scan_repo":
-      return await scanRepo(runtime);
+      return await scanRepo(runtime, scanMode(args));
     default:
       throw new Error(`unknown tool ${name}`);
   }
+}
+
+// scanMode reads the mode argument. The schema allows only "tree" and
+// "change", and an unknown value is refused there, so anything else here is
+// tree: the whole-tree review stays the default, and a change run must be asked
+// for explicitly.
+function scanMode(args: Record<string, unknown>): ReviewMode {
+  return args["mode"] === "change" ? "change" : "tree";
 }
 
 // readLatestLocalReport returns the newest report the local review wrote under
@@ -79,11 +88,11 @@ function readLatestLocalReport(): string {
 // promise this tool cannot keep. A root that is not a checkout is announced
 // before the report, and the same line goes on an error, so a review of the
 // wrong folder is never a quiet confident answer.
-async function scanRepo(runtime: ToolRuntime): Promise<string> {
+async function scanRepo(runtime: ToolRuntime, mode: ReviewMode): Promise<string> {
   const root = reviewRoot();
   const note = reviewRootNote(root);
   try {
-    const text = await runtime.review(root);
+    const text = await runtime.review(root, mode);
     return note === "" ? text : `${note}\n${text}`;
   } catch (error) {
     if (note === "") {

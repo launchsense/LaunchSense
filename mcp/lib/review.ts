@@ -7,6 +7,10 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { reviewTimeoutMs } from "./limits.ts";
 
+// The scope a scan runs over. "tree" reads the whole working tree and is the
+// default; "change" reads only what changed since the base of the branch.
+export type ReviewMode = "tree" | "change";
+
 // reviewScript is the local review entry point. The installer passes an absolute
 // LAUNCHSENSE_REVIEW. Without it, resolve against the review root, not the
 // process folder: the server runs with cwd inside the checkout, so a process
@@ -101,10 +105,17 @@ export function checkoutAbove(folder: string): string {
 // runNodeReview runs the review script with node and returns its combined
 // output, trimmed. A review that runs past its budget is killed and reported as
 // an error, so a review that never finishes cannot live for ever.
-export async function runNodeReview(root: string): Promise<string> {
+//
+// The --mcp flag tells the review it is not the direct CLI: an incomplete
+// review still exits 0 and carries its completeness in the report body, so the
+// harness sees the report text rather than a tool error. isError is reserved
+// for a review that could not run at all.
+export async function runNodeReview(root: string, mode: ReviewMode = "tree"): Promise<string> {
   const script = reviewScript(root);
   return new Promise<string>((resolveOutput, reject) => {
-    const child = spawn(process.execPath, [script, "--root", root], {
+    const args = [script, "--root", root, "--mcp"];
+    if (mode === "change") args.push("--change");
+    const child = spawn(process.execPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";

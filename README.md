@@ -19,7 +19,7 @@ The file check runs on your machine, reads your working tree including uncommitt
 
 Secrets left in tracked files, licenses that need a person, dependencies with known holes or floating versions, risky code, project hygiene, and duplicate or large files. OSV covers up to 50 packages, and the rest is listed as not checked.
 
-A partial result is not a pass. The not-checked list goes back line for line.
+A partial result is not a pass. The not-checked list goes back line for line. The report states its own completeness in one line, `Review complete.` or `Review incomplete:` with the reasons in words. Ask again as a change review (the scan takes an optional `mode`: `change` reviews only what changed since the base of your branch, named in the report), where a newly added `.ls/policy.yaml` acceptance shows up as one info row.
 
 ## Layout
 
