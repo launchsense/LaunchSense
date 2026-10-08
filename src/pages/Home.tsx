@@ -16,7 +16,7 @@ export default function Home() {
         <p className="beat-early beat-2">You do not know what to ask.</p>
         <h1 className="beat" id="launchsense-title">LaunchSense already asks.</h1>
         <p className="home-actions">
-          <a className="button" href="/connect">Run it on your machine</a>
+          <a className="button" href="/start">Start the check</a>
           <a href="/how">How it works</a>
         </p>
       </header>
@@ -36,7 +36,7 @@ export default function Home() {
           Paste it into Cursor, Claude Code, or Codex with your repo open.
           Then ask it to audit the repo.
         </p>
-        <p><a href="/connect">Local setup in one place</a></p>
+        <p><a href="/start">Start here, everything in one place</a></p>
       </section>
     </SiteFrame>
   );

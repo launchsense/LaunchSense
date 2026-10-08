@@ -14,11 +14,17 @@ export const POLICY_PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18
 export type PolicyProtocolVersion = (typeof POLICY_PROTOCOL_VERSIONS)[number];
 export const POLICY_DEFAULT_VERSION: PolicyProtocolVersion = "2025-03-26";
 
+// The policy bundle version. Bump it whenever the skill, rules, checklist, or
+// audit instructions change, so a harness can tell a stale local copy apart
+// from the current text. Dated, same shape as the consent notice versions.
+export const POLICY_BUNDLE_VERSION = "2026-10-08";
+
 export type PolicyToolName =
   | "launchsense_get_skill"
   | "launchsense_get_rules"
   | "launchsense_get_checklist"
-  | "launchsense_get_audit_instructions";
+  | "launchsense_get_audit_instructions"
+  | "launchsense_get_version";
 
 export type PolicyUsageKind = "mcp_session_initialized" | "mcp_tools_listed" | "mcp_tool_called";
 
@@ -90,8 +96,18 @@ export function policyToolDefs(): Array<{ name: PolicyToolName; description: str
       description: "Read how to run the local audit and report it. Static text, no arguments.",
       inputSchema: closed,
     },
+    {
+      name: "launchsense_get_version",
+      description: "Read the policy bundle version. Compare it with the Skill version line in your local skill copy. Static text, no arguments.",
+      inputSchema: closed,
+    },
   ];
 }
+
+const VERSION_TEXT =
+  `Policy bundle version: ${POLICY_BUNDLE_VERSION}. ` +
+  "If your local skill copy names an older Skill version, re-read skill, rules, " +
+  "checklist, and audit instructions from here and follow those instead of the stale copy.";
 
 export function policyToolText(name: PolicyToolName): string {
   switch (name) {
@@ -103,6 +119,8 @@ export function policyToolText(name: PolicyToolName): string {
       return CHECKLIST_TEXT;
     case "launchsense_get_audit_instructions":
       return AUDIT_INSTRUCTIONS;
+    case "launchsense_get_version":
+      return VERSION_TEXT;
   }
 }
 

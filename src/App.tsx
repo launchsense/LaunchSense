@@ -1,4 +1,5 @@
 import Home from "./pages/Home";
+import Start from "./pages/Start";
 import Why from "./pages/Why";
 import How from "./pages/How";
 import Connect from "./pages/Connect";
@@ -30,6 +31,7 @@ export default function App() {
 
   if (path.startsWith("/s/")) return <Archived />;
   if (path.startsWith("/p/")) return <Archived />;
+  if (path === "/start") return <Start />;
   if (path === "/why") return <Why />;
   if (path === "/how") return <How />;
   if (path === "/connect") return <Connect />;

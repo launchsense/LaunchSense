@@ -41,7 +41,7 @@ cd LaunchSense && ./install.sh`}</pre>
           guided by the skill, and the model writes the audit locally.
         </p>
         <pre className="install-command">{POLICY_URL}</pre>
-        <p>The policy source answers four tools: skill, rules, checklist, audit instructions. It takes no arguments and stores no code. A call is counted, with no gate.</p>
+        <p>The policy source answers five tools: skill, rules, checklist, audit instructions, and version. It takes no arguments and stores no code. A call is counted, with no gate.</p>
       </section>
 
       <section className="check-section" aria-labelledby="runs-title">

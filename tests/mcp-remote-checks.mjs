@@ -25,7 +25,7 @@ describe("online policy source", () => {
     assert.equal(negotiatePolicyProtocol("2099-01-01"), "2025-03-26");
   });
 
-  it("lists exactly the four policy tools and nothing that scans", async () => {
+  it("lists exactly the five policy tools and nothing that scans", async () => {
     const listed = await handlePolicyMessage({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     const names = listed.body.result.tools.map((tool) => tool.name);
     assert.deepEqual(names, [
@@ -33,8 +33,9 @@ describe("online policy source", () => {
       "launchsense_get_rules",
       "launchsense_get_checklist",
       "launchsense_get_audit_instructions",
+      "launchsense_get_version",
     ]);
-    assert.equal(policyToolDefs().length, 4);
+    assert.equal(policyToolDefs().length, 5);
     for (const name of names) {
       assert.doesNotMatch(name, /scan_public|get_report/i);
     }
@@ -65,6 +66,21 @@ describe("online policy source", () => {
     assert.equal(unknown.body.error.code, -32602);
   });
 
+  it("version stamp matches the skill file, so staleness is checkable", async () => {
+    const called = await handlePolicyMessage({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: { name: "launchsense_get_version", arguments: {} },
+    });
+    const text = called.body.result.content[0].text;
+    assert.match(text, /Policy bundle version: \d{4}-\d{2}-\d{2}/);
+    const skill = readFileSync(new URL("../skills/launchsense/SKILL.md", import.meta.url), "utf8");
+    const stamp = skill.match(/^Skill version: (\d{4}-\d{2}-\d{2})\./m);
+    assert.ok(stamp, "the skill must carry a Skill version stamp");
+    assert.ok(text.includes(stamp[1]), "online bundle version and skill stamp must agree");
+  });
+
   it("rules text names the check families and never decides", () => {
     const text = policyToolText("launchsense_get_rules");
     assert.match(text, /secrets, risky code, dependencies, licenses/);
@@ -81,15 +97,17 @@ describe("online policy source", () => {
     assert.doesNotMatch(http, /\/api\/mcp\/scan/);
   });
 
-  it("the connect page shows both doors and the home page tells people to clone", () => {
+  it("the connect page shows both doors and the home page points at the start page", () => {
     const home = readFileSync(new URL("../src/pages/Home.tsx", import.meta.url), "utf8");
     const connect = readFileSync(new URL("../src/pages/Connect.tsx", import.meta.url), "utf8");
+    const start = readFileSync(new URL("../src/pages/Start.tsx", import.meta.url), "utf8");
     assert.match(connect, /https:\/\/harmless-chihuahua-667\.convex\.site\/mcp/);
     assert.match(connect, /Two addresses, two jobs/);
     assert.match(connect, /launchsense_get_skill/);
     assert.match(connect, /git clone https:\/\/github\.com\/launchsense\/LaunchSense/);
     assert.match(connect, /install\.sh/);
-    assert.match(home, /href="\/connect"/);
+    assert.match(home, /href="\/start"/);
     assert.match(home, /SETUP_PROMPT/);
+    assert.match(start, /SETUP_PROMPT/);
   });
 });

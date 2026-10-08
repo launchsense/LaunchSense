@@ -1,7 +1,8 @@
 #!/bin/sh
 # Local review for a checkout of this repository.
-# People using LaunchSense add https://harmless-chihuahua-667.convex.site/mcp
-# They do not run this script.
+# Everyone who uses LaunchSense runs this script. It installs the skill,
+# registers the local file review and the online policy source, and asks two
+# questions.
 #
 # Usage counts are off until you say yes to one question. This script asks
 # before it records anything. It never writes an agreement you did not give.
@@ -130,7 +131,7 @@ fi
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || printf 'unknown')
 
 echo "LaunchSense local review for this checkout."
-echo "Public users add https://harmless-chihuahua-667.convex.site/mcp and do not run this script."
+echo "This script installs the skill, registers the local file review and the online policy source, and asks two questions."
 echo "This local review reads files on this machine. It does not upload them."
 
 GRANTED=false
@@ -286,7 +287,7 @@ else
   echo "Diagnostics: off."
 fi
 echo "Recorded in $CONFIG and $CONSENT_LOG."
-echo "To turn it off later, run LAUNCHSENSE_DIAGNOSTICS=off sh $ROOT/install.sh, or set granted to false in that file."
+echo "To turn it off later, run: LAUNCHSENSE_DIAGNOSTICS=off sh \"$ROOT/install.sh\", or set granted to false in that file."
 
 SKILL_SRC="$ROOT/skills/launchsense/SKILL.md"
 for dest in \
@@ -304,8 +305,9 @@ done
 # start.
 if ! command -v node > /dev/null 2>&1; then
   echo "node is not on PATH, so the local MCP server was not registered."
-  echo "Install Node 24 or newer, then run: node $ROOT/mcp/server.ts"
-  echo "The skill and the config above are installed. The hosted address does not need Node."
+  echo "Install Node 24 or newer, check with: node --version"
+  echo "Then run: LAUNCHSENSE_ROOT=\"$ROOT\" LAUNCHSENSE_REVIEW=\"$ROOT/mcp/review-entry.ts\" node \"$ROOT/mcp/server.ts\""
+  echo "The skill and the config above are installed. The policy address does not need Node."
   exit 0
 fi
 
@@ -337,9 +339,21 @@ if [ ! -f "$CURSOR_CONFIG" ]; then
 EOF
   echo "Wrote $CURSOR_CONFIG"
 else
-  echo "Left existing $CURSOR_CONFIG in place. Point launchsense at: node $ROOT/mcp/server.ts"
-  echo "Set LAUNCHSENSE_ROOT=$ROOT in that entry so the server reviews the checkout, not the mcp folder."
-  echo "Add a launchsense-policy entry at: $POLICY_URL (policies only, never a scan)."
+  echo "Left existing $CURSOR_CONFIG in place, so nothing was merged automatically."
+  echo "Add these two entries inside its mcpServers object, then restart your tool:"
+  cat <<EOF
+    "launchsense": {
+      "command": "node",
+      "args": ["$ROOT/mcp/server.ts"],
+      "env": {
+        "LAUNCHSENSE_ROOT": "$ROOT",
+        "LAUNCHSENSE_REVIEW": "$ROOT/mcp/review-entry.ts"
+      }
+    },
+    "launchsense-policy": {
+      "url": "$POLICY_URL"
+    }
+EOF
 fi
 
 echo "Installed the launchsense skill and the local config. Auth is not checked."
