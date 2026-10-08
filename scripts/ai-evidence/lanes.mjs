@@ -17,7 +17,7 @@
 import { AI_MAX_OUTPUT_TOKENS, extractJson, extractOllamaText } from "../../convex/adapters/ai.ts";
 
 export const LOCAL_OLLAMA_ROOT = "http://127.0.0.1:11434";
-/** The product's decision rung path, unchanged from convex/adapters/decision.ts. */
+/** The product's decision rung path, unchanged from shared/adapters/decision.ts. */
 export const LOCAL_DECISION_PATH = "/v1/systemone";
 /** The OpenAI-compatible chat path the product's Ollama rung already speaks. */
 export const LOCAL_CHAT_PATH = "/v1/chat/completions";

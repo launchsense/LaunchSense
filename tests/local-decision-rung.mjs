@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decisionRungs, LOCAL_DECISION_URL, LOCAL_DECISION_MODEL } from "../convex/adapters/decision.ts";
+import { decisionRungs, LOCAL_DECISION_URL, LOCAL_DECISION_MODEL } from "../shared/adapters/decision.ts";
 
 // The local decision rung is a development instrument. It must be OFF unless the
 // environment asks for it, so a hosted deployment never tries to reach a

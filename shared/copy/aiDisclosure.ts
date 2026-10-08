@@ -74,7 +74,7 @@ export const AI_ASSISTED_TASKS: readonly AiAssistedTask[] = [
     task: "Reorder findings that already exist, inside one severity band.",
     oversight_level: "prompt_guided",
     cannot: "It cannot change which findings exist or what severity any of them has. The fixed priority table always produces an order, and the model lane can only move items within a band that table already placed.",
-    where: ["convex/adapters/decision.ts", "shared/reports/priority.ts"],
+    where: ["shared/adapters/decision.ts", "shared/reports/priority.ts"],
     needs_configuration: true,
   },
   {

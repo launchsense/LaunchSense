@@ -10,7 +10,7 @@
 //
 //   A  licence-unknown lookup   fetch      shared/licensing/lookup.ts
 //   B  plain-word assist        summarize  shared/ai/deterministic.ts + validate.ts
-//   C  reorder inside a band    assist     convex/adapters/decision.ts + priority.ts
+//   C  reorder inside a band    assist     shared/adapters/decision.ts + priority.ts
 //
 // Run it three ways:
 //
@@ -48,7 +48,7 @@ import { buildExplainPrompt, deterministicPlan } from "../../shared/ai/determini
 import { validateAiPlan } from "../../shared/ai/validate.ts";
 import { classifyLookupAnswer, licenseLookupRefusal, suggestUnknownLicenses } from "../../shared/licensing/lookup.ts";
 import { callAiLane } from "../../convex/adapters/ai.ts";
-import { decide, looksLikeSecret } from "../../convex/adapters/decision.ts";
+import { decide, looksLikeSecret } from "../../shared/adapters/decision.ts";
 import { findingsToAsk, questionIdFor } from "../../shared/reports/priority.ts";
 
 const argv = process.argv.slice(2);

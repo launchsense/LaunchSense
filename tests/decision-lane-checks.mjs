@@ -10,7 +10,7 @@ import {
   laneCanReorder,
   findingsToAsk,
 } from "../shared/reports/priority.ts";
-import { looksLikeSecret, validateQuestions, decisionRungs } from "../convex/adapters/decision.ts";
+import { looksLikeSecret, validateQuestions, decisionRungs } from "../shared/adapters/decision.ts";
 import * as FX from "./fixtures.mjs";
 
 // The decision lane. Two things must hold:
@@ -208,7 +208,7 @@ describe("the rung order matches the operator decision", () => {
   });
 
   it("reads only server-side env vars", () => {
-    const source = readFileSync(new URL("../convex/adapters/decision.ts", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../shared/adapters/decision.ts", import.meta.url), "utf8");
     for (const key of ["TYPESAFE_API_KEY", "PERPLEXITY_API_KEY"]) {
       assert.ok(source.includes(key), `must read ${key}`);
     }
@@ -233,7 +233,7 @@ describe("the state sent to the lane is minimal", () => {
 });
 
 describe("the product promise is enforced, not intended", () => {
-  const adapter = readFileSync(new URL("../convex/adapters/decision.ts", import.meta.url), "utf8");
+  const adapter = readFileSync(new URL("../shared/adapters/decision.ts", import.meta.url), "utf8");
   const ranker = readFileSync(new URL("../shared/reports/priority.ts", import.meta.url), "utf8");
 
   it("never lets the lane choose the work that runs", () => {

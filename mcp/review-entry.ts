@@ -3,9 +3,9 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { decide } from "../convex/adapters/decision.ts";
-import type { DecisionQuestion } from "../convex/adapters/decision.ts";
-import { queryOsvBatch } from "../convex/adapters/osv.ts";
+import { decide } from "../shared/adapters/decision.ts";
+import type { DecisionQuestion } from "../shared/adapters/decision.ts";
+import { queryOsvBatch } from "../shared/adapters/osv.ts";
 import { buildLocalReport } from "../shared/review/buildReport.ts";
 import type { AdvisoryCoverage, NotChecked, ReviewFile, ReviewReport } from "../shared/review/buildReport.ts";
 import { diagnosticPayload, diagnosticsAllowed, emptyGovOutcome } from "../shared/review/diagnostics.ts";

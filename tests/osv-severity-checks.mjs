@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { pickSeverity } from "../convex/adapters/osv.ts";
+import { pickSeverity } from "../shared/adapters/osv.ts";
 
 // U5. Most OSV advisories carry a CVSS vector or a textual
 // severity, not a numeric score. The old reader returned the

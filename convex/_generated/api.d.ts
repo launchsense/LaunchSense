@@ -9,10 +9,8 @@
  */
 
 import type * as adapters_ai from "../adapters/ai.js";
-import type * as adapters_decision from "../adapters/decision.js";
 import type * as adapters_dnsGuard from "../adapters/dnsGuard.js";
 import type * as adapters_live from "../adapters/live.js";
-import type * as adapters_osv from "../adapters/osv.js";
 import type * as adapters_share from "../adapters/share.js";
 import type * as analytics_ingest from "../analytics/ingest.js";
 import type * as analytics_inventory from "../analytics/inventory.js";
@@ -44,10 +42,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "adapters/ai": typeof adapters_ai;
-  "adapters/decision": typeof adapters_decision;
   "adapters/dnsGuard": typeof adapters_dnsGuard;
   "adapters/live": typeof adapters_live;
-  "adapters/osv": typeof adapters_osv;
   "adapters/share": typeof adapters_share;
   "analytics/ingest": typeof analytics_ingest;
   "analytics/inventory": typeof analytics_inventory;
