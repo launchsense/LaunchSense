@@ -3,6 +3,8 @@ import Start from "./pages/Start";
 import Why from "./pages/Why";
 import How from "./pages/How";
 import BlogIndex from "./pages/BlogIndex";
+import PrivateSetup from "./pages/PrivateSetup";
+import Dogfooding from "./pages/Dogfooding";
 import CaseStudies from "./pages/CaseStudies";
 import WhyPolicy from "./pages/WhyPolicy";
 import ResearchPost from "./pages/ResearchPost";
@@ -38,6 +40,8 @@ export default function App() {
   if (path === "/licence") return <Archived />;
   if (path === "/blog/why-policy") return <WhyPolicy />;
   if (path === "/blog/what-the-research-says") return <ResearchPost />;
+  if (path === "/blog/fully-private") return <PrivateSetup />;
+  if (path === "/blog/self-scan") return <Dogfooding />;
   if (path === "/case-studies") return <CaseStudies />;
   if (path === "/blog") return <BlogIndex />;
   return <Home />;

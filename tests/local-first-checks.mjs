@@ -32,9 +32,10 @@ describe("the local path says what it is", () => {
     assert.match(flat(localPath), /working tree/);
   });
 
-  it("shows a real install, not a placeholder that cannot run", () => {
-    assert.match(localPath, /github\.com\/launchsense\/LaunchSense/);
-    assert.match(localPath, /install\.sh/);
+  it("shows words and points at Start, with no commands in view", () => {
+    assert.doesNotMatch(localPath, /git clone/);
+    assert.doesNotMatch(localPath, /install\.sh/);
+    assert.match(localPath, /href="\/start"/);
   });
 
   it("uses no countdown, no fake number, and no em dash", () => {

@@ -1,9 +1,6 @@
-// The free local path, shown on the home and connect pages.
-//
-// It runs on the user's machine, reads their working tree, sends nothing to us,
-// and has no hourly limit.
-
-const REPO_URL = "https://github.com/launchsense/LaunchSense";
+// The free local path, in words only. No commands here: the agent reads
+// /install.txt and does the typing. It runs on the user's machine, reads
+// their working tree, sends nothing to us, and has no hourly limit.
 
 export default function LocalPath() {
   return (
@@ -13,11 +10,8 @@ export default function LocalPath() {
         us, there is no hourly limit, and it reads your working tree, including work you
         have not committed yet.
       </p>
-      <pre className="install-command">{`git clone ${REPO_URL}
-cd LaunchSense && ./install.sh`}</pre>
       <p>
-        The installer asks before it changes anything and writes the entry for your
-        coding tool. You can read it before it runs.
+        Your coding tool does the setup with you. <a href="/start">Start here, everything in one place</a>.
       </p>
     </div>
   );

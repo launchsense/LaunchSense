@@ -9,8 +9,8 @@ export default function Home() {
     <SiteFrame>
       <Hero
         id="launchsense-title"
-        title="LaunchSense already asks."
-        lead="For people who just built an app with an AI tool and do not know what to ask before they share it."
+        title="Your repo, audited on your machine."
+        lead="You built an app with an AI tool and you are about to share it. LaunchSense asks the review questions for you: leaked secrets, licenses that do not fit, risky code, and missing basics. Then it hands your coding tool a fix prompt."
         primaryAction={{ href: "/start", label: "Start the check" }}
         secondaryAction={{ href: "/how", label: "How it works" }}
       />
