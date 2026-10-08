@@ -83,6 +83,8 @@ export interface ReviewReport {
   findings: ReviewFinding[];
   lead: string;
   prompts: string[];
+  /** The ordered fix plan: what to do first, with files and a short checklist. */
+  plan: Array<{ order: number; title: string; why: string; files: string[]; checklist: string[] }>;
   orderSource: "local" | "jev" | "perplexity" | "table";
   orderNote: string;
   /** Positions the decision lane moved inside a severity band. 0 means it changed nothing. */
@@ -481,7 +483,8 @@ export function buildLocalReport(
     title: item.title,
     why: item.why,
   }));
-  const top = buildTopPrompt(promptsIn, buildFixPlan(findings).steps, [], 3, order);
+  const plan = buildFixPlan(findings);
+  const top = buildTopPrompt(promptsIn, plan.steps, [], 3, order);
   const lead = top.lead?.prompt ?? "Nothing was flagged in the files we read. This is not a clean bill of health.";
   const promptLines = top.prompts
     .filter((item) => item.ruleId !== top.lead?.ruleId)
@@ -516,6 +519,13 @@ export function buildLocalReport(
     findings,
     lead,
     prompts: promptLines,
+    plan: plan.steps.map((step) => ({
+      order: step.order,
+      title: step.title,
+      why: step.why,
+      files: step.files,
+      checklist: step.checklist,
+    })),
     orderSource: "table",
     orderNote: "Ordered by severity and credential risk alone. The model did not choose which findings exist.",
     orderMoved: 0,

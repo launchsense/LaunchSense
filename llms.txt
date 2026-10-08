@@ -46,7 +46,11 @@ A partial result is not a pass.
 
 Fixed checks cover secrets, code shapes, dependency names, license text, dependency license terms, and project hygiene, plus duplicate files and large files.
 
-The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB per file. It does not read vendored trees, `.progress`, or binary files. Anything past a cap is listed as not checked.
+The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB per file. It does not read vendored trees, installed packages or tool caches (`.venv`, `venv`, `site-packages`, `node_modules`, and the common Python and JS caches), `.progress`, or binary files. Anything past a cap is listed as not checked.
+
+### The report
+
+The report leads with the solution, not a wall of findings: START HERE, then the lead fix prompt and the next prompts to paste, each naming the file; then PLAN, the ordered fix steps, secrets first, each with its why, files, and checklist; then DETAIL, the findings, the not-checked list line for line, the licence suggestion, and one line pointing at the third-party notice file written beside the report.
 
 ### The licence declaration
 

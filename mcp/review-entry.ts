@@ -28,11 +28,24 @@ import { parseManifests } from "../shared/analyzers/deps.ts";
 // not-checked list, so the report never hides the gap.
 const VENDORED = new Set(["vendor", "third_party", "3rdparty", "deps"]);
 
+// Installed-package and tool-cache folders. These hold thousands of files that
+// belong to downloaded libraries, not to the person being reviewed. Reading them
+// buries the repo's own code, and their generic example files produce findings
+// that are not about this project at all. Skipped by name, disclosed like any
+// other skip. site-packages covers a Python virtualenv under any name.
+const PACKAGE_CACHES = new Set([
+  ".venv", "venv", ".env.d", "env", ".tox", ".nox", "site-packages",
+  ".mypy_cache", ".pytest_cache", ".ruff_cache", ".pytype", ".pyre",
+  ".cache", ".turbo", ".nuxt", ".output", ".svelte-kit", ".parcel-cache",
+  "out", "bower_components", ".pnp", ".yarn",
+]);
+
 const SKIP = new Set([
   "node_modules", "dist", "build", ".git", "coverage", ".next", "vendor", "target", "__pycache__", "third_party",
   // The other names third-party code arrives under. Same rule as vendor and
   // third_party: not read, and named in the not-checked list when skipped.
   ...VENDORED,
+  ...PACKAGE_CACHES,
   // The agent working folder. It holds personal and planning material that is
   // nobody's to review, and a review of this repo must never walk into it. Skipped
   // by name, the same as any other unread directory, and disclosed when skipped.
@@ -190,6 +203,12 @@ function applyGovernanceFile(root: string, report: ReviewReport, acknowledged: b
     const dir = join(root, ".ls", "reports");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, `${stamp}.md`), render(report, false, null), "utf8");
+    // The third-party notice is its own file, so the report body stays a report
+    // and the notice stays a document the person can commit. Same one per run.
+    if (report.licenseDeclaration !== null) {
+      const noticeName = report.licenseDeclaration.noticeFilename.replace(/[^\w.-]/g, "-");
+      writeFileSync(join(dir, `${stamp}-${noticeName}`), report.licenseDeclaration.notice, "utf8");
+    }
     ensureGitignored(root);
   } catch {
     report.notChecked.push({ scope: ".ls/reports", reason: "The report copy could not be written." });
@@ -288,6 +307,12 @@ function walk(root: string, agentReadAllowed: boolean): { files: ReviewFile[]; s
         const scope = relative(root, join(dir, name)).split("\\").join("/");
         if (VENDORED.has(name)) {
           skipped.push({ scope, reason: "Vendored tree was not read, so its notices were not checked." });
+        } else if (PACKAGE_CACHES.has(name)) {
+          skipped.push({
+            scope,
+            reason:
+              "Installed packages or a tool cache. Not read, because it holds downloaded library files, not this project's code.",
+          });
         } else if (name === ".progress") {
           skipped.push({ scope, reason: "Working notes folder. Not read, and its contents are not the repo owner's to review." });
         } else {
@@ -516,24 +541,38 @@ async function sendDiagnostics(
 }
 
 function render(report: ReviewReport, diagnosticsSent: boolean, quote: string | null): string {
-  const lines = [
-    "LaunchSense alpha review. The job runs on the files on this machine.",
-    report.coverageNote,
-    `Auth slot: present, not enforced. Alpha does not check a key.`,
-    // The provenance block, in plain words. It names both lanes and says what
-    // each one did. The checks decide; a model explains, orders inside a
-    // severity band, and suggests a licence. The model never decides a finding.
-    `Checks: fixed rules. No model decides a finding or a severity.`,
-    `Order source: ${report.orderSource}. Model moved ${report.orderMoved} item(s) inside a severity band. ${report.orderNote}`,
-    "",
-    report.lead,
-    ...report.prompts.map((line) => line),
-    "",
-    report.lockNote,
-  ];
+  const lines: string[] = [];
+  // 1. One line on what this is and what to do next.
+  lines.push("LaunchSense review. The job ran on the files on this machine.");
+  lines.push(report.coverageNote);
+  lines.push("");
+  // 2. The solution, first. The lead prompt, then the next prompts to paste.
+  lines.push("START HERE");
+  lines.push(report.lead);
+  for (const prompt of report.prompts) lines.push(prompt);
+  lines.push("");
+  // 3. The plan: what to do, in order, with the files and a short checklist.
+  if (report.plan.length > 0) {
+    lines.push("PLAN");
+    for (const step of report.plan) {
+      lines.push(`${step.order}. ${step.title}`);
+      lines.push(`   Why: ${step.why}`);
+      const files = step.files.slice(0, 5);
+      if (files.length > 0) {
+        lines.push(`   Files: ${files.join(", ")}${step.files.length > files.length ? `, and ${step.files.length - files.length} more` : ""}`);
+      }
+      for (const item of step.checklist) lines.push(`   - ${item}`);
+    }
+    lines.push("");
+  }
+  // 4. Everything else: the detail behind the plan.
+  lines.push("DETAIL");
+  lines.push(`Checks: fixed rules. No model decides a finding or a severity.`);
+  lines.push(`Order source: ${report.orderSource}. Model moved ${report.orderMoved} item(s) inside a severity band. ${report.orderNote}`);
   if (quote !== null) {
     lines.push(`Suggestion, quoted from the model: "${quote}" This quote is not a finding.`);
   }
+  lines.push(report.lockNote);
   if (report.sbom !== null) {
     lines.push(`SBOM from ${report.sbom.tool}: ${report.sbom.components} components. Omissions: ${report.sbom.omissions.join("; ")}.`);
   }
@@ -542,14 +581,14 @@ function render(report: ReviewReport, diagnosticsSent: boolean, quote: string | 
     lines.push(
       `Third-party licence declaration: ${declaration.components} components, ${declaration.unknown} unknown. ${declaration.note}`,
     );
-    // The notice text is a file the builder can commit, so it goes to stdout in
-    // full rather than behind a flag. The JSON output carries it as
-    // licenseDeclaration.notice under the same name.
-    lines.push(declaration.notice);
+    // The notice text is a file the builder can commit. It is written to its own
+    // file next to the report, and only referenced here, so the report body does
+    // not carry a hundred lines of it.
+    lines.push(`The full third-party notice is in ${declaration.noticeFilename}, next to this report.`);
   }
   if (report.notChecked.length > 0) {
     lines.push("Not checked:");
-    for (const item of report.notChecked.slice(0, 30)) lines.push(`- ${item.scope}: ${item.reason}`);
+    for (const item of report.notChecked) lines.push(`- ${item.scope}: ${item.reason}`);
   }
   lines.push(`Licence suggestion: ${report.licenseSuggestion.pick ?? "none"} (source: ${report.licenseSuggestion.source}). ${report.licenseSuggestion.note}`);
   lines.push(diagnosticsSent ? "Usage counts were sent. No file text was included." : "Usage counts were not sent.");

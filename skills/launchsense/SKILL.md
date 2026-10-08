@@ -52,11 +52,17 @@ When the person accepts a finding, write the acceptance into `.ls/policy.yaml` w
 
 ### `.ls/reports/`
 
-Each review writes a copy of its report to `.ls/reports/<timestamp>.md`, next to the policy. It is written only when the local file read was acknowledged. It stays on the machine and is not committed.
+Each review writes a copy of its report to `.ls/reports/<timestamp>.md`, next to the policy. It is written only when the local file read was acknowledged. It stays on the machine and is not committed. The third-party notice is written beside it as a separate file, `<timestamp>-THIRD-PARTY-NOTICES.md`.
 
 ## Full review, not secrets only
 
-The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB per file, and it does not read vendored trees, `.progress`, or binary files. Anything past a cap is listed as not checked. It runs every check: secrets, risky code, deps, licenses, hygiene, duplicates, large files, plus OSV, registry facts, ordering, one fix prompt, coverage, and the not-checked list.
+The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB per file. It does not read vendored trees, installed packages or tool caches (`.venv`, `venv`, `site-packages`, `node_modules`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`), `.progress`, or binary files. Anything past a cap is listed as not checked. It runs every check: secrets, risky code, deps, licenses, hygiene, duplicates, large files, plus OSV, registry facts, ordering, the fix plan, coverage, and the not-checked list.
+
+## The report leads with the solution
+
+The report opens with START HERE, then the lead fix prompt and the next prompts to paste, each naming the file. Then PLAN, the ordered fix steps, secrets first, each with its why, the files to open, and a short checklist. DETAIL comes last: the findings, the not-checked list line for line, the licence suggestion, and one line pointing at the third-party notice file written next to the report. The notice text is not dumped into the report body.
+
+A solution here is the ranked, ordered fix path the fixed rules produce. It is not prose advice invented for the repo, and it is not a model's opinion.
 
 ## Licences, and the file you can commit
 
