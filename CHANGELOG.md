@@ -4,6 +4,22 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-08
+
+One lane. The customer's repo is audited on their own machine, through their coding harness. Local reads the files. Online serves the policies.
+
+### Added
+
+- Online policy source at `POST /mcp`. Five closed tools with static text: skill, rules, checklist, audit instructions, and a bundle version stamp. No repo URL, no file reads, no scans, no stored code. Calls counted with no gate and no PII.
+- Self-updating skill. It carries a version stamp and checks the online bundle first on every run.
+- Single `/start` page with the whole setup in words, plus a plain-text `/install.txt` brief for agents with per-harness configs for Cursor, Claude Code, Codex, OpenCode, Antigravity, and Grok.
+- `/notes` with private-setup and self-scan posts, and a case studies page with five measured failure patterns, counts only.
+- `/data` policy page generated against the code, and footer links to GitHub, privacy, data, and the builder.
+
+### Removed
+
+- Web scan, hosted report, share and passport links, licence route, sign-in, guest and signed-in read caps, queue, rescan, and live app check. Their routes return an archived notice. Their tables stay in the schema, unused.
+
 ### Added
 
 - Open core licensing. `LICENSE.txt` now grants MIT over `shared/`, `convex/adapters/`, `convex/scans/snapshot.ts`, `mcp/`, `skills/launchsense/`, `install.sh`, `scripts/`, and `tests/`, except three test files that verify proprietary surfaces. The backend minus adapters and the web app stay proprietary. Contributors sign off under the Developer Certificate of Origin, see `CONTRIBUTING.md`.

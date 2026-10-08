@@ -9,6 +9,7 @@ import CaseStudies from "./pages/CaseStudies";
 import WhyPolicy from "./pages/WhyPolicy";
 import ResearchPost from "./pages/ResearchPost";
 import Privacy from "./pages/Privacy";
+import DataPolicy from "./pages/DataPolicy";
 import { SiteFrame } from "./features/site/SiteFrame";
 
 function Archived() {
@@ -37,6 +38,7 @@ export default function App() {
   if (path === "/how") return <How />;
   if (path === "/connect") return <Archived />;
   if (path === "/privacy") return <Privacy />;
+  if (path === "/data") return <DataPolicy />;
   if (path === "/licence") return <Archived />;
   if (path === "/blog/why-policy") return <Archived />;
   if (path === "/blog/what-the-research-says") return <Archived />;
