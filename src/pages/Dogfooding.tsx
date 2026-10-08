@@ -4,7 +4,7 @@ export default function Dogfooding() {
   return (
     <SiteFrame>
       <header className="hero" aria-labelledby="dogfood-title">
-        <p><a href="/blog">Blog</a></p>
+        <p><a href="/notes">Notes</a></p>
         <h1 id="dogfood-title">LaunchSense on LaunchSense</h1>
         <p className="lead">
           We scan this repo with its own review after every change. These are the measured counts and what each one taught us. Nothing here is a customer story.
@@ -54,9 +54,34 @@ export default function Dogfooding() {
       <section className="check-section" aria-labelledby="hundred-title">
         <h2 id="hundred-title">On scanning 100 repos</h2>
         <p>
-          We have not scanned 100 repos. There is no such post to write yet, and no case study to claim from it.
-          When that run happens, it will measure fix rates across repos with the same triage discipline above, and the
-          numbers will land here and on the case studies page.
+          In addition to our own repo, we ran the same offline review across 100 public repos in ten waves.
+          Depth-1 clones, reviewed and removed. No code was changed. Shapes were recorded, values never were.
+        </p>
+        <ul className="check-list">
+          <li>
+            <strong>Hits per wave, as counted</strong>
+            <p>Wave counts came back between 12 and 1,285 findings. Volume tracks repo size and ecosystem, not quality. Every HIGH and MEDIUM finding was judged against the real file at the reported line.</p>
+          </li>
+          <li>
+            <strong>No live key verified, with an honest gap</strong>
+            <p>No live key was verified in any of the 100. That gap is stated, not hidden: two credential families were never surfaced by the harness, so absence there is unmeasured, not clean. Real non-live literals turned up throughout: scaffold defaults, expired test tokens, seed passwords, and tutorial values.</p>
+          </li>
+          <li>
+            <strong>Precision is the blocker, not recall</strong>
+            <p>The credential pattern fires on ordinary code across ecosystems. Eval flags model evaluation calls. Markup rules fire on generated code. License advice appears where a license file already exists. A global per-rule match cap fills silently with these, hiding rows behind them.</p>
+          </li>
+          <li>
+            <strong>Thirteen fabricated rows, one rule bug</strong>
+            <p>Thirteen rows pointed at a placeholder path that does not exist, all from one license rule. A reviewer cannot open them. They are counted as fabricated and deferred to a rule fix, not deleted.</p>
+          </li>
+          <li>
+            <strong>The decision table held</strong>
+            <p>Measured on development scans, the deterministic table ordered most reports, one provider rung ordered some, the fallback rung was never observed. No rung switch was proposed. No rescan reward was earned, since no repo was scanned twice.</p>
+          </li>
+        </ul>
+        <p>
+          Pattern-level stories from these waves, counts only and never names or values, are the only honest
+          material for the case studies page. Each one needs explicit approval before it is published there.
         </p>
       </section>
     </SiteFrame>

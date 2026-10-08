@@ -4,7 +4,7 @@ const LINKS = [
   { href: "/why", label: "Why" },
   { href: "/how", label: "How" },
   { href: "/start", label: "Start" },
-  { href: "/blog", label: "Blog" },
+  { href: "/notes", label: "Notes" },
 ] as const;
 
 function currentPath(): string {
@@ -14,7 +14,7 @@ function currentPath(): string {
 }
 
 function isCurrent(path: string, href: string): boolean {
-  if (href === "/blog") return path === "/blog" || path.startsWith("/blog/");
+  if (href === "/notes") return path === "/notes" || path.startsWith("/notes/");
   return path === href;
 }
 

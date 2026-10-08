@@ -4,7 +4,7 @@ export default function PrivateSetup() {
   return (
     <SiteFrame>
       <header className="hero" aria-labelledby="private-title">
-        <p><a href="/blog">Blog</a></p>
+        <p><a href="/notes">Notes</a></p>
         <h1 id="private-title">Make it fully private</h1>
         <p className="lead">
           Three levels, from the default to fully offline. Every step is a command your agent can run. Nothing here is advice about your threat model, it is what each switch does.

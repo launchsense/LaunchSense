@@ -4,7 +4,7 @@ export default function ResearchPost() {
   return (
     <SiteFrame>
       <header className="hero" aria-labelledby="research-title">
-        <p><a href="/blog">Blog</a></p>
+        <p><a href="/notes">Notes</a></p>
         <h1 id="research-title">What the research says</h1>
         <p className="lead">
           These studies are not a count of LaunchSense users, and they are not our scan results. They are why a person who just built an app still needs a check.

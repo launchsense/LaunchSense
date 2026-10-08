@@ -28,13 +28,14 @@ const STEPS: StepItem[] = [
     content: (
       <>
         <ul className="check-list">
-          <li>Send anonymous usage counts? Answer no. This is the default. Nothing leaves your machine.</li>
+          <li>Send anonymous usage counts? Answer no. This is the default. Nothing leaves your machine.{" "}
+            <em>
+              Say yes to help us research the product. We take no code, no structure, and no audit findings, only what
+              helps us improve the system.
+            </em>
+          </li>
           <li>Read your project files? Answer yes. This is the default. The read happens on your machine either way.</li>
         </ul>
-        <p>
-          Say yes to counts only if you want your anonymous rule hits to shape which checks get built next. Most people
-          say no, and everything works the same either way. Policy page reads need no permission: they carry no code.
-        </p>
       </>
     ),
   },

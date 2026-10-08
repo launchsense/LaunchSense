@@ -4,7 +4,7 @@ export default function WhyPolicy() {
   return (
     <SiteFrame>
       <header className="hero" aria-labelledby="policy-title">
-        <p><a href="/blog">Blog</a></p>
+        <p><a href="/notes">Notes</a></p>
         <h1 id="policy-title">Why a policy decision matters before you share</h1>
         <p className="lead">
           You built it in a chat. A license and a leaked key are still decisions, even if you never use the word policy.
