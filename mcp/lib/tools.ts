@@ -31,28 +31,19 @@ export function objectSchema(
 export function toolDefs(): ToolDef[] {
   return [
     {
-      // The hosted server really reads a public repo under this name. A local
-      // tool of that name that reads nothing is how a scan gets reported that
-      // never happened, so this one says where the hosted read lives and is
-      // named so it cannot be mistaken for it.
+      // No hosted file read exists. The online address serves policies only, and
+      // this server reviews only files on this machine, so a tool named like
+      // a hosted read would report work that never happened. This one names
+      // both doors so neither is mistaken for the other.
       name: "launchsense_scan_public_notice",
       description:
-        "Does nothing by itself. It names where the public repo read actually lives: the website, or the hosted MCP address. This server reads only files on this machine and never downloads GitHub.",
+        "Does nothing by itself. Policies live online at https://harmless-chihuahua-667.convex.site/mcp: skill, rules, checklists, and audit instructions only, never a file read. This server reviews only files on this machine and never downloads GitHub.",
       inputSchema: objectSchema({}),
     },
     {
       name: "launchsense_report",
-      description: "Read a LaunchSense report by scan id.",
-      inputSchema: objectSchema(
-        {
-          scanId: {
-            type: "string",
-            description:
-              "The scan id the website or the hosted address gave you.",
-          },
-        },
-        ["scanId"],
-      ),
+      description: "Read the latest local LaunchSense report on this machine, written under .ls/reports by a local review.",
+      inputSchema: objectSchema({}),
     },
     {
       name: "launchsense_github",

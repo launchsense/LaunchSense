@@ -13,7 +13,7 @@
 
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { join, dirname } from "node:path";
@@ -226,89 +226,75 @@ describe("W4-MCP: the local server speaks MCP on stdio", () => {
     assert.ok(!("result" in reply), "isError is for a tool that ran and failed, not for a tool that does not exist");
   });
 
-  it("[arguments] a missing required field, a wrong type, and an undeclared field are three different errors", async function () {
-    const missing = await session(
-      HELLO + frame(request(1, "tools/call", { name: "launchsense_report", arguments: {} })),
+  it("[arguments] an unknown tool, an undeclared field, and malformed params are three different errors", async function () {
+    const unknown = await session(
+      HELLO + frame(request(1, "tools/call", { name: "launchsense_report", arguments: { scanId: "abc" } })),
     );
-    assert.equal(replyFor(missing, 1).error.code, -32602);
+    assert.equal(replyFor(unknown, 1).error.code, -32602);
     assert.match(
-      replyFor(missing, 1).error.message,
-      /scanId is required/,
-      `a missing field says which field; got: ${replyFor(missing, 1).error.message}`,
-    );
-
-    const wrongType = await session(
-      HELLO + frame(request(2, "tools/call", { name: "launchsense_report", arguments: { scanId: 42 } })),
-    );
-    assert.equal(replyFor(wrongType, 2).error.code, -32602);
-    assert.match(
-      replyFor(wrongType, 2).error.message,
-      /scanId must be a string, got number/,
-      `a wrong type is a type error, not a missing field; got: ${replyFor(wrongType, 2).error.message}`,
+      replyFor(unknown, 1).error.message,
+      /unexpected property scanId/,
+      `a field the tool dropped is named; got: ${replyFor(unknown, 1).error.message}`,
     );
 
     const undeclared = await session(
-      HELLO + frame(request(3, "tools/call", { name: "launchsense_scan_repo", arguments: { repoUrl: "https://github.com/octocat/Hello-World" } })),
+      HELLO + frame(request(2, "tools/call", { name: "launchsense_scan_repo", arguments: { repoUrl: "https://github.com/octocat/Hello-World" } })),
     );
-    assert.equal(replyFor(undeclared, 3).error.code, -32602);
+    assert.equal(replyFor(undeclared, 2).error.code, -32602);
     assert.match(
-      replyFor(undeclared, 3).error.message,
+      replyFor(undeclared, 2).error.message,
       /repoUrl/,
-      `an argument the tool dropped is named, not silently ignored; got: ${replyFor(undeclared, 3).error.message}`,
+      `an argument the tool dropped is named, not silently ignored; got: ${replyFor(undeclared, 2).error.message}`,
+    );
+
+    const malformed = await session(HELLO + frame({ jsonrpc: "2.0", id: 3, method: "tools/call", params: 42 }));
+    assert.equal(replyFor(malformed, 3).error.code, -32602);
+    assert.match(
+      replyFor(malformed, 3).error.message,
+      /Invalid tool call/,
+      `malformed params are a protocol error; got: ${replyFor(malformed, 3).error.message}`,
     );
   });
 
-  it("[truncation] a report body over 1 MiB comes back as partial, never as a whole report", async function () {
-    const body = "R".repeat(2 * 1024 * 1024);
-    const host = await fixture((req, res) => {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(body);
-    });
+  it("[truncation] a local report over 1 MiB is refused, never returned whole", async function () {
+    const root = mkdtempSync("/tmp/opencode/w4-report-");
     try {
+      mkdirSync(join(root, ".ls", "reports"), { recursive: true });
+      writeFileSync(join(root, ".ls", "reports", "2099-01-01T00-00-00-000Z.md"), "R".repeat(2 * 1024 * 1024));
       const result = await session(
-        HELLO + frame(request(1, "tools/call", { name: "launchsense_report", arguments: { scanId: "fixture" } })),
-        { env: { LAUNCHSENSE_API_URL: host.url }, timeoutMs: 30_000 },
+        HELLO + frame(request(1, "tools/call", { name: "launchsense_report", arguments: {} })),
+        { env: { LAUNCHSENSE_ROOT: root }, timeoutMs: 30_000 },
       );
       const reply = replyFor(result, 1);
       const text = reply.result.content[0].text;
-      assert.equal(reply.result.isError, true, `a clipped body is an error; got isError false with ${text.length} characters`);
-      assert.match(text, /partial/i, `the answer says it is partial; got: ${text.slice(0, 200)}`);
-      assert.ok(text.length < body.length, "the clipped text is not passed off as the whole body");
+      assert.equal(reply.result.isError, true, "an overlarge local report is an error");
+      assert.match(text, /1 MiB/, `the answer says the limit; got: ${text.slice(0, 200)}`);
     } finally {
-      await host.close();
+      rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it("[timeout] an endpoint that accepts and never answers is abandoned, and the next call still works", async function () {
-    // This one really waits for the client timeout, so the test budget is wide.
-    const host = await fixture(() => {
-      // Accepted, then nothing. Never ends the response.
-    });
+  it("[report] the local report never touches the network", async function () {
+    // LAUNCHSENSE_API_URL points at a dead port for every session here. The
+    // report reads .ls/reports on this machine, so it answers anyway.
+    const root = mkdtempSync("/tmp/opencode/w4-report-");
     try {
-      const started = Date.now();
+      mkdirSync(join(root, ".ls", "reports"), { recursive: true });
+      writeFileSync(join(root, ".ls", "reports", "2099-01-01T00-00-00-000Z.md"), "Local report body.");
       const result = await session(
         HELLO +
           frames(
-            request(1, "tools/call", { name: "launchsense_report", arguments: { scanId: "hangs" } }),
+            request(1, "tools/call", { name: "launchsense_report", arguments: {} }),
             request(2, "ping"),
           ),
-        { env: { LAUNCHSENSE_API_URL: host.url }, timeoutMs: 40_000 },
+        { env: { LAUNCHSENSE_ROOT: root }, timeoutMs: 30_000 },
       );
-      const waited = Date.now() - started;
-      assert.equal(result.replies.length, 3, `handshake, hung call and ping all answer; got: ${result.stdout.slice(0, 200)}`);
       const call = replyFor(result, 1);
-      assert.equal(call.result.isError, true, "the hung call is an error");
-      assert.match(
-        call.result.content[0].text,
-        /timeout|deadline/i,
-        `the answer names the timeout; got: ${call.result.content[0].text.slice(0, 200)}`,
-      );
-      // Matched by id, not by position: the ping is answered while the tool call
-      // is still waiting on the endpoint, so it arrives first.
-      assert.ok(replyFor(result, 2).result, "a hung endpoint does not take ping down with it");
-      assert.ok(waited < 30_000, `the call gave up in ${waited}ms instead of hanging`);
+      assert.equal(call.result.isError, false);
+      assert.match(call.result.content[0].text, /Local report body/);
+      assert.ok(replyFor(result, 2).result, "ping still answers, so nothing hung");
     } finally {
-      await host.close();
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

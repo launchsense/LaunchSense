@@ -1,7 +1,9 @@
 import LocalPath from "../features/scan/LocalPath";
 import { SiteFrame } from "../features/site/SiteFrame";
 
-const SETUP_PROMPT = `Set up the local LaunchSense check from https://github.com/launchsense/LaunchSense. Clone it if it is not on this machine, run ./install.sh from its root, answer its two questions as I tell you, and confirm the launchsense server entry points LAUNCHSENSE_ROOT at my checkout. Then run a local review of my checkout and show me the report. Nothing is uploaded.`;
+const POLICY_URL = "https://harmless-chihuahua-667.convex.site/mcp";
+
+const SETUP_PROMPT = `Set up the local LaunchSense check from https://github.com/launchsense/LaunchSense. Clone it if it is not on this machine, run ./install.sh from its root, answer its two questions as I tell you, and confirm the launchsense server entry points LAUNCHSENSE_ROOT at my checkout. Then read the policy source at ${POLICY_URL} with launchsense_get_skill and launchsense_get_rules, run a local review of my checkout, and show me the report. Nothing is uploaded.`;
 
 export default function Home() {
   return (

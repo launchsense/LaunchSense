@@ -31,7 +31,7 @@
 
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { join, dirname } from "node:path";
@@ -502,148 +502,109 @@ describe("Red team: the local MCP server", () => {
   });
 
   // ------------------------------------------------------------------
-  // Target 3: report body truncation
+  // Target 3: local report size cap
   // ------------------------------------------------------------------
   describe("target 3: truncation", () => {
-    const R = "R";
+    function reportRoot(body) {
+      const dir = mkdtempSync("/tmp/opencode/w4-red-report-");
+      mkdirSync(join(dir, ".ls", "reports"), { recursive: true });
+      writeFileSync(join(dir, ".ls", "reports", "2099-01-01T00-00-00-000Z.md"), body);
+      return dir;
+    }
 
-    it("[DEFENDED] 3.1 a body of exactly 1 MiB comes back whole, as a success", async () => {
+    it("[DEFENDED] 3.1 a local report of exactly 1 MiB comes back whole, as a success", async () => {
       needServer();
-      const host = await fixture((req, res) => {
-        const body = Buffer.alloc(REPORT_CAP, 0x52);
-        res.writeHead(200, { "content-type": "application/json", "content-length": String(body.length) });
-        res.end(body);
-      });
+      const dir = reportRoot(Buffer.alloc(REPORT_CAP, 0x52).toString());
       try {
-        const result = await session(HELLO + callTool(1, "launchsense_report", { scanId: "fixture" }), {
-          env: { LAUNCHSENSE_API_URL: host.url },
+        const result = await session(HELLO + callTool(1, "launchsense_report", {}), {
+          env: { LAUNCHSENSE_ROOT: dir },
         });
         const reply = result.replies.find((r) => r.id === 1);
         assert.equal(reply.result.isError, false, "a body exactly at the cap is not an error");
         assert.equal(reply.result.content[0].text.length, REPORT_CAP, "every byte came through");
-        assert.doesNotMatch(reply.result.content[0].text, /partial/i, "and nothing claims it was clipped");
+        assert.doesNotMatch(reply.result.content[0].text, /1 MiB/, "and nothing claims it was clipped");
       } finally {
-        await host.close();
+        rmSync(dir, { recursive: true, force: true });
       }
     });
 
-    it("[DEFENDED] 3.2 a body one byte over 1 MiB comes back as partial, never as a clipped success", async () => {
+    it("[DEFENDED] 3.2 a local report one byte over 1 MiB is refused, never returned whole", async () => {
       needServer();
-      const host = await fixture((req, res) => {
-        const body = Buffer.alloc(REPORT_CAP + 1, 0x52);
-        res.writeHead(200, { "content-type": "application/json", "content-length": String(body.length) });
-        res.end(body);
-      });
+      const dir = reportRoot(Buffer.alloc(REPORT_CAP + 1, 0x52).toString());
       try {
-        const result = await session(HELLO + callTool(1, "launchsense_report", { scanId: "fixture" }), {
-          env: { LAUNCHSENSE_API_URL: host.url },
+        const result = await session(HELLO + callTool(1, "launchsense_report", {}), {
+          env: { LAUNCHSENSE_ROOT: dir },
         });
         const reply = result.replies.find((r) => r.id === 1);
         const text = reply.result.content[0].text;
-        assert.equal(reply.result.isError, true, `a clipped body must not be a success; text was ${text.length} characters`);
-        assert.match(text, /partial/i, `the answer says it is partial: ${text}`);
-        assert.doesNotMatch(text, /RRRRR/, "and the clipped bytes are not passed off as a report");
-        assert.ok(text.length < REPORT_CAP, "the answer is far shorter than the body that arrived");
+        assert.equal(reply.result.isError, true, "an overlarge local report must not be a success");
+        assert.match(text, /1 MiB/, "the answer names the limit");
+        assert.ok(text.length < REPORT_CAP, "the answer is far shorter than the file that arrived");
       } finally {
-        await host.close();
+        rmSync(dir, { recursive: true, force: true });
       }
     });
 
-    it("[DEFENDED] 3.3 a chunked body of exactly 1 MiB is whole too, so the cap does not lean on content-length", async () => {
+    it("[DEFENDED] 3.3 no local report yet is an error that names the fix, not an empty success", async () => {
       needServer();
-      const host = await fixture((req, res) => {
-        res.writeHead(200, { "content-type": "application/json" }); // chunked, no length
-        res.write(Buffer.alloc(REPORT_CAP, 0x52));
-        res.end();
-      });
+      const dir = mkdtempSync("/tmp/opencode/w4-red-report-");
       try {
-        const result = await session(HELLO + callTool(1, "launchsense_report", { scanId: "fixture" }), {
-          env: { LAUNCHSENSE_API_URL: host.url },
+        const result = await session(HELLO + callTool(1, "launchsense_report", {}), {
+          env: { LAUNCHSENSE_ROOT: dir },
         });
         const reply = result.replies.find((r) => r.id === 1);
-        assert.equal(reply.result.isError, false, "no content-length header, same result");
-        assert.equal(reply.result.content[0].text.length, REPORT_CAP);
+        assert.equal(reply.result.isError, true, "a missing report is a failure");
+        assert.match(reply.result.content[0].text, /launchsense_scan_repo/, "and it names the tool that writes one");
       } finally {
-        await host.close();
-      }
-    });
-
-    it("[DEFENDED] 3.4 an upstream that promises more than it sends is an error, not a short report", async () => {
-      needServer();
-      const host = await fixture((req, res) => {
-        res.writeHead(200, { "content-type": "application/json", "content-length": String(4 * REPORT_CAP) });
-        res.write(Buffer.alloc(REPORT_CAP, 0x52));
-        res.socket.destroy(); // hang up mid-body
-      });
-      try {
-        const result = await session(HELLO + callTool(1, "launchsense_report", { scanId: "truncated" }), {
-          env: { LAUNCHSENSE_API_URL: host.url },
-        });
-        const reply = result.replies.find((r) => r.id === 1);
-        assert.equal(reply.result.isError, true, "a half-read body is a failure");
-        const text = reply.result.content[0].text;
-        assert.doesNotMatch(text, /RRRRR/, "the partial bytes are not handed over as a report");
-        assert.ok(!text.includes(R.repeat(1000)), "not even a run of them");
-      } finally {
-        await host.close();
+        rmSync(dir, { recursive: true, force: true });
       }
     });
   });
 
   // ------------------------------------------------------------------
-  // Target 4: a host that never answers
+  // Target 4: the report never touches the network
   // ------------------------------------------------------------------
   describe("target 4: timeout", () => {
-    it("[DEFENDED] 4.1 a host that accepts and never answers is abandoned at about 8 s, and the queued ping still answers", async () => {
+    it("[DEFENDED] 4.1 a dead API does not stop the local report, and the queued ping still answers", async () => {
       needServer();
-      const host = await fixture(() => {
-        // Accepted, then nothing. Never ends the response.
-      });
+      const dir = mkdtempSync("/tmp/opencode/w4-red-report-");
+      mkdirSync(join(dir, ".ls", "reports"), { recursive: true });
+      writeFileSync(join(dir, ".ls", "reports", "2099-01-01T00-00-00-000Z.md"), "Local report body.");
       try {
-        const started = Date.now();
         const result = await session(
-          HELLO + callTool(1, "launchsense_report", { scanId: "hangs" }) + PING,
-          { env: { LAUNCHSENSE_API_URL: host.url }, killAfterMs: 40_000 },
+          HELLO + callTool(1, "launchsense_report", {}) + PING,
+          { env: { LAUNCHSENSE_ROOT: dir, LAUNCHSENSE_API_URL: DEAD_API }, killAfterMs: 30_000 },
         );
-        const waited = Date.now() - started;
         assert.equal(result.replies.length, 3, `every message answers: ${result.stdout.slice(0, 160)}`);
         const call = result.replies.find((r) => r.id === 1);
-        assert.equal(call.result.isError, true, "the hung call is an error");
-        assert.match(
-          call.result.content[0].text,
-          /timeout|deadline/i,
-          `and it names the timeout: ${call.result.content[0].text}`,
-        );
-        assert.equal(result.replies.find((r) => r.id === 999).id, 999, "a hung endpoint does not take ping down with it");
-        assert.ok(waited >= 7_000 && waited < 20_000, `gave up in ${waited}ms, not before the 8s budget and not forever`);
+        assert.equal(call.result.isError, false, "the local report answers with no network");
+        assert.match(call.result.content[0].text, /Local report body/);
+        assert.equal(result.replies.find((r) => r.id === 999).id, 999, "a dead API does not take ping down with it");
         assert.equal(result.code, 0);
       } finally {
-        await host.close();
+        rmSync(dir, { recursive: true, force: true });
       }
     });
 
-    it("[DEFENDED] 4.2 a host that sends headers then stalls the body is abandoned too", async () => {
+    it("[DEFENDED] 4.2 two concurrent local reports and a ping all answer", async () => {
       needServer();
-      const host = await fixture((req, res) => {
-        res.writeHead(200, { "content-type": "application/json", "content-length": String(2 * REPORT_CAP) });
-        res.write(Buffer.alloc(16, 0x52));
-        // Never ends the body.
-      });
+      const dir = mkdtempSync("/tmp/opencode/w4-red-report-");
+      mkdirSync(join(dir, ".ls", "reports"), { recursive: true });
+      writeFileSync(join(dir, ".ls", "reports", "2099-01-01T00-00-00-000Z.md"), "Local report body.");
       try {
-        const started = Date.now();
         const result = await session(
-          HELLO + callTool(1, "launchsense_report", { scanId: "stalls" }) + PING,
-          { env: { LAUNCHSENSE_API_URL: host.url }, killAfterMs: 40_000 },
+          HELLO + callTool(1, "launchsense_report", {}) + callTool(2, "launchsense_report", {}) + PING,
+          { env: { LAUNCHSENSE_ROOT: dir }, killAfterMs: 30_000 },
         );
-        const waited = Date.now() - started;
-        assert.equal(result.replies.length, 3, `every message answers: ${result.stdout.slice(0, 160)}`);
-        const call = result.replies.find((r) => r.id === 1);
-        assert.equal(call.result.isError, true, "a stalled body read is an error");
-        assert.match(call.result.content[0].text, /timeout|deadline|context/i);
+        assert.equal(result.replies.length, 4, `every message answers: ${result.stdout.slice(0, 160)}`);
+        for (const id of [1, 2]) {
+          const call = result.replies.find((r) => r.id === id);
+          assert.equal(call.result.isError, false, `report ${id} answers`);
+        }
         assert.equal(result.replies.find((r) => r.id === 999).id, 999, "ping still answers");
-        assert.ok(waited < 20_000, `gave up in ${waited}ms`);
+        assert.equal(result.code, 0);
       } finally {
-        await host.close();
+        rmSync(dir, { recursive: true, force: true });
       }
     });
 
@@ -786,25 +747,24 @@ describe("Red team: the local MCP server", () => {
       assert.ok(!("result" in reply), "isError is for a tool that ran and failed, not one that does not exist");
     });
 
-    it("[DEFENDED] 5.3 a missing required argument names the field", async () => {
+    it("[DEFENDED] 5.3 an undeclared argument names the field", async () => {
       needServer();
-      for (const args of [{}, { scanId: null }, { scanId: "   " }]) {
+      for (const args of [{ scanId: "x" }, { scanId: null }, { scanId: "   " }]) {
         const reply = await ask("launchsense_report", args);
         assert.equal(reply.error.code, -32602, `for ${JSON.stringify(args)}`);
-        assert.match(reply.error.message, /scanId is required/, `says which field: ${reply.error.message}`);
-        assert.match(reply.error.message, /launchsense_report/, "and which tool");
+        assert.match(reply.error.message, /unexpected property scanId/, `says which field: ${reply.error.message}`);
       }
     });
 
-    it("[DEFENDED] 5.4 a wrong type is a type error, naming the field, the type wanted and the type given", async () => {
+    it("[DEFENDED] 5.4 a wrong-typed undeclared argument is still the same undeclared field, not a missing one", async () => {
       needServer();
       for (const [value, got] of [[42, "number"], [true, "boolean"], [["a"], "array"], [{}, "object"]]) {
         const reply = await ask("launchsense_report", { scanId: value });
         assert.equal(reply.error.code, -32602, `for ${JSON.stringify(value)}`);
         assert.match(
           reply.error.message,
-          new RegExp(`scanId must be a string, got ${got}`),
-          `a wrong type is not reported as a missing field: ${reply.error.message}`,
+          /unexpected property scanId/,
+          `a wrong type on a dropped field is still that field: ${reply.error.message}`,
         );
         assert.doesNotMatch(reply.error.message, /is required/, `not a missing field either: ${reply.error.message}`);
       }
@@ -815,7 +775,7 @@ describe("Red team: the local MCP server", () => {
       const extra = await ask("launchsense_report", { scanId: "x", bogusProp: "y" });
       assert.equal(extra.error.code, -32602);
       assert.match(extra.error.message, /unexpected property bogusProp/);
-      assert.match(extra.error.message, /scanId/, "and lists the declared properties");
+      assert.match(extra.error.message, /takes no arguments/, "and says the tool takes none");
 
       // The tool that dropped repoUrl must say so rather than ignore it.
       const dropped = await ask("launchsense_scan_repo", { repoUrl: "https://github.com/octocat/Hello-World" });
@@ -832,9 +792,9 @@ describe("Red team: the local MCP server", () => {
         ["arguments as an array", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report","arguments":["scanId"]}}\n', -32602, /must be a JSON object/],
         ["params as a string", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":"scanId=x"}\n', -32602, /Invalid tool call/],
         ["name as a number", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":7,"arguments":{}}}\n', -32602, /Invalid tool call/],
-        ["arguments missing", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report"}}\n', -32602, /scanId is required/],
-        ["a duplicate key", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report","arguments":{"scanId":"a","scanId":null}}}\n', -32602, /scanId is required/],
-        ["a prototype key", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report","arguments":{"scanId":"x","__proto__":"y","constructor":"z"}}}\n', -32602, /unexpected property/],
+        ["a dropped scanId", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report","arguments":{"scanId":"a"}}}\n', -32602, /unexpected property scanId/],
+        ["a duplicate key", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report","arguments":{"scanId":"a","scanId":null}}}\n', -32602, /unexpected property scanId/],
+        ["a prototype key", '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"launchsense_report","arguments":{"bogus":"x","__proto__":"y","constructor":"z"}}}\n', -32602, /unexpected property/],
         ["an unknown method", '{"jsonrpc":"2.0","id":1,"method":"does/not/exist"}\n', -32601, /Method not found/],
       ];
       for (const [name, input, code, pattern] of cases) {

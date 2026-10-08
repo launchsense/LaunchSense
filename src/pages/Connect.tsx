@@ -1,7 +1,9 @@
 import { SiteFrame } from "../features/site/SiteFrame";
 import { AI_DISCLOSURE_WITH_LEVEL } from "../../shared/copy/aiDisclosure";
 
-const SETUP_PROMPT = `Set up the local LaunchSense check from https://github.com/launchsense/LaunchSense. Clone it if it is not on this machine, run ./install.sh from its root, answer its two questions as I tell you, and confirm the launchsense server entry points LAUNCHSENSE_ROOT at my checkout. Then run a local review of my checkout and show me the report. Nothing is uploaded.`;
+const POLICY_URL = "https://harmless-chihuahua-667.convex.site/mcp";
+
+const SETUP_PROMPT = `Set up the local LaunchSense check from https://github.com/launchsense/LaunchSense. Clone it if it is not on this machine, run ./install.sh from its root, answer its two questions as I tell you, and confirm the launchsense server entry points LAUNCHSENSE_ROOT at my checkout. Then read the policy source at ${POLICY_URL} with launchsense_get_skill and launchsense_get_rules, run a local review of my checkout, and show me the report. Nothing is uploaded.`;
 
 export default function Connect() {
   return (
@@ -25,10 +27,21 @@ export default function Connect() {
 cd LaunchSense && ./install.sh`}</pre>
         <ul className="check-list">
           <li>Installs the skill into your coding tool.</li>
-          <li>Registers the local MCP server and points it at your repo.</li>
+          <li>Registers the local MCP server and points it at your repo. The local server reads your files.</li>
+          <li>Registers the policy source. The policy source serves skill, rules, checklists, and audit instructions only, never a scan.</li>
           <li>Asks two questions. Usage counts default to no. File read defaults to yes.</li>
           <li>Needs Node 24 or newer on PATH. Without it the installer says so and registers nothing.</li>
         </ul>
+      </section>
+
+      <section className="check-section" aria-labelledby="doors-title">
+        <h2 id="doors-title">Two addresses, two jobs</h2>
+        <p>
+          Local reads the files. Online serves the policies. Your tool reads the rules from online,
+          guided by the skill, and the model writes the audit locally.
+        </p>
+        <pre className="install-command">{POLICY_URL}</pre>
+        <p>The policy source answers four tools: skill, rules, checklist, audit instructions. It takes no arguments and stores no code. A call is counted, with no gate.</p>
       </section>
 
       <section className="check-section" aria-labelledby="runs-title">

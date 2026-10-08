@@ -311,13 +311,13 @@ fi
 
 mkdir -p "$HOME/.cursor" "$CONFIG_DIR"
 CURSOR_CONFIG="$HOME/.cursor/mcp.json"
+POLICY_URL="https://harmless-chihuahua-667.convex.site/mcp"
 if [ ! -f "$CURSOR_CONFIG" ]; then
   # LAUNCHSENSE_ROOT names the checkout to review. LAUNCHSENSE_REVIEW names the
   # review script and stays absolute, so it does not depend on the folder the
-  # server was started in. These two keys are the whole contract with the server:
-  # it reads LAUNCHSENSE_ROOT, LAUNCHSENSE_REVIEW and LAUNCHSENSE_API_URL, and
-  # nothing else. A key written here that the server does not read is a promise
-  # the installer cannot keep, so there are no others.
+  # server was started in. The launchsense entry reads files on this machine.
+  # The launchsense-policy entry serves skill, rules, checklists, and audit
+  # instructions only, never a scan.
   cat > "$CURSOR_CONFIG" <<EOF
 {
   "mcpServers": {
@@ -328,6 +328,9 @@ if [ ! -f "$CURSOR_CONFIG" ]; then
         "LAUNCHSENSE_ROOT": "$ROOT",
         "LAUNCHSENSE_REVIEW": "$ROOT/mcp/review-entry.ts"
       }
+    },
+    "launchsense-policy": {
+      "url": "$POLICY_URL"
     }
   }
 }
@@ -336,6 +339,7 @@ EOF
 else
   echo "Left existing $CURSOR_CONFIG in place. Point launchsense at: node $ROOT/mcp/server.ts"
   echo "Set LAUNCHSENSE_ROOT=$ROOT in that entry so the server reviews the checkout, not the mcp folder."
+  echo "Add a launchsense-policy entry at: $POLICY_URL (policies only, never a scan)."
 fi
 
 echo "Installed the launchsense skill and the local config. Auth is not checked."

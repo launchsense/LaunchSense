@@ -45,6 +45,7 @@ const OPEN_FILES = [];
 const EXCLUDED = [
   "tests/analytics-pii-checks.mjs",
   "tests/consent-record-lane-checks.mjs",
+  "tests/mcp-remote-checks.mjs",
 ];
 
 function listFiles(dir) {

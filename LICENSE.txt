@@ -21,6 +21,7 @@ Section 3 with the surfaces they verify:
 
   tests/analytics-pii-checks.mjs
   tests/consent-record-lane-checks.mjs
+  tests/mcp-remote-checks.mjs
 
 The rule is functional, not just this list: any test file that imports or
 loads a module outside the open scope stays under Section 3. The list above

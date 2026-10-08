@@ -1,10 +1,12 @@
 // What each tool does once its arguments have been checked. Every tool reads
-// this machine or the LaunchSense API. None of them downloads GitHub.
+// this machine. None of them downloads GitHub and none uploads files.
 
 import type { Account } from "./github.ts";
 import { accountText } from "./github.ts";
-import { postJSON } from "./api.ts";
 import { reviewRoot, reviewRootNote } from "./review.ts";
+import { maxReportBytes } from "./limits.ts";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 export interface ToolRuntime {
   apiURL: string;
@@ -13,8 +15,8 @@ export interface ToolRuntime {
 }
 
 const NOTICE =
-  "The public paste is the website, and the hosted address reads a public repo too: " +
-  "https://harmless-chihuahua-667.convex.site/mcp\n" +
+  "Policies live online at https://harmless-chihuahua-667.convex.site/mcp: skill, " +
+  "rules, checklists, and audit instructions only, never a file read.\n" +
   "This server reviews the files on this machine and does not download GitHub. " +
   "Use launchsense_scan_repo for the checkout.";
 
@@ -23,18 +25,14 @@ const NOTICE =
 // is a result and not a protocol error.
 export async function callTool(
   name: string,
-  args: Record<string, unknown>,
+  _args: Record<string, unknown>,
   runtime: ToolRuntime,
 ): Promise<string> {
   switch (name) {
     case "launchsense_scan_public_notice":
       return NOTICE;
     case "launchsense_report": {
-      const scanId = typeof args.scanId === "string" ? args.scanId : "";
-      if (scanId.trim() === "") {
-        throw new Error("scanId is required");
-      }
-      return await postJSON(runtime.apiURL, "/api/mcp/report", { scanId });
+      return readLatestLocalReport();
     }
     case "launchsense_github":
       return accountText(await runtime.account());
@@ -45,6 +43,37 @@ export async function callTool(
   }
 }
 
+// readLatestLocalReport returns the newest report the local review wrote under
+// .ls/reports. Local only: it never asks any server, because reports stay on
+// the machine. Set LAUNCHSENSE_ROOT at the checkout, the same root the review
+// uses, so the report is for the checkout and not for the server folder.
+function readLatestLocalReport(): string {
+  const root = reviewRoot();
+  const dir = join(root, ".ls", "reports");
+  let names: string[];
+  try {
+    names = readdirSync(dir).filter((n) => n.endsWith(".md")).sort();
+  } catch {
+    throw new Error("No local report yet. Run launchsense_scan_repo first.");
+  }
+  if (names.length === 0) {
+    throw new Error("No local report yet. Run launchsense_scan_repo first.");
+  }
+  const latest = names[names.length - 1];
+  if (latest === undefined) {
+    throw new Error("No local report yet. Run launchsense_scan_repo first.");
+  }
+  try {
+    const info = statSync(join(dir, latest));
+    if (info.size > maxReportBytes) {
+      throw new Error("The latest local report is over 1 MiB. Read it from .ls/reports directly.");
+    }
+    return readFileSync(join(dir, latest), "utf8");
+  } catch (error) {
+    if (error instanceof Error && /No local report|over 1 MiB/.test(error.message)) throw error;
+    throw new Error("The latest local report could not be read as text.");
+  }
+}
 // scanRepo reviews the checkout named by LAUNCHSENSE_ROOT. It takes no arguments
 // on purpose: it reads files on this machine, so a repository URL would be a
 // promise this tool cannot keep. A root that is not a checkout is announced

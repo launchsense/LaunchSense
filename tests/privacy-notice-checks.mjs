@@ -175,18 +175,21 @@ describe("sign-in is archived", () => {
 });
 
 describe("the Connect page discloses local setup", () => {
-  it("names the local install and the one prompt, not a hosted address", () => {
+  it("names the local install, the one prompt, and the policy source, never a scan", () => {
     for (const line of [
       "Run it on your machine",
       "git clone https://github.com/launchsense/LaunchSense",
       "./install.sh",
       "SETUP_PROMPT",
       "Nothing is uploaded",
+      "Two addresses, two jobs",
+      "launchsense_get_skill",
     ]) {
       assert.ok(connectText.includes(line), `the Connect page is missing a disclosure line: ${line}`);
     }
-    assert.ok(!connect.includes("harmless-chihuahua-667.convex.site/mcp"), "Connect must not name a hosted address");
-    assert.ok(!connect.includes("launchsense_scan_public"), "Connect must not name a hosted tool");
+    assert.ok(connect.includes("harmless-chihuahua-667.convex.site/mcp"), "Connect must name the policy source");
+    assert.ok(!connect.includes("launchsense_scan_public"), "Connect must not name a scan tool");
+    assert.ok(!connect.includes("launchsense_get_report"), "Connect must not name a hosted report tool");
   });
 
   it("keeps the running text and the partial-result warning", () => {
