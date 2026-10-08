@@ -1,39 +1,16 @@
-# Internal documentation and planning folders.
-/.agents
-/.progress/
-# Local run notes for the audit-fix wave. Never publish.
-/state/
-
-# Dependencies, build output, and private machine configuration.
+# Dependencies and build output.
 node_modules/
-/dist/
-/mcp/launchsense-mcp
-.env*
-!.env.example
+dist/
 *.tsbuildinfo
-.auth-keys.json
 
-# Local agent instructions, tools, and internal notes never go to GitHub.
-/AGENTS.md
-/.codex
-/docs/SETUP.md
-
-# Local tool state. Never publish.
-.impeccable/
-
-# Private keys, credentials, and local tool/editor state. Never publish.
+# Local machine configuration and secrets. Never committed.
+.env
+.env.*
+!.env.example
 *.pem
 *.key
 credentials*.json
 secrets*.json
-.builder-pulse/
-.claude/
-.opencode/
-.vscode/
-.idea/
 
 # LaunchSense governance. Kept on this machine only.
 .ls/
-
-# Local research notes. Never publish.
-/research/

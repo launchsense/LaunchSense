@@ -1,10 +1,8 @@
-# Tools that respect this file (ripgrep, and most grep wrappers) will skip these
-# paths even during a broad search. This is a MECHANICAL guard for the private
-# folders, not just a prose instruction. It backs up the boundary stated in every
-# audit brief.
-#
-# Private personal folders. Never read, list, search, index, or report.
-StableSense/
-.progress/StableSense/
-.progress/reserach-policy/
-.progress/CyberInvestigation/
+# Paths search tools should skip even during a broad search, as a mechanical
+# guard on top of the installer's own skip list.
+node_modules/
+dist/
+.venv/
+venv/
+site-packages/
+__pycache__/
