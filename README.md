@@ -35,14 +35,13 @@ The website and the policies live in a separate repository, `launchsense-core`, 
 
 If you want the whole thing local with no policy source and no network at all, ask the creator for access to the policy and governance engine: https://www.withkeshav.com
 
-## Checks
+## Run it directly
+
+No build step and no dependencies. The engine runs on Node 24 or newer with types stripped:
 
 ```
-npm ci
-npm run check
+node --experimental-strip-types mcp/review-entry.ts --root /path/to/your/repo
 ```
-
-Typecheck, lint, claim guard, DCO, and the test run. The gate runs on pre-push and in CI.
 
 ## License
 
