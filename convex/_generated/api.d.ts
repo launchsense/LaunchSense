@@ -11,11 +11,9 @@
 import type * as adapters_ai from "../adapters/ai.js";
 import type * as adapters_decision from "../adapters/decision.js";
 import type * as adapters_dnsGuard from "../adapters/dnsGuard.js";
-import type * as adapters_github from "../adapters/github.js";
 import type * as adapters_live from "../adapters/live.js";
 import type * as adapters_osv from "../adapters/osv.js";
 import type * as adapters_share from "../adapters/share.js";
-import type * as adapters_tarball from "../adapters/tarball.js";
 import type * as analytics_ingest from "../analytics/ingest.js";
 import type * as analytics_inventory from "../analytics/inventory.js";
 import type * as analytics_privacy from "../analytics/privacy.js";
@@ -35,23 +33,7 @@ import type * as identity_attribution from "../identity/attribution.js";
 import type * as identity_credential from "../identity/credential.js";
 import type * as identity_quotaKey from "../identity/quotaKey.js";
 import type * as identity_store from "../identity/store.js";
-import type * as mcpHttp from "../mcpHttp.js";
-import type * as mcpLimit from "../mcpLimit.js";
 import type * as projects from "../projects.js";
-import type * as scans_actions from "../scans/actions.js";
-import type * as scans_aiExplain from "../scans/aiExplain.js";
-import type * as scans_analyze from "../scans/analyze.js";
-import type * as scans_internal from "../scans/internal.js";
-import type * as scans_livecheck from "../scans/livecheck.js";
-import type * as scans_queries from "../scans/queries.js";
-import type * as scans_queue from "../scans/queue.js";
-import type * as scans_quota from "../scans/quota.js";
-import type * as scans_rankScan from "../scans/rankScan.js";
-import type * as scans_rescan from "../scans/rescan.js";
-import type * as scans_sharing from "../scans/sharing.js";
-import type * as scans_snapshot from "../scans/snapshot.js";
-import type * as scans_store from "../scans/store.js";
-import type * as scans_suggestLicence from "../scans/suggestLicence.js";
 
 import type {
   ApiFromModules,
@@ -63,11 +45,9 @@ declare const fullApi: ApiFromModules<{
   "adapters/ai": typeof adapters_ai;
   "adapters/decision": typeof adapters_decision;
   "adapters/dnsGuard": typeof adapters_dnsGuard;
-  "adapters/github": typeof adapters_github;
   "adapters/live": typeof adapters_live;
   "adapters/osv": typeof adapters_osv;
   "adapters/share": typeof adapters_share;
-  "adapters/tarball": typeof adapters_tarball;
   "analytics/ingest": typeof analytics_ingest;
   "analytics/inventory": typeof analytics_inventory;
   "analytics/privacy": typeof analytics_privacy;
@@ -87,23 +67,7 @@ declare const fullApi: ApiFromModules<{
   "identity/credential": typeof identity_credential;
   "identity/quotaKey": typeof identity_quotaKey;
   "identity/store": typeof identity_store;
-  mcpHttp: typeof mcpHttp;
-  mcpLimit: typeof mcpLimit;
   projects: typeof projects;
-  "scans/actions": typeof scans_actions;
-  "scans/aiExplain": typeof scans_aiExplain;
-  "scans/analyze": typeof scans_analyze;
-  "scans/internal": typeof scans_internal;
-  "scans/livecheck": typeof scans_livecheck;
-  "scans/queries": typeof scans_queries;
-  "scans/queue": typeof scans_queue;
-  "scans/quota": typeof scans_quota;
-  "scans/rankScan": typeof scans_rankScan;
-  "scans/rescan": typeof scans_rescan;
-  "scans/sharing": typeof scans_sharing;
-  "scans/snapshot": typeof scans_snapshot;
-  "scans/store": typeof scans_store;
-  "scans/suggestLicence": typeof scans_suggestLicence;
 }>;
 
 /**
