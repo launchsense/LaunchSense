@@ -245,24 +245,9 @@ describe("a consent record carries the fields ISO/IEC TS 27560:2023 names", () =
     assert.match(named, /myConsentRecords/, "and the query that returns it");
   });
 
-  it("names the four purposes the sign-in panel asks about, with the same labels", () => {
-    // The panel is the surface a person reads. If a purpose is renamed in one place
-    // and not the other, the record describes a question nobody was asked. The
-    // local file read is a fifth purpose but it is not asked on this panel.
-    const panelIds = [...authPanel.matchAll(/^ {4}id: "([a-z]+)",$/gm)].map((m) => m[1]);
-    assert.deepEqual(
-      [...SIGN_IN_PURPOSE_IDS],
-      panelIds,
-      "the consent vocabulary and the sign-in boxes must ask about the same things in the same order",
-    );
-    for (const id of SIGN_IN_PURPOSE_IDS) {
-      const purpose = CONSENT_PURPOSES.find((item) => item.id === id);
-      assert.ok(purpose, `${id} must exist in the vocabulary`);
-      assert.ok(
-        authPanel.includes(purpose.label),
-        `the sign-in panel no longer says: ${purpose.label}`,
-      );
-    }
+  it("sign-in panel is archived and asks nothing", () => {
+    assert.equal(existsSync(join(repo, "src", "features", "auth", "AuthPanel.tsx")), false);
+    // Vocabulary stays so old consentRecords rows remain readable. Panel is gone.
   });
 
   it("says where each of the four purposes is recorded, in the ledger or the database", () => {
@@ -498,9 +483,8 @@ describe("the Article 30 register is generated from the data inventory in the re
         }
       }
     }
-    assert.equal(purged, 2, "two windows in this build delete rows, and no third one does");
-    // The two windows the copy names as deleted really do delete.
-    assert.match(convexSource, /db\.delete\("fileContents"/, "the 24 hour window needs a real delete");
+    assert.equal(purged, 1, "one window in this build deletes rows, and no second one does");
+    // The window the copy names as deleted really does delete.
     assert.match(convexSource, /db\.delete\("usageEvents"/, "the 30 day window needs a real delete");
   });
 
@@ -544,8 +528,8 @@ describe("the Article 30 register is generated from the data inventory in the re
       }
     }
     assert.match(
-      read("convex", "scans", "store.ts"),
-      /"findings"|"evidenceItems"/,
+      read("convex", "schema.ts"),
+      /"findings"|findings:/,
       "the findings tables exist, so saying they are never purged is a real statement",
     );
   });
@@ -801,8 +785,10 @@ describe("no document in this lane claims more than the code does", () => {
   it("ties each retention window in the notice to the purge, or says nothing enforces it", () => {
     const doc = flat(privacyDoc);
     const page = flat(privacyPage);
-    // 24 hours and 30 days are the two windows the code purges.
-    for (const window of ["24 hours", "30 days"]) {
+    // 30 days is the window the code purges. 24 hours went with the web scan.
+    assert.ok(!doc.includes("24 hours"), "docs/PRIVACY.md must not claim the archived 24 hour window");
+    assert.ok(!page.includes("24 hours"), "/privacy must not claim the archived 24 hour window");
+    for (const window of ["30 days"]) {
       assert.ok(doc.includes(window), `docs/PRIVACY.md lost the ${window} window`);
       assert.ok(page.includes(window), `/privacy lost the ${window} window`);
     }
@@ -814,10 +800,7 @@ describe("no document in this lane claims more than the code does", () => {
     ]) {
       assert.ok(doc.includes(gap) || page.includes(gap), `both copies must keep the honest gap: ${gap}`);
     }
-    const analyze = read("convex", "scans", "analyze.ts");
     const retention = read("convex", "analytics", "retention.ts");
-    assert.match(analyze, /CONTENT_CACHE_TTL_MS\s*=\s*24 \* 60 \* 60 \* 1000/);
-    assert.match(analyze, /purgeStaleContents/);
     assert.match(retention, /USAGE_EVENT_TTL_MS\s*=\s*30 \* 24 \* 60 \* 60 \* 1000/);
     assert.match(retention, /db\.delete\("usageEvents"/);
   });

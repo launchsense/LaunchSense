@@ -1,7 +1,30 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
-import { allowlistedClientName } from "../mcpHttp";
 import { forbiddenPropertiesIn } from "./privacy";
+
+// Archived hosted MCP ingest. The protocol route went with the web scan, so
+// nothing calls this now. Kept so analytics tables stay settled until Stage 3.
+type ClientName = "cursor" | "claude_code" | "claude_desktop" | "codex" | "vscode" | "windsurf" | "other" | "unknown";
+
+function allowlistedClientName(raw: unknown): ClientName {
+  const key = typeof raw === "string" ? raw.toLowerCase().replace(/[^a-z]/g, "") : "";
+  const map: Record<string, ClientName> = {
+    cursor: "cursor",
+    claudecode: "claude_code",
+    claudedesktop: "claude_desktop",
+    claudeapp: "claude_desktop",
+    codex: "codex",
+    openaicodex: "codex",
+    codexcli: "codex",
+    vscode: "vscode",
+    visualstudiocode: "vscode",
+    windsurf: "windsurf",
+    windsurfnext: "windsurf",
+    code: "vscode",
+  };
+  if (key.length === 0) return "unknown";
+  return map[key] ?? "other";
+}
 
 // Analytics ingest for the hosted MCP surface. One row per protocol action.
 //

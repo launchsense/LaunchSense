@@ -2,22 +2,18 @@
 
 What this release does not do. Everything here is stated so nothing looks finished when it is not.
 
-LaunchSense does not say if the product will sell. It does not judge the market or the idea. The website paste and the hosted MCP check duplicate files and large files.
+LaunchSense audits your repo on your machine, through your coding tool. It has no hourly limit, sends nothing to us unless you opt in, and reads your working tree including work you have not committed.
 
 ## Code we can read
 
-- The paste box reads a public GitHub repo with no account. That guest read stops at 200 files and about 2MB, and it uses the shared GitHub quota.
-- Sign in with GitHub to read one private repo you can already read, or more of a public one. That read uses your GitHub token on our server for one archive download, then the token is deleted when you sign out. The signed-in cap is 1,000 files and about 8MB. The download stops at 20MB either way. We do not store the file contents.
-- GitHub quota for a guest scan is shared. When it runs out, scans show partial with a retry time. A signed-in scan spends that person's GitHub quota and does not change the guest meter.
-- One scan makes about four GitHub requests: repository metadata, the latest commit, the file list, and one repository archive.
+- The local read covers 5,000 files and 40MB in all, 100KB per file.
+- OSV covers up to 50 packages. The rest stay not checked.
 - Caps: 100 KB per file. Lockfiles may be read up to 500 KB so exact installed versions can be checked. Skipped files are listed as not checked.
 - Binary files and generated folders like node_modules, dist, and build are skipped.
 
 ## Capacity, and what we show you
 
-- The scan page shows how many GitHub requests are left, how many more scans that allows, and when the quota resets.
-- Six scans analyse at the same time. Extra scans queue and are told their place instead of everyone failing together.
-- Every scan has a time budget. When it runs out, the result is partial and the not-checked list says what was left undone.
+- Every local run has a time budget. When it runs out, the result is partial and the not-checked list says what was left undone.
 
 ## Checks we do not run
 
@@ -29,7 +25,7 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 - A package whose license could not be read stays Unknown and is never given a severity or a finding. A guarded AI lookup for those exists, with a strict noun whitelist, and no lane is wired in this release, so it is refused.
 - License notes are signals, not legal advice.
 - Authentication and runtime behaviour are not tested.
-- Rendered layout on a real phone is not checked. The live check only reads served HTML, and the report says so.
+- Rendered layout on a real phone is not checked.
 
 ## Signals, not verdicts
 
@@ -54,11 +50,9 @@ LaunchSense does not say if the product will sell. It does not judge the market 
 
 ## Not built yet
 
-- No saved projects, no history, no rescan across sessions.
-- The hosted MCP reads one public GitHub repo on our server. The Connect page shows the address. It does not read a repo that exists only on a laptop. The hosted read keeps 200 scans an hour for the shared hosted bucket, and 600 in total across the hosted lane, then that route pauses. A resolved credential gets 20 scans an hour and 120 in a day against its own bucket. The counter holds no part of your network address.
-- No monitoring and no scheduled scans.
-- No GitHub App installation scan yet. That connected read is on the roadmap, see `ROADMAP.md`. Sign-in today downloads one archive with the person's token.
-- No runtime performance data. GitHub does not expose it.
+- No saved projects on our server, no history on our server, no scheduled scans.
+- No GitHub App installation scan yet. That connected read is on the roadmap, see `ROADMAP.md`.
+- No runtime performance data.
 - No blog posts published yet.
 
 ## The one rule that overrides all of these

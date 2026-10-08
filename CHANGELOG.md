@@ -79,9 +79,9 @@ All notable changes to LaunchSense. This file follows Keep a Changelog. Versions
 - Accepted-risk marks no longer insert duplicate rows.
 - AI explanations are now returned and visible in the report instead of validated and discarded.
 - The footer no longer calls the checks open source while the project license is proprietary.
-- Privacy page described a 24 hour cache of redacted file text that was removed three releases ago. It now describes what is actually stored: paths, sizes, hashes, and redacted snippets.
+- Privacy page described a daily cache of redacted file text that was removed three releases ago. It now describes what is actually stored: paths, sizes, hashes, and redacted snippets.
 - Docs claimed re-scanning the same commit costs nothing. It costs about 4 GitHub requests. Corrected, with the real cost stated.
-- Scan page told users their snippets were cached for 24 hours. No purge existed. Corrected.
+- Scan page told users their snippets were cached for a day. No purge existed. Corrected.
 
 ### Changed
 

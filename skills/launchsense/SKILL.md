@@ -58,7 +58,7 @@ Three things, and nothing else. It rewrites a finding in plainer language. It ca
 
 Human oversight level, `humanOversightLevel` in C2PA Technical Specification 2.4, is `prompt_guided`: a person asked for the output and nobody approved it afterwards. No path in this product is `fully_autonomous` and none is `human_validated`. We borrow the vocabulary. We are not a C2PA claim generator.
 
-The AI never decides a finding, a severity, a licence fact, consent, who a caller is, or whether a request is allowed. Each of those is fixed code: `shared/analyzers`, `shared/policies/severity.ts`, `shared/licensing`, `install.sh`, `convex/identity`, `convex/mcpLimit.ts`. If a line suggests a model settled one of those, it is wrong.
+The AI never decides a finding, a severity, a licence fact, consent, who a caller is, or whether a request is allowed. Each of those is fixed code: `shared/analyzers`, `shared/policies/severity.ts`, `shared/licensing`, `install.sh`, `convex/identity`. If a line suggests a model settled one of those, it is wrong.
 
 ## What you may say
 

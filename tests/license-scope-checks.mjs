@@ -37,23 +37,14 @@ const OPEN_DIRS = [
   "scripts",
   "tests",
 ];
-const OPEN_FILES = ["convex/scans/snapshot.ts"];
+const OPEN_FILES = [];
 // Tests that load proprietary modules, and stay proprietary with the
 // surfaces they verify. The rule is functional: any test file that imports
 // or loads a module outside the open zone stays out of the grant, and this
 // list is complete as of this writing.
 const EXCLUDED = [
-  "tests/ai-lane-gate-checks.mjs",
-  "tests/analytics-lane-checks.mjs",
   "tests/analytics-pii-checks.mjs",
   "tests/consent-record-lane-checks.mjs",
-  "tests/decision-monitoring-checks.mjs",
-  "tests/identity-attribution-checks.mjs",
-  "tests/livecheck-ownership-checks.mjs",
-  "tests/mcp-provenance-checks.mjs",
-  "tests/mcp-remote-checks.mjs",
-  "tests/red-team-checks.mjs",
-  "tests/signin-resume-checks.mjs",
 ];
 
 function listFiles(dir) {

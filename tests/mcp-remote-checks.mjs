@@ -1,114 +1,26 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import {
-  formatPublicScan,
-  formatReport,
-  handleMcpMessage,
-  wantsEventStream,
-} from "../convex/mcpHttp.ts";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-describe("hosted MCP protocol", () => {
-  it("answers initialize with the client protocol version", async () => {
-    const result = await handleMcpMessage(
-      {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "initialize",
-        params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "cursor", version: "1" } },
-      },
-      async () => ({ text: "unused", isError: false }),
-    );
-    assert.equal(result.status, 200);
-    assert.equal(result.body.result.protocolVersion, "2025-11-25");
-    assert.equal(result.body.result.serverInfo.name, "launchsense");
+// Hosted MCP protocol is archived. The server exposes health only.
+// The check runs on your machine through the local MCP server.
+
+const repo = dirname(dirname(fileURLToPath(import.meta.url)));
+const read = (...parts) => readFileSync(join(repo, ...parts), "utf8");
+
+describe("hosted MCP protocol is archived", () => {
+  it("mcpHttp module is deleted", () => {
+    assert.equal(existsSync(join(repo, "convex", "mcpHttp.ts")), false);
   });
 
-  it("lists the public tools and calls one", async () => {
-    const listed = await handleMcpMessage(
-      { jsonrpc: "2.0", id: 2, method: "tools/list" },
-      async () => ({ text: "unused", isError: false }),
-    );
-    const names = listed.body.result.tools.map((tool) => tool.name);
-    assert.deepEqual(names, ["launchsense_scan_public", "launchsense_get_report"]);
-
-    const called = await handleMcpMessage(
-      {
-        jsonrpc: "2.0",
-        id: 3,
-        method: "tools/call",
-        params: { name: "launchsense_scan_public", arguments: { repoUrl: "https://github.com/example/repo" } },
-      },
-      async (name, args) => {
-        assert.equal(name, "launchsense_scan_public");
-        assert.equal(args.repoUrl, "https://github.com/example/repo");
-        return { text: "Scan abc\nStatus: partial\nA partial result is not a pass.", isError: false };
-      },
-    );
-    assert.equal(called.body.result.isError, false);
-    assert.match(called.body.result.content[0].text, /partial/);
-  });
-
-  it("accepts a notification without a result body", async () => {
-    const result = await handleMcpMessage(
-      { jsonrpc: "2.0", method: "notifications/initialized" },
-      async () => ({ text: "unused", isError: false }),
-    );
-    assert.equal(result.status, 202);
-    assert.equal(result.body, null);
-  });
-
-  it("rejects an unknown method and a batch", async () => {
-    const missing = await handleMcpMessage(
-      { jsonrpc: "2.0", id: 4, method: "resources/list" },
-      async () => ({ text: "unused", isError: false }),
-    );
-    assert.equal(missing.body.error.code, -32601);
-    const batch = await handleMcpMessage([], async () => ({ text: "unused", isError: false }));
-    assert.equal(batch.status, 400);
-  });
-
-  it("keeps the coverage line in the scan text", () => {
-    const text = formatPublicScan({
-      scanId: "scan1",
-      status: "partial",
-      coverageNote: "Read 10 of 40 files.",
-      errorMessage: null,
-      findingCount: 0,
-      findings: [],
-    });
-    assert.match(text, /Read 10 of 40 files/);
-    assert.match(text, /Findings listed: 0/);
-    assert.match(text, /A partial result is not a pass/);
-    assert.doesNotMatch(text, /Reason:/);
-    assert.equal(wantsEventStream("text/event-stream"), true);
-    assert.equal(wantsEventStream("application/json, text/event-stream"), false);
-  });
-
-  it("names the stored reason when a scan stops before any finding", () => {
-    const reason = "GitHub API quota is exhausted. Try again later. Showing a partial result with nothing marked as checked.";
-    const pub = formatPublicScan({
-      scanId: "scan2",
-      status: "partial",
-      coverageNote: null,
-      errorMessage: reason,
-      findingCount: 0,
-      findings: [],
-    });
-    assert.match(pub, /Coverage: not recorded/);
-    assert.match(pub, /Reason: GitHub API quota is exhausted/);
-    assert.match(pub, /A partial result is not a pass/);
-    const rep = formatReport({
-      scanId: "scan2",
-      sha: null,
-      status: "partial",
-      coverageNote: null,
-      errorMessage: reason,
-      findingCount: 0,
-      findings: [],
-    });
-    assert.match(rep, /Commit: not recorded/);
-    assert.match(rep, /Reason: GitHub API quota is exhausted/);
+  it("http exposes health only, no hosted routes", () => {
+    const http = read("convex", "http.ts");
+    assert.match(http, /\/api\/health/);
+    assert.doesNotMatch(http, /launchsense_scan_public/);
+    assert.doesNotMatch(http, /\/mcp/);
+    assert.doesNotMatch(http, /\/api\/mcp\/scan/);
   });
 
   it("the connect page shows local setup and the home page tells people to clone", () => {

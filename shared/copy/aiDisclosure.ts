@@ -66,7 +66,7 @@ export const AI_ASSISTED_TASKS: readonly AiAssistedTask[] = [
     task: "Rewrite a finding that a fixed rule already produced, in plainer language.",
     oversight_level: "prompt_guided",
     cannot: "It cannot add, drop, re-rank, or re-score a finding. Output that names an unknown finding, drops an actionable one, or claims a check that did not run is thrown away and fixed wording is shown instead.",
-    where: ["convex/adapters/ai.ts", "convex/scans/aiExplain.ts", "shared/ai/deterministic.ts"],
+    where: ["convex/adapters/ai.ts", "shared/ai/deterministic.ts"],
     needs_configuration: true,
   },
   {
@@ -74,7 +74,7 @@ export const AI_ASSISTED_TASKS: readonly AiAssistedTask[] = [
     task: "Reorder findings that already exist, inside one severity band.",
     oversight_level: "prompt_guided",
     cannot: "It cannot change which findings exist or what severity any of them has. The fixed priority table always produces an order, and the model lane can only move items within a band that table already placed.",
-    where: ["convex/adapters/decision.ts", "shared/reports/priority.ts", "convex/scans/rankScan.ts"],
+    where: ["convex/adapters/decision.ts", "shared/reports/priority.ts"],
     needs_configuration: true,
   },
   {
@@ -118,12 +118,12 @@ export const AI_NEVER_DECIDES: readonly NeverDecided[] = [
   {
     item: "Who a caller is",
     why: "A credential is resolved by an indexed read and a constant-time hash compare. The harness label a caller declares never enters a rate limit key, an ownership check, or an access decision, and the verified binding is absent on every row today.",
-    where: ["convex/identity", "convex/mcpLimit.ts"],
+    where: ["convex/identity"],
   },
   {
     item: "Whether a request is allowed",
     why: "Caps, quota, revocation, and ownership are fixed rules read on every request. No model is on that path.",
-    where: ["convex/mcpLimit.ts", "convex/scans/queue.ts"],
+    where: ["convex/identity/quotaKey.ts"],
   },
 ];
 

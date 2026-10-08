@@ -21,42 +21,12 @@ function constant(file, name) {
   return Number(match[1].replace(/_/g, ""));
 }
 
-describe("docs/LIMITS.md states the caps the code sets", () => {
-  const text = read("docs", "LIMITS.md");
-
-  it("names the shared hourly cap and the lane total the code sets", () => {
-    const shared = constant("convex/mcpLimit.ts", "CALLER_LIMIT");
-    const lane = constant("convex/mcpLimit.ts", "GLOBAL_LIMIT");
-    assert.ok(
-      text.includes(`${shared} scans an hour for the shared hosted bucket`),
-      `docs/LIMITS.md must state the shared hosted cap as ${shared}, the value the code sets`,
-    );
-    assert.ok(
-      text.includes(`${lane} in total across the hosted lane`),
-      `docs/LIMITS.md must state the hosted lane cap as ${lane}, the value the code sets`,
-    );
-  });
-
-  it("names the per-credential caps the code sets", () => {
-    const hourly = constant("convex/identity/quotaKey.ts", "CALLER_HOURLY_LIMIT");
-    const daily = constant("convex/identity/quotaKey.ts", "CALLER_DAILY_LIMIT");
-    assert.ok(
-      text.includes(`${hourly} scans an hour and ${daily} in a day`),
-      `docs/LIMITS.md must state the per-credential caps as ${hourly}/${daily}`,
-    );
-  });
-
-  it("no longer names the retired per-caller caps", () => {
-    assert.doesNotMatch(
-      text,
-      /Two scans an hour from one caller/,
-      "the per-caller hosted cap is retired; the counter holds no caller",
-    );
-    assert.doesNotMatch(
-      text,
-      /eight an hour in total/i,
-      "the old lane total is retired; LIMITS.md must state the current one",
-    );
+describe("docs/LIMITS.md states one lane", () => {
+  it("names no hosted bucket and no hosted lane total", () => {
+    const text = read("docs", "LIMITS.md");
+    assert.doesNotMatch(text, /shared hosted bucket/);
+    assert.doesNotMatch(text, /across the hosted lane/);
+    assert.match(text, /no hourly limit/i);
   });
 });
 

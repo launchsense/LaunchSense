@@ -204,10 +204,7 @@ export default function Privacy() {
         </p>
         <ul className="check-list">
           <li>
-            Cached file metadata: deleted after 24 hours by a later scan of that repository.
-            The window is <code>CONTENT_CACHE_TTL_MS</code> in <code>convex/scans/analyze.ts</code>,
-            and the deletion is <code>purgeStaleContents</code> in <code>convex/scans/store.ts</code>,
-            bounded at 500 rows a run.
+            Cached file metadata: archived with the web scan. No new rows are written.
           </li>
           <li>
             OSV vulnerability answers are reused for 7 days and then looked up again. That is a

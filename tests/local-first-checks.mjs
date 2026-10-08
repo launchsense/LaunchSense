@@ -2,33 +2,22 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-// The limit offers the free local path. Three defects, one file of tests.
-//
-// 1. The hosted read is a shared budget. When it is spent, the honest answer is
-//    "run it free on your own machine", not a dead end and not a sign-in wall.
-// 2. A paused state must never print a fake number, a countdown, or a queue.
-// 3. The local check reads the user's own checkout and sends nothing, so it is
-//    the better default, and the copy must say so.
-//
+// One lane. The hosted read is gone, so there is no limit to offer.
+// The home page is the local path with one setup prompt to copy.
 // No network, no database, and no clock. Files are read as text.
 
-const guest = readFileSync(new URL("../src/features/scan/GuestScan.tsx", import.meta.url), "utf8");
+import { existsSync } from "node:fs";
+
 const localPath = readFileSync(new URL("../src/features/scan/LocalPath.tsx", import.meta.url), "utf8");
 const skill = readFileSync(new URL("../skills/launchsense/SKILL.md", import.meta.url), "utf8");
 const llms = readFileSync(new URL("../llms.txt", import.meta.url), "utf8");
 
-describe("the limit always offers the free local path", () => {
-  it("tells a rate-limited visitor that hosted reads are paused, not to sign in", () => {
-    assert.match(guest, /Hosted reads are paused until the hour resets/);
-  });
-
-  it("renders the local path in the cap dialog for a limit, and only for a limit", () => {
-    assert.match(guest, /capReason !== "repoMiss" && <LocalPath \/>/);
-  });
-
-  it("separates a repository miss from a spent budget", () => {
-    assert.match(guest, /rateLimited = quotaExhausted \|\| scan\?\.errorKind === "rate_limited"/);
-    assert.match(guest, /capReason === "rateLimited"/);
+describe("the hosted sample is gone", () => {
+  it("GuestScan file is deleted and Home names no hosted read", () => {
+    assert.equal(existsSync(new URL("../src/features/scan/GuestScan.tsx", import.meta.url)), false);
+    const home = readFileSync(new URL("../src/pages/Home.tsx", import.meta.url), "utf8");
+    assert.doesNotMatch(home, /GuestScan/);
+    assert.doesNotMatch(home, /Hosted reads are paused/);
   });
 });
 
@@ -54,7 +43,6 @@ describe("the local path says what it is", () => {
     }
     for (const character of [/\u2014/, /\u2013/, /\u2026/, /\u00b7/]) {
       assert.doesNotMatch(localPath, character);
-      assert.doesNotMatch(guest, character);
     }
   });
 });

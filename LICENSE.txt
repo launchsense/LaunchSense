@@ -10,7 +10,6 @@ The MIT terms in Section 2 apply ONLY to the files under these paths:
 
   shared/
   convex/adapters/
-  convex/scans/snapshot.ts (this file only, not the rest of convex/scans/)
   mcp/
   skills/launchsense/
   install.sh
@@ -20,17 +19,8 @@ The MIT terms in Section 2 apply ONLY to the files under these paths:
 except the test files that load proprietary modules, which stay under
 Section 3 with the surfaces they verify:
 
-  tests/ai-lane-gate-checks.mjs
-  tests/analytics-lane-checks.mjs
   tests/analytics-pii-checks.mjs
   tests/consent-record-lane-checks.mjs
-  tests/decision-monitoring-checks.mjs
-  tests/identity-attribution-checks.mjs
-  tests/livecheck-ownership-checks.mjs
-  tests/mcp-provenance-checks.mjs
-  tests/mcp-remote-checks.mjs
-  tests/red-team-checks.mjs
-  tests/signin-resume-checks.mjs
 
 The rule is functional, not just this list: any test file that imports or
 loads a module outside the open scope stays under Section 3. The list above

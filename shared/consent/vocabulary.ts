@@ -292,9 +292,8 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [  {
     pii_controllers: [CONTROLLER_PARTY],
     storage_locations: [CONVEX_LOCATION],
     retention: {
-      window: "File contents: read in memory and never written. Cached file metadata: deleted after 24 hours.",
-      enforced_by:
-        "CONTENT_CACHE_TTL_MS in convex/scans/analyze.ts, called through convex/scans/store.ts:purgeStaleContents, bounded at 500 rows a run",
+      window: "File contents: read in memory and never written. Cached file metadata: archived with the web scan, no new rows.",
+      enforced_by: null,
     },
     human_oversight_level: null,
   },

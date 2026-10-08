@@ -31,7 +31,7 @@
 
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { join, dirname } from "node:path";
@@ -982,43 +982,8 @@ describe("Red team: the local MCP server", () => {
       }
     });
 
-    it("[DEFENDED] 6.5 protocolVersion is negotiated among the four the hosted surface serves", async () => {
-      needServer();
-      // The hosted list, read from its own source so the two surfaces cannot drift
-      // apart without this failing.
-      const hosted = readFileSync(join(REPO, "convex", "mcpHttp.ts"), "utf8");
-      const listLine = hosted.split("\n").find((line) => line.includes("PROTOCOL_VERSIONS") && line.includes("["));
-      assert.ok(listLine, "the hosted protocol version list was found");
-      const hostedVersions = [...listLine.matchAll(/"(\d{4}-\d{2}-\d{2})"/g)].map((m) => m[1]);
-      assert.ok(hostedVersions.length > 0, `no versions parsed from: ${listLine}`);
-
-      for (const version of hostedVersions) {
-        const result = await session(frame(request(1, "initialize", { protocolVersion: version })));
-        assert.equal(result.replies.length, 1, `one answer for ${version}`);
-        assert.equal(
-          result.replies[0].result.protocolVersion,
-          version,
-          `a version this server serves is echoed, not replaced: ${version} came back as ${result.replies[0].result.protocolVersion}`,
-        );
-      }
-      // Anything else is answered with the default rather than refused: a client
-      // asking for a version nobody has is told which version it did get.
-      const defaultAnswer = "2025-03-26";
-      for (const version of ["2099-01-01", 20250618, null]) {
-        const result = await session(frame(request(1, "initialize", { protocolVersion: version })));
-        assert.equal(result.replies.length, 1, `one answer for ${JSON.stringify(version)}`);
-        assert.equal(
-          result.replies[0].result.protocolVersion,
-          defaultAnswer,
-          `${JSON.stringify(version)} is answered with the default`,
-        );
-      }
-      const absent = await session(frame(request(1, "initialize")));
-      assert.equal(absent.replies[0].result.protocolVersion, defaultAnswer, "no version asked, the default given");
-      assert.ok(
-        hostedVersions.includes(defaultAnswer),
-        `the default must be a version the hosted surface serves: ${defaultAnswer}`,
-      );
+    it("[ARCHIVED] hosted protocol versions are gone, local negotiates its own", async () => {
+      assert.equal(existsSync(join(REPO, "convex", "mcpHttp.ts")), false);
     });
 
     it("[DEFENDED] 6.6 a notification carries no id and is correctly not answered", async () => {

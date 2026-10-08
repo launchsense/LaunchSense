@@ -354,87 +354,27 @@ describe("the inventory matches the schema, so a new PII column cannot arrive qu
 });
 
 describe("the write paths cannot put a person's details on an analytics row", () => {
-  const queries = read("convex", "scans", "queries.ts");
-  const limit = read("convex", "mcpLimit.ts");
-
-  it("keeps a share link id only when it has the shape the server minted", () => {
-    // logEvent is a public mutation. Before the check, the visitor's own URL
-    // became a stored column, so `?ref=ada@example.com` was an email address on
-    // an analytics row.
-    assert.match(queries, /export function publicIdOrNull/, "the shape check must be reachable");
-    assert.match(
-      queries,
-      /\^\[0-9a-f\]\{32\}\$/,
-      "the share id shape must be 32 lower-case hex characters, the shape newPublicId mints",
-    );
-    assert.doesNotMatch(
-      queries,
-      /shareId:\s*args\.shareId\.slice/,
-      "a slice bounds the length, not the content: an email address would still land",
-    );
-    assert.match(queries, /shareId:\s*publicIdOrNull\(args\.shareId\)/);
-    assert.match(queries, /refShareId:\s*publicIdOrNull\(args\.refShareId\)/);
+  it("share write paths are archived with the web scan", () => {
+    assert.equal(existsSync(join(repo, "convex", "scans", "queries.ts")), false);
+    assert.equal(existsSync(join(repo, "convex", "mcpLimit.ts")), false);
   });
 
-  it("drops a malformed share id but still records the event", () => {
-    // The event is the measurement. The id is not what any metric segments on,
-    // so dropping a malformed one loses no number and keeps the funnel honest.
-    const block = queries.match(/export const logEvent = mutation\(\{[\s\S]*?\n\}\);/);
-    assert.ok(block !== null, "logEvent must still be a mutation in queries.ts");
-    const insert = block[0].match(/ctx\.db\.insert\("analyticsEvents"[\s\S]*?\n\s*\}\);/);
-    assert.ok(insert !== null, "logEvent must still insert an analyticsEvents row");
-    for (const column of ["shareId:", "refShareId:"]) {
-      assert.match(insert[0], new RegExp(`${column}\\s*publicIdOrNull\\(`));
-      assert.doesNotMatch(insert[0], new RegExp(`${column}\\s*args\\.\\w+\\.slice`));
-    }
-  });
-
-  it("keeps only closed labels in usageDiagnostics, so a name or an address cannot land", () => {
-    assert.match(limit, /export function isDeclaredValue/, "the allowlist check must be reachable");
-    // A character shape accepts "AdaLovelace". The fields must use closed sets and
-    // normalize anything outside them, so a name can never be stored raw.
-    assert.doesNotMatch(
-      limit,
-      /\^\[A-Za-z0-9\._\+\-\]\{1,20\}\$/,
-      "a character shape accepts a person's name, so it is not the gate",
-    );
-    assert.match(limit, /const ALLOWED_HARNESS = new Set\(/);
-    assert.match(limit, /const ALLOWED_ORDER_SOURCE = new Set\(/);
-    assert.match(limit, /declaredOr\(args\.stage, ALLOWED_STAGE, "other"\)/);
-    assert.match(limit, /declaredOr\(args\.tier, ALLOWED_TIER, "other"\)/);
-    assert.match(limit, /declaredOr\(args\.harness, ALLOWED_HARNESS, "other"\)/);
-    assert.match(limit, /declaredOr\(args\.orderSource, ALLOWED_ORDER_SOURCE, "unspecified"\)/);
-    assert.doesNotMatch(
-      limit,
-      /harness: args\.harness\b/,
-      "the raw harness value must never be inserted; only the normalized label",
-    );
-  });
-
-  it("reports whether the usage row was actually stored", () => {
-    // The route answered {stored:true} even when the row was refused, and the
-    // installer told the person their counts were sent. All three links agree now.
-    assert.match(limit, /returns: v\.boolean\(\)/, "recordUsage must report whether it stored");
-    assert.match(read("convex", "http.ts"), /return json\(\{ stored \}\)/);
+  it("usage write path is archived, local review reports not sent honestly", () => {
+    const http = read("convex", "http.ts");
+    assert.doesNotMatch(http, /\/api\/mcp\/usage/);
     assert.match(
       read("mcp", "review-entry.ts"),
       /body\["stored"\] === true/,
-      "the installer must read the stored flag, not only the status",
+      "the local review still reads the stored flag when a route answers",
     );
   });
 
   it("reads no caller network address into any key", () => {
     // The notice says the counter holds no part of your network address, and the
-    // rule says no analytics row carries one. Same input, so it is checked once
-    // here for the analytics side.
-    //
-    // Comments are stripped first: convex/mcpLimit.ts names the header in the
-    // comment that records its removal, and reading that as a live read would
-    // make this check a lie rather than a guard.
+    // rule says no analytics row carries one. Hosted quota is archived.
     const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
     for (const [name, source] of [
       ["convex/http.ts", read("convex", "http.ts")],
-      ["convex/mcpLimit.ts", limit],
       ["convex/analytics/ingest.ts", read("convex", "analytics", "ingest.ts")],
       ["convex/analytics/rollup.ts", read("convex", "analytics", "rollup.ts")],
     ]) {

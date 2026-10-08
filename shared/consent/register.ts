@@ -258,16 +258,16 @@ export const PROCESSING_ACTIVITIES: readonly ProcessingActivity[] = [
     retention: [
       {
         data: "fileContents: cached file metadata",
-        window: "Deleted after 24 hours by a later scan of that repository.",
-        enforcement: "purge",
-        enforced_by: "CONTENT_CACHE_TTL_MS in convex/scans/analyze.ts, through convex/scans/store.ts:purgeStaleContents, bounded at 500 rows a run",
+        window: "Archived with the web scan. No new rows are written.",
+        enforcement: "none",
+        enforced_by: null,
       },
       {
         data: "osvCache: vulnerability answers",
         window: "Reused for 7 days and then looked up again, which overwrites the row. Nothing deletes this table.",
         enforcement: "read_window",
         enforced_by:
-          "OSV_CACHE_TTL_MS in convex/scans/analyze.ts. The row stops being read after the window and the answer is fetched again. That is not a deletion.",
+          "OSV responses are cached by the local review adapters. The row stops being read after the window and the answer is fetched again. That is not a deletion.",
       },
       {
         data: "findings and evidenceItems",

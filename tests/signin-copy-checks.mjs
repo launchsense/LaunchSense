@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 // Regression guards for W3, the sign-in contradiction, and the queue promise.
 // Every rule below was written against a real string that existed in the app on
@@ -51,20 +51,11 @@ describe("sign-in copy never promises unbuilt capability", () => {
     const projectsTs = readFileSync(new URL("../convex/projects.ts", import.meta.url), "utf8");
     const entitlementsTs = readFileSync(new URL("../convex/entitlements.ts", import.meta.url), "utf8");
 
-    // These three exist only as definitions. If one ever gains a real caller,
-    // the copy can honestly change and this test should fail to remind us.
+    // Archived UI files are deleted. Remaining UI must not reference unbuilt backends.
     const sourceFiles = [
-      "src/features/scan/GuestScan.tsx",
-      "src/features/report/ScanReport.tsx",
-      "src/features/report/CapacityMeter.tsx",
-      "src/features/report/SignalPanels.tsx",
-      "src/features/report/Stage5Panels.tsx",
-      "src/features/report/CompareView.tsx",
-      "src/features/auth/AuthPanel.tsx",
       "src/features/auth/TopMenu.tsx",
       "src/pages/Home.tsx",
-      "src/pages/SharePage.tsx",
-      "src/pages/PassportPage.tsx",
+      "src/pages/How.tsx",
     ];
     const ui = sourceFiles.map((f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8")).join("\n");
 
@@ -81,18 +72,8 @@ describe("sign-in copy never promises unbuilt capability", () => {
     assert.ok(entitlementsTs.includes("getMyEntitlements"));
   });
 
-  it("does not tell signed-in users they get a paid step that does not exist", () => {
-    const authPanel = readFileSync(new URL("../src/features/auth/AuthPanel.tsx", import.meta.url), "utf8");
-    assert.equal(
-      /paid\s+step/i.test(authPanel),
-      false,
-      "no billing, price, or paywall exists, so 'paid step' is a false promise",
-    );
-    assert.equal(
-      /is\s+being\s+built/i.test(authPanel),
-      false,
-      "the old copy said the connected scan 'is being built' directly under a home page promising it already",
-    );
+  it("archived sign-in surface is deleted and claims nothing", () => {
+    assert.equal(existsSync(new URL("../src/features/auth/AuthPanel.tsx", import.meta.url)), false);
   });
 
   it("sign-in is archived and sells no install", () => {
@@ -112,7 +93,7 @@ describe("sign-in copy never promises unbuilt capability", () => {
   });
 
   it("uses no em dashes in the sign-in surface", () => {
-    for (const f of ["src/pages/Home.tsx", "src/features/auth/AuthPanel.tsx", "src/features/auth/TopMenu.tsx"]) {
+    for (const f of ["src/pages/Home.tsx", "src/features/auth/TopMenu.tsx"]) {
       const source = readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
       assert.equal(/[\u2014\u2013]/.test(source), false, `${f} contains an em or en dash`);
     }

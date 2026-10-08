@@ -88,15 +88,15 @@ describe("claim guard extra-file opt-in", () => {
 
   it("passes a retention claim backed by a purge bound to that window", () => {
     withTempFile(
-      "Snippet metadata is cached for 24 hours after it was written.\n",
+      "Usage rows are deleted after 30 days by the nightly purge.\n",
       (tempPath) => {
         const rel = relative(ROOT, tempPath);
         const result = runGuard(rel);
         const output = `${result.stdout}\n${result.stderr}`;
-        // 24 hours matches CONTENT_CACHE_TTL_MS, and purgeStaleContents
-        // is invoked with beforeMs: Date.now() - CONTENT_CACHE_TTL_MS.
-        // The claim is backed, so this file must not be reported. Other
-        // files in the repo may still fail; that is not this test's claim.
+        // 30 days matches USAGE_EVENT_TTL_MS, and the purge job deletes
+        // usageEvents past that window. The claim is backed, so this file
+        // must not be reported. Other files in the repo may still fail;
+        // that is not this test's claim.
         assert.ok(
           !output.includes(rel),
           `backed retention claim must not be reported (${rel}); output was:\n${output}`,

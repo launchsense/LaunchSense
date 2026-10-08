@@ -20,53 +20,19 @@ function walk(dir, out = []) {
 }
 
 const tsxFiles = walk(join(repo, "src"));
-const panels = readFileSync(join(repo, "src/features/report/Stage5Panels.tsx"), "utf8");
 const app = readFileSync(join(repo, "src/App.tsx"), "utf8");
 
-describe("the panel strip is a real tablist", () => {
-  it("uses role=tablist, not a nav of pressed buttons", () => {
-    assert.match(panels, /role="tablist"/);
-    assert.doesNotMatch(panels, /aria-pressed/);
-    assert.doesNotMatch(panels, /<nav aria-label="Panels">/);
-  });
-
-  it("gives every tab a role, a selected state, and a panel link", () => {
-    assert.match(panels, /role="tab"/);
-    assert.match(panels, /aria-selected=\{tab === entry\.id\}/);
-    assert.match(panels, /aria-controls=\{`panel-\$\{entry\.id\}`\}/);
-    assert.match(panels, /id=\{`tab-\$\{entry\.id\}`\}/);
-  });
-
-  it("uses a roving tabindex so only the selected tab is tab reachable", () => {
-    assert.match(panels, /tabIndex=\{tab === entry\.id \? 0 : -1\}/);
-  });
-
-  it("labels the panel from its tab", () => {
-    assert.match(panels, /role="tabpanel"/);
-    assert.match(panels, /aria-labelledby=\{`tab-\$\{tab\}`\}/);
-  });
-
-  it("supports arrow keys, Home, and End", () => {
-    for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
-      assert.match(panels, new RegExp(key), `the tablist does not handle ${key}`);
+describe("archived routes render an archived notice", () => {
+  it("unroutes share, passport, and licence to Archived", () => {
+    for (const route of ['"/s/"', '"/p/"', '"/licence"']) {
+      assert.ok(app.includes(route), `App does not handle ${route}`);
     }
-  });
-
-  it("moves focus with selection", () => {
-    assert.match(panels, /tabRefs\.current\[id\]\?\.focus\(\)/);
-  });
-
-  it("wraps at both ends", () => {
-    assert.match(panels, /index === last \? 0 : index \+ 1/);
-    assert.match(panels, /index === 0 \? last : index - 1/);
+    assert.match(app, /<Archived \/>/);
   });
 });
 
 describe("skip link", () => {
   it("is the first focusable element on every page", () => {
-    for (const route of ['"/s/"', '"/p/"']) {
-      assert.ok(app.includes(route), `App does not handle ${route}`);
-    }
     const frame = readFileSync(join(repo, "src/features/site/SiteFrame.tsx"), "utf8");
     assert.match(frame, /className="skip-link"/);
     assert.match(frame, /href="#main-content"/);
@@ -77,7 +43,7 @@ describe("skip link", () => {
     const frame = readFileSync(join(repo, "src/features/site/SiteFrame.tsx"), "utf8");
     assert.match(frame, /id="main-content"/);
     assert.match(frame, /tabIndex=\{-1\}/);
-    for (const page of ["Home.tsx", "SharePage.tsx", "PassportPage.tsx"]) {
+    for (const page of ["Home.tsx"]) {
       const source = readFileSync(join(repo, "src/pages", page), "utf8");
       assert.match(source, /SiteFrame/, `${page} does not use the site frame`);
     }
@@ -89,7 +55,7 @@ describe("every page has one main landmark", () => {
     const frame = readFileSync(join(repo, "src/features/site/SiteFrame.tsx"), "utf8");
     const mains = [...frame.matchAll(/<main[^>]*id="main-content"/g)];
     assert.equal(mains.length, 1);
-    for (const page of ["Home.tsx", "SharePage.tsx", "PassportPage.tsx"]) {
+    for (const page of ["Home.tsx"]) {
       const source = readFileSync(join(repo, "src/pages", page), "utf8");
       assert.doesNotMatch(source, /<main/, `${page} adds a second main`);
     }
@@ -121,9 +87,9 @@ describe("interactive controls are real controls", () => {
 });
 
 describe("states are announced", () => {
-  it("uses role=status for progress and role=alert for errors", () => {
+  it("uses no fake dynamic states on a static position page", () => {
     const all = tsxFiles.map((f) => readFileSync(f, "utf8")).join("\n");
-    assert.match(all, /role="status"/);
-    assert.match(all, /role="alert"/);
+    assert.doesNotMatch(all, /role="status"/);
+    assert.doesNotMatch(all, /role="alert"/);
   });
 });

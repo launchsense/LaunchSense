@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -143,8 +143,8 @@ describe("the surfaces show it as a suggestion", () => {
     assert.match(schema, /suggestionNote:/);
   });
 
-  it("both doors suggest: the hosted scan and the local review", () => {
-    assert.match(read("convex", "scans", "analyze.ts"), /suggestLicence/);
+  it("local review suggests, hosted scan is gone", () => {
+    assert.equal(existsSync(join(repo, "convex", "scans", "analyze.ts")), false);
     assert.match(read("mcp", "review-entry.ts"), /suggestProjectLicence|licenseSuggestion/);
   });
 });

@@ -171,10 +171,7 @@ stays in the server logs.
 Every line below names the code that deletes the thing, or says that nothing does.
 A window with no job behind it is stated as a gap rather than as a promise.
 
-- Cached file metadata: deleted 24 hours after it was written, by a later scan of that
-  repository. The window is `CONTENT_CACHE_TTL_MS` in `convex/scans/analyze.ts`, and
-  the deletion is `purgeStaleContents` in `convex/scans/store.ts`, bounded at 500 rows
-  a run.
+- Cached file metadata: archived with the web scan. No new rows are written.
 - OSV vulnerability answers are reused for 7 days and then looked up again. That is a
   read window, not a purge: nothing deletes the `osvCache` table.
 - Findings and evidence: kept so a re-scan can tell you what you fixed. There is no

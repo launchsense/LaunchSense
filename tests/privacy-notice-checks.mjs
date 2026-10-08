@@ -165,87 +165,11 @@ describe("the page and the repository file say the same thing", () => {
   });
 });
 
-describe("sign in asks once for all four purposes", () => {
-  it("has one checkbox, not four", () => {
-    assert.equal(
-      [...authPanel.matchAll(/type="checkbox"/g)].length,
-      1,
-      "one tick covers all four purposes",
-    );
-    assert.match(authPanel, /id="purpose-all"/, "the single box has a stable id");
-    assert.match(authPanel, /htmlFor="purpose-all"/, "the label points at the box");
-  });
-
-  it("starts unticked", () => {
-    assert.doesNotMatch(
-      authPanel,
-      /defaultChecked/,
-      "a pre-ticked box is not a decision: ICO and DPDP s6(1) both rule it out",
-    );
-    assert.doesNotMatch(authPanel, /checked=\{(true|false)\}/, "no box may be fixed at build time");
-    assert.match(authPanel, /useState\(false\)/, "empty state means unticked");
-  });
-
-  it("names every purpose as keywords in the label", () => {
-    for (const keyword of [
-      "token storage",
-      "one repository read",
-      "AI explanations",
-      "anonymous usage counts",
-    ]) {
-      assert.ok(authPanelText.includes(keyword), `the single label is missing: ${keyword}`);
-    }
-  });
-
-  it("keeps the four purposes recorded behind the tick", () => {
-    assert.match(authPanel, /PURPOSES\.map\(\(purpose\) => purpose\.id\)/, "the tick grants all four ids");
-    assert.match(authPanel, /grantedFor: \(\) => accepted === true/, "one tick grants every purpose or none");
-  });
-
-  it("says what each purpose stores or sends, not just that it exists", () => {
-    for (const detail of [
-      "plaintext string",
-      "1,000 files and about 8MB",
-      "fingerprint, the severity, the title, and the reason",
-      "Rule id counts, the harness name, the version",
-    ]) {
-      assert.ok(authPanelText.includes(detail), `a purpose does not say what leaves: ${detail}`);
-    }
-  });
-
-  it("blocks the sign-in button until the box is ticked", () => {
-    assert.match(authPanel, /disabled=\{!accepted\}/, "the sign-in button must be disabled until ticked");
-    assert.match(authPanel, /role="status"/, "the reader is told the box is unticked");
-  });
-
-  it("says signing in turns on all four, because no per-purpose switch exists yet", () => {
-    assert.ok(
-      authPanelText.includes("Signing in turns on all four"),
-      "one tick that silently records four purposes must say so",
-    );
-  });
-
-  it("links the privacy notice from the sign-in surface", () => {
-    assert.match(authPanel, /href="\/privacy"/, "the sign-in surface must link the notice");
-    assert.match(authPanel, /Read the privacy notice/);
-  });
-
-  it("still states the signed-in token policy, and still bundles nothing into it", () => {
-    // The old paragraph stays, because it is the plain statement of what the
-    // signed-in read does. It may not grow into a catch-all for the boxes.
-    assert.match(authPanel, /SIGN_IN_POLICY/, "the signed-in policy sentence must stay");
-    assert.ok(BUNDLED_SIGN_IN.startsWith("When you are signed in"), "fixture drifted");
-  });
-
-  it("does not sell a capability the code does not have", () => {
-    for (const phrase of [/deeper scan/i, /saved history/i, /paid/i, /sign in is optional/i]) {
-      assert.doesNotMatch(authPanel, phrase, `the sign-in surface must not claim ${phrase}`);
-    }
-  });
-
-  it("uses no em dash, en dash, ellipsis, or middle dot", () => {
-    for (const character of [/\u2014/, /\u2013/, /\u2026/, /\u00b7/]) {
-      assert.doesNotMatch(authPanel, character, `the sign-in surface contains ${character}`);
+describe("sign-in is archived", () => {
+  it("AuthPanel file is deleted and no surface asks to sign in", () => {
+    assert.equal(existsSync(join(repo, "src", "features", "auth", "AuthPanel.tsx")), false);
+    for (const [name, source] of [["Home", read("src", "pages", "Home.tsx")], ["Connect", read("src", "pages", "Connect.tsx")], ["How", read("src", "pages", "How.tsx")]]) {
+      assert.doesNotMatch(source, /Sign in with GitHub/, `${name} must not ask to sign in`);
     }
   });
 });

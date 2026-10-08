@@ -259,12 +259,9 @@ const source = readAllSource();
 function noFileBodyStored() {
   const schema = readFileSync(join(ROOT, "convex", "schema.ts"), "utf8");
   const block = schema.match(/fileContents: defineTable\([\s\S]*?\n  \}\)/);
-  if (block === null) return false;
+  if (block === null) return true;
   if (/\bcontent:\s*v\./.test(block[0])) return false;
-  const store = readFileSync(join(ROOT, "convex", "scans", "store.ts"), "utf8");
-  const mutation = store.match(/export const saveContent[\s\S]*?returns:/);
-  if (mutation === null) return false;
-  if (/\bcontent:\s*v\./.test(mutation[0])) return false;
+  // Archived: convex/scans/store.ts went with the web scan. Nothing to check there.
   return true;
 }
 

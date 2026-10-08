@@ -55,12 +55,12 @@ It is not legal advice, and no lawyer has reviewed it.
 - Third country transfers:
   - unknown (not known): No region has been confirmed with the host, and no transfer safeguard is named because there is nothing to name against a known destination.
 - Retention:
-  - fileContents: cached file metadata: Deleted after 24 hours by a later scan of that repository.
-    Enforced: purge.
-    By: CONTENT_CACHE_TTL_MS in convex/scans/analyze.ts, through convex/scans/store.ts:purgeStaleContents, bounded at 500 rows a run
+  - fileContents: cached file metadata: Archived with the web scan. No new rows are written.
+    Enforced: none.
+    By: nothing in this repository enforces this. It is a gap.
   - osvCache: vulnerability answers: Reused for 7 days and then looked up again, which overwrites the row. Nothing deletes this table.
     Enforced: read_window.
-    By: OSV_CACHE_TTL_MS in convex/scans/analyze.ts. The row stops being read after the window and the answer is fetched again. That is not a deletion.
+    By: OSV responses are cached by the local review adapters. The row stops being read after the window and the answer is fetched again. That is not a deletion.
   - findings and evidenceItems: Kept so a re-scan can say what was fixed. No automatic deletion exists.
     Enforced: none.
     By: nothing in this repository enforces this. It is a gap.

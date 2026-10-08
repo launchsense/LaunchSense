@@ -606,32 +606,15 @@ describe("install.sh asks before it records an agreement", () => {
   });
 });
 
-// llms.txt is the file a harness reads first, and the rate caps it states are a
-// claim about convex/mcpLimit.ts. The wave that raised those caps updated the
-// sentence, but nothing stopped the next edit from drifting it again, while the
-// privacy notice got a pin and this did not. These rules pin the numbers to the
-// constants, so a wrong number fails the gate.
-describe("llms.txt states the caps the code sets", () => {
-  function limitConstant(name) {
-    const source = readFileSync(join(ROOT, "convex", "mcpLimit.ts"), "utf8");
-    const match = source.match(new RegExp(`${name}\\s*=\\s*([0-9_]+)`));
-    assert.ok(match, `${name} must exist in convex/mcpLimit.ts`);
-    return Number(match[1].replace(/_/g, ""));
-  }
-
+// llms.txt is the file a harness reads first. Hosted caps are archived.
+// It must describe one lane, local, with no hourly limit.
+describe("llms.txt states one lane", () => {
   const text = readFileSync(LLMS, "utf8");
 
-  it("names the shared hosted cap and the lane cap the code sets", () => {
-    const shared = limitConstant("CALLER_LIMIT");
-    const lane = limitConstant("GLOBAL_LIMIT");
-    assert.ok(
-      text.includes(`${shared} scans an hour for the shared hosted bucket`),
-      `llms.txt must state the shared hosted cap as ${shared}, the value the code sets`,
-    );
-    assert.ok(
-      text.includes(`${lane} in total across the hosted lane`),
-      `llms.txt must state the hosted lane cap as ${lane}, the value the code sets`,
-    );
+  it("names no hosted bucket and states no hourly limit", () => {
+    assert.doesNotMatch(text, /shared hosted bucket/);
+    assert.doesNotMatch(text, /across the hosted lane/);
+    assert.match(text, /no hourly limit/i);
   });
 
   it("no longer names the retired per-caller caps", () => {

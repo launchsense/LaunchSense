@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import {
   tableOrder,
   actionableFindings,
@@ -237,16 +237,12 @@ describe("the product promise is enforced, not intended", () => {
   const ranker = readFileSync(new URL("../shared/reports/priority.ts", import.meta.url), "utf8");
 
   it("never lets the lane choose the work that runs", () => {
-    // The adapter must SUPPORT the choice type, because that is the documented
-    // contract. What matters is that OUR caller never uses it: a choice question in
-    // rankScan would mean the lane is picking from a set of checks or tools.
-    const action = readFileSync(new URL("../convex/scans/rankScan.ts", import.meta.url), "utf8");
-    const can = action.indexOf("laneCanReorder");
-    const call = action.indexOf("await decide");
-    assert.ok(can >= 0 && call > can, "the model is skipped when no band can move");
-    assert.match(action, /type: "noul"/, "the ranker asks a yes/no about fixing");
-    assert.doesNotMatch(action, /type: "choice"/, "the lane must never pick from a set of work");
-    assert.doesNotMatch(action, /type: "score"/, "the lane must not be asked to rank the work itself");
+    // Archived rankScan went with the web scan. Local review orders with noul
+    // only. Choice appears once, for the licence suggestion quote, never for findings.
+    const local = readFileSync(new URL("../mcp/review-entry.ts", import.meta.url), "utf8");
+    assert.match(local, /type: "noul"/, "the local review asks a yes/no about fixing");
+    assert.match(local, /unknownNext/, "the only choice is the licence suggestion quote");
+    assert.equal(existsSync(new URL("../convex/scans/rankScan.ts", import.meta.url)), false);
   });
 
   it("shared/ stays pure with no convex import", () => {

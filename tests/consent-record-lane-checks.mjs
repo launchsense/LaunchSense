@@ -570,9 +570,9 @@ describe("the client persists the decision and records it once", () => {
     const siteFrame = readRepo("src/features/site/SiteFrame.tsx");
     const topMenu = readRepo("src/features/auth/TopMenu.tsx");
     const app = readRepo("src/App.tsx");
-    // Archived files stay on disk but are unrouted and unmounted.
-    assert.ok(hasRepo("src/features/auth/AuthPanel.tsx"), "the archived panel file stays on disk");
-    assert.ok(hasRepo("src/features/auth/ConsentRecorder.tsx"), "the archived recorder file stays on disk");
+    // Archived files are deleted. No panel, no recorder, no wiring.
+    assert.equal(hasRepo("src/features/auth/AuthPanel.tsx"), false);
+    assert.equal(hasRepo("src/features/auth/ConsentRecorder.tsx"), false);
     assert.doesNotMatch(siteFrame, /ConsentRecorder/, "the recorder must not be mounted where OAuth returns");
     assert.doesNotMatch(topMenu, /isAuthenticated|signOut/, "the menu holds no account state");
     assert.match(app, /<Archived \/>/, "archived routes render the archived notice");
