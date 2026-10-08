@@ -25,36 +25,34 @@ describe("online policy source", () => {
     assert.equal(negotiatePolicyProtocol("2099-01-01"), "2025-03-26");
   });
 
-  it("lists exactly the five policy tools and nothing that scans", async () => {
+  it("lists exactly one policy tool and nothing that scans", async () => {
     const listed = await handlePolicyMessage({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     const names = listed.body.result.tools.map((tool) => tool.name);
-    assert.deepEqual(names, [
-      "launchsense_get_skill",
-      "launchsense_get_rules",
-      "launchsense_get_checklist",
-      "launchsense_get_audit_instructions",
-      "launchsense_get_version",
-    ]);
-    assert.equal(policyToolDefs().length, 5);
+    assert.deepEqual(names, ["launchsense_get_policy"]);
+    assert.equal(policyToolDefs().length, 1);
     for (const name of names) {
       assert.doesNotMatch(name, /scan_public|get_report/i);
     }
   });
 
-  it("calls one tool with static text and refuses arguments", async () => {
+  it("returns the whole bundle in one call and refuses arguments", async () => {
     const called = await handlePolicyMessage({
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
-      params: { name: "launchsense_get_skill", arguments: {} },
+      params: { name: "launchsense_get_policy", arguments: {} },
     });
     assert.equal(called.body.result.isError, false);
-    assert.match(called.body.result.content[0].text, /not-checked list goes back/);
+    const text = called.body.result.content[0].text;
+    for (const section of ["Policy bundle version", "SKILL", "RULES", "CHECKLIST", "AUDIT INSTRUCTIONS"]) {
+      assert.ok(text.includes(section), `the one call must carry ${section}`);
+    }
+    assert.match(text, /not-checked list goes back/);
     const refused = await handlePolicyMessage({
       jsonrpc: "2.0",
       id: 4,
       method: "tools/call",
-      params: { name: "launchsense_get_skill", arguments: { repoUrl: "https://github.com/x/y" } },
+      params: { name: "launchsense_get_policy", arguments: { repoUrl: "https://github.com/x/y" } },
     });
     assert.equal(refused.body.error.code, -32602);
     const unknown = await handlePolicyMessage({
@@ -71,7 +69,7 @@ describe("online policy source", () => {
       jsonrpc: "2.0",
       id: 6,
       method: "tools/call",
-      params: { name: "launchsense_get_version", arguments: {} },
+      params: { name: "launchsense_get_policy", arguments: {} },
     });
     const text = called.body.result.content[0].text;
     assert.match(text, /Policy bundle version: \d{4}-\d{2}-\d{2}/);
@@ -81,8 +79,8 @@ describe("online policy source", () => {
     assert.ok(text.includes(stamp[1]), "online bundle version and skill stamp must agree");
   });
 
-  it("rules text names the check families and never decides", () => {
-    const text = policyToolText("launchsense_get_rules");
+  it("the bundle names the check families and never decides", () => {
+    const text = policyToolText("launchsense_get_policy");
     assert.match(text, /secrets, risky code, dependencies, licenses/);
     assert.match(text, /never decides a finding/);
     assert.doesNotMatch(text, /repoUrl/);

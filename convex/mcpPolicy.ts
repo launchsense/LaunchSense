@@ -3,9 +3,11 @@
 // Local reads the files. Online serves the policies. The harness reads rules
 // from here, guided by the skill, and the model writes the audit locally.
 //
-// Four tools, all closed and argument-free. No repo URL, no file reads, no
-// scans, no stored code. A call is counted server-side with no gate and no
-// PII: the usage row carries the method and the outcome only.
+// One tool, closed and argument-free, returning the whole bundle: version,
+// skill, rules, checklist, and audit instructions. One call means one approval
+// in the harness, and the skill fetches it once and keeps a local copy. No repo
+// URL, no file reads, no scans, no stored code. A call is counted server-side
+// with no gate and no PII: the usage row carries the method and the outcome only.
 
 import { AI_DISCLOSURE_SHORT } from "../shared/copy/aiDisclosure.ts";
 import { KNOWN_RULE_IDS } from "../shared/policies/severity.ts";
@@ -19,12 +21,7 @@ export const POLICY_DEFAULT_VERSION: PolicyProtocolVersion = "2025-03-26";
 // from the current text. Dated, same shape as the consent notice versions.
 export const POLICY_BUNDLE_VERSION = "2026-10-08";
 
-export type PolicyToolName =
-  | "launchsense_get_skill"
-  | "launchsense_get_rules"
-  | "launchsense_get_checklist"
-  | "launchsense_get_audit_instructions"
-  | "launchsense_get_version";
+export type PolicyToolName = "launchsense_get_policy";
 
 export type PolicyUsageKind = "mcp_session_initialized" | "mcp_tools_listed" | "mcp_tool_called";
 
@@ -73,54 +70,42 @@ function rulesText(): string {
   );
 }
 
+// The whole bundle, one response. The version leads so a harness can compare it
+// against its local copy and decide whether to keep reading or refresh.
+export function policyBundleText(): string {
+  return [
+    `Policy bundle version: ${POLICY_BUNDLE_VERSION}.`,
+    "",
+    "SKILL",
+    SKILL_TEXT,
+    "",
+    "RULES",
+    rulesText(),
+    "",
+    "CHECKLIST",
+    CHECKLIST_TEXT,
+    "",
+    "AUDIT INSTRUCTIONS",
+    AUDIT_INSTRUCTIONS,
+  ].join("\n");
+}
+
 export function policyToolDefs(): Array<{ name: PolicyToolName; description: string; inputSchema: unknown }> {
   const closed = { type: "object", properties: {}, additionalProperties: false };
   return [
     {
-      name: "launchsense_get_skill",
-      description: "Read what the LaunchSense skill covers and how to install it. Static text, no arguments.",
-      inputSchema: closed,
-    },
-    {
-      name: "launchsense_get_rules",
-      description: "Read the check families, rule ids, and severity policy. Static text, no arguments.",
-      inputSchema: closed,
-    },
-    {
-      name: "launchsense_get_checklist",
-      description: "Read the pre-share checklist. Static text, no arguments.",
-      inputSchema: closed,
-    },
-    {
-      name: "launchsense_get_audit_instructions",
-      description: "Read how to run the local audit and report it. Static text, no arguments.",
-      inputSchema: closed,
-    },
-    {
-      name: "launchsense_get_version",
-      description: "Read the policy bundle version. Compare it with the Skill version line in your local skill copy. Static text, no arguments.",
+      name: "launchsense_get_policy",
+      description:
+        "Read the whole LaunchSense policy bundle in one call: version, skill, rules, checklist, and audit instructions. Static text, no arguments.",
       inputSchema: closed,
     },
   ];
 }
 
-const VERSION_TEXT =
-  `Policy bundle version: ${POLICY_BUNDLE_VERSION}. ` +
-  "If your local skill copy names an older Skill version, re-read skill, rules, " +
-  "checklist, and audit instructions from here and follow those instead of the stale copy.";
-
 export function policyToolText(name: PolicyToolName): string {
   switch (name) {
-    case "launchsense_get_skill":
-      return SKILL_TEXT;
-    case "launchsense_get_rules":
-      return rulesText();
-    case "launchsense_get_checklist":
-      return CHECKLIST_TEXT;
-    case "launchsense_get_audit_instructions":
-      return AUDIT_INSTRUCTIONS;
-    case "launchsense_get_version":
-      return VERSION_TEXT;
+    case "launchsense_get_policy":
+      return policyBundleText();
   }
 }
 

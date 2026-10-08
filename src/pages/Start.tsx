@@ -7,7 +7,7 @@ const POLICY_URL = "https://harmless-chihuahua-667.convex.site/mcp";
 
 const PASTE_LINE = `Read ${POLICY_URL.replace("/mcp", "/install.txt")} and do everything it says in my open repo. Ask me the two permission questions first and use only my answers.`;
 
-const SETUP_PROMPT = `Set up the local LaunchSense check. Tell it to fetch the code and install, answer no to usage counts and yes to file read, and confirm both server entries are registered. Then read the policy source at ${POLICY_URL} with launchsense_get_skill and launchsense_get_rules, run a local review of my checkout, and show me the report. Nothing is uploaded.`;
+const SETUP_PROMPT = `Set up the local LaunchSense check. Tell it to fetch the code and install, answer no to usage counts and yes to file read, and confirm both server entries are registered. Then read the policy source at ${POLICY_URL} with launchsense_get_policy, run a local review of my checkout, and show me the report. Nothing is uploaded.`;
 
 const STEPS: StepItem[] = [
   {

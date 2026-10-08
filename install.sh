@@ -356,4 +356,7 @@ else
 EOF
 fi
 
-echo "Installed the launchsense skill and the local config. Auth is not checked."
+echo "Installed the launchsense skill and the local config. No login is needed."
+echo ""
+echo "Next: run the first audit now, so you see it work."
+echo "In your coding tool, with this repo open, ask it to review the repo with launchsense_scan_repo."

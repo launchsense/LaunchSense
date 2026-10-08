@@ -17,23 +17,19 @@ The server is `mcp/server.ts` in the checkout, started with `node mcp/server.ts`
 
 ## Policy source
 
-The policy source is online at `https://harmless-chihuahua-667.convex.site/mcp`. It serves skill, rules, checklists, and audit instructions only, never a scan. It takes no arguments and stores no code. Read it when you need the current rules:
+The policy source is online at `https://harmless-chihuahua-667.convex.site/mcp`. It answers one tool, `launchsense_get_policy`, which returns the whole bundle in one call: version, skill, rules, checklist, and audit instructions. It takes no arguments and stores no code.
 
-- `launchsense_get_skill`: what this skill covers and how to install it.
-- `launchsense_get_rules`: check families, rule ids, and the severity policy.
-- `launchsense_get_checklist`: the pre-share checklist.
-- `launchsense_get_audit_instructions`: how to run the local audit and report it.
-- `launchsense_get_version`: the policy bundle version. Call it first on every run.
+Fetch it once, at install, and keep the copy in this skill folder. Later runs read that local copy and make no policy calls, so a normal session asks for no approvals. Re-fetch only when the person asks, or when the bundle version online is newer than the copy you hold.
 
-Local reads the files. Online serves the policies. Read the rules from online, run `launchsense_scan_repo` here with no arguments, and write the audit locally. A policy change reaches you on the next call. Nothing to reinstall.
+Local reads the files. Online serves the policies. Read the rules, run `launchsense_scan_repo` here with no arguments, and write the audit locally. A policy change reaches you on the next fetch. Nothing to reinstall.
 
-## Check for updates first
+## First run after install
 
-Your installed copy of this skill can go stale. On every run, before the review:
+After `./install.sh` finishes, run the first audit immediately, on the repo the person has open, and show them the report. Setup is not done until they have seen one real result. Ask for approval once, covering the policy fetch and this one review, so the whole first run is smooth.
 
-1. Call `launchsense_get_version` on the policy source.
-2. Compare its bundle version with the `Skill version:` line at the top of this file.
-3. If online is newer, re-read skill, rules, checklist, and audit instructions from online and follow those instead of this stale copy. Say that you did, in one line.
+## Check for updates
+
+Your installed copy of this skill can go stale. Compare the bundle version you stored with `launchsense_get_policy` online. When online is newer, re-read the bundle and follow it instead of the stale copy. Say in one line that you refreshed it.
 
 ## When to call the review
 
