@@ -212,6 +212,13 @@ export function containsProviderKey(line: string): boolean {
     const allLower = !/[A-Z]/.test(token);
     if (looksBase64) return true;
     if (allLower) continue;
+    // A dotted chain of identifiers is source code, not a JWT. `_context.pushContext.call`,
+    // `_modification.updateSiblingKeys.call`, and `_printer.ChainFormatter.Config` are
+    // member chains: every segment is a valid identifier. A JWT's header segment is
+    // base64url of JSON and always begins with `eyJ`, which the branch above already
+    // returned on, so a real token never reaches here. Corpus: this branch produced 823 of
+    // 925 `secret.credential-pattern` false positives on real third-party code.
+    if (segs.every((s) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(s))) continue;
     if (hasUrlChar && mixedCase) return true;
     if (allLowerDotted) continue;
     // The last shape that reaches here has uppercase and NO lowercase, because

@@ -95,6 +95,13 @@ function isReferenceOrExpression(value: string): boolean {
   if (/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(value)) return true; // a.b
   if (/[{}[\]]/.test(value)) return true;                          // containers, generics
   if (/\s/.test(value)) return true;                               // prose has spaces
+  // A numeric range is a computed value, not a secret. `0..secret_count` and
+  // `0..keys.length` are Rust/Python ranges: the value begins with a number, then the
+  // `..` operator. Corpus class 4 measured `key_range = 0..N` as a declaration false
+  // positive (the name carries `key`, the value is a range). Deliberately anchored to a
+  // leading number: a passphrase may contain `..` (`correct..horse..staple`), and a
+  // false negative on a secret is worse than this false positive.
+  if (/^\d+\.\./.test(value)) return true;
   if (/^(https?|postgres|postgresql|mysql|mongodb|redis):\/\//i.test(value)) return true;
   if (/^(\.{0,2}\/|[A-Za-z]:\\)/.test(value)) return true;         // path
   return false;
@@ -176,6 +183,22 @@ export function looksLikeSecretValue(value: string, wasQuoted = true, name = "")
   // as a value is the feature it names, the same way `token_address` is. A real
   // credential is a hash, a base64 run, or a prefixed key, never a clean snake name.
   if (/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(t)) return false;
+
+  // A colon-separated lowercase namespace is a label, not a secret. `user:session:cache`
+  // and `session:token:blacklist` are Redis/cache keyspace patterns. Three or more
+  // segments is a keyspace; two is ambiguous with a `user:password` pair, so it still
+  // fires. A trailing colon marks a prefix (`user:session:`), two segments by design.
+  // Every segment must be short, so a colon value carrying a token-like run
+  // (`id:<32-hex>`) still fires. A real credential is a hash, a base64 run, or a prefixed
+  // key: base64 carries uppercase, hex carries no colon, and provider keys are matched
+  // above this point. Corpus class 4 measured `CACHE_KEY = "..."` as a declaration false
+  // positive.
+  const COLON_NAMESPACE = /^[a-z][a-z0-9_]*(?::[a-z0-9_]+)+:?$/;
+  if (COLON_NAMESPACE.test(t)) {
+    const segs = t.replace(/:$/, "").split(":");
+    const min = t.endsWith(":") ? 2 : 3;
+    if (segs.length >= min && segs.every((seg) => seg.length <= 12)) return false;
+  }
 
   // The kebab-case sibling of that rule, and the only shape here judged together with
   // the NAME it sits under. `USAGE_KEY_HEADER = "x-launchsense-usage-key"` is the name
