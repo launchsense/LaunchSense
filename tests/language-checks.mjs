@@ -106,10 +106,11 @@ describe("error text never leaks raw backend messages", () => {
   });
 });
 
-describe("share permanence is stated, not implied", () => {
-  it("Why describes the share feature without claiming safety", () => {
+describe("no share links to describe", () => {
+  it("Why names no share feature and claims no safety", () => {
     const why = readFileSync(join(repo, "src/pages/Why.tsx"), "utf8");
     assert.doesNotMatch(why, /without exposing secrets/i);
-    assert.match(why, /Links stay live once created/);
+    assert.doesNotMatch(why, /share link/i);
+    assert.doesNotMatch(why, /Links stay live once created/);
   });
 });

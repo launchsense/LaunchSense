@@ -566,24 +566,16 @@ describe("the client persists the decision and records it once", () => {
     }
   });
 
-  it("wires the panel to persist on the click and the recorder to run after sign-in", () => {
-    assert.ok(hasRepo("src/features/auth/ConsentRecorder.tsx"), "a recorder component must exist");
-    const panel = readRepo("src/features/auth/AuthPanel.tsx");
-    const recorder = readRepo("src/features/auth/ConsentRecorder.tsx");
+  it("sign-in is archived and no panel wiring remains on the site frame", () => {
     const siteFrame = readRepo("src/features/site/SiteFrame.tsx");
-    // The panel cannot record at the click: the person is anonymous until the
-    // OAuth callback, so the click only persists.
-    assert.match(panel, /saveSignInDecision\(/, "the click must persist the decision");
-    assert.match(panel, /SIGN_IN_NOTICE_VERSION/, "the persisted version is the sign-in notice version");
-    assert.ok(
-      panel.indexOf("saveSignInDecision(") < panel.indexOf("signIn(\"github\")"),
-      "the decision is persisted before the OAuth redirect starts",
-    );
-    // The recorder is the only thing that calls the mutation, it waits for the
-    // session, and it is mounted on every page.
-    assert.match(recorder, /myConsentRecords|recordSignInDecisions/, "the recorder uses the real functions");
-    assert.match(recorder, /isAuthenticated/, "nothing is recorded while signed out");
-    assert.match(siteFrame, /<ConsentRecorder\s*\/>/, "the recorder must be mounted where OAuth returns");
+    const topMenu = readRepo("src/features/auth/TopMenu.tsx");
+    const app = readRepo("src/App.tsx");
+    // Archived files stay on disk but are unrouted and unmounted.
+    assert.ok(hasRepo("src/features/auth/AuthPanel.tsx"), "the archived panel file stays on disk");
+    assert.ok(hasRepo("src/features/auth/ConsentRecorder.tsx"), "the archived recorder file stays on disk");
+    assert.doesNotMatch(siteFrame, /ConsentRecorder/, "the recorder must not be mounted where OAuth returns");
+    assert.doesNotMatch(topMenu, /isAuthenticated|signOut/, "the menu holds no account state");
+    assert.match(app, /<Archived \/>/, "archived routes render the archived notice");
   });
 });
 

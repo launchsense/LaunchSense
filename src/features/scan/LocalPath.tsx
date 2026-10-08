@@ -1,11 +1,7 @@
-// The free local path, shown wherever the hosted read is limited.
+// The free local path, shown on the home and connect pages.
 //
-// The hosted read is a shared budget, so it can pause. The local read is not:
-// it runs on the user's machine, reads their working tree, sends nothing to us,
-// and has no hourly limit. When the shared budget runs out, this is the honest
-// and better answer, so the limit always offers it instead of a dead end.
-//
-// No fake number. A paused state says paused, and names the real alternative.
+// It runs on the user's machine, reads their working tree, sends nothing to us,
+// and has no hourly limit.
 
 const REPO_URL = "https://github.com/launchsense/LaunchSense";
 

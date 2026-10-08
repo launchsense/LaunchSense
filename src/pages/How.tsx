@@ -1,46 +1,41 @@
 import { SiteFrame } from "../features/site/SiteFrame";
-import { SIGN_IN_POLICY } from "../../shared/copy/signIn";
 
 export default function How() {
   return (
     <SiteFrame>
       <header className="hero" aria-labelledby="how-title">
-        <h1 id="how-title">Two ways in, one check</h1>
+        <h1 id="how-title">One way in, on your machine</h1>
         <p className="lead">
-          Taste it on this site. Keep it in your coding tool. The tool calls our server. You do not clone this repo.
+          Clone this repo, run the installer, paste one prompt. Your coding tool runs the check where your code sits.
         </p>
       </header>
 
-      <section className="check-section" aria-labelledby="taste-title">
-        <h2 id="taste-title">Taste it here</h2>
+      <section className="check-section" aria-labelledby="setup-title">
+        <h2 id="setup-title">Setup</h2>
         <p>
-          Paste a public GitHub URL on the home page. That sample is the same public read as the website. A guest read stops at 200 files and about 2MB.
-        </p>
-        <p>
-          <a href="/#scan">Run a sample check</a>
+          <a href="/connect">Connect</a> holds the one setup prompt. Paste it into Cursor, Claude Code, or Codex with your repo open.
         </p>
       </section>
 
-      <section className="check-section" aria-labelledby="keep-title">
-        <h2 id="keep-title">Keep it in the coding tool</h2>
+      <section className="check-section" aria-labelledby="run-title">
+        <h2 id="run-title">Run</h2>
         <p>
-          <a href="/connect">Connect</a> adds the MCP address. Your tool asks LaunchSense to read one public repo. Alpha has no login on that address.
+          Ask your tool to audit the repo. The harness reads the rules from the local MCP, guided by the skill, the .ls files, and your agent file.
         </p>
         <p>
-          The connected call does not read a repo that exists only on your laptop. A private repo, or a larger public read, uses Sign in with GitHub on the sample after the guest cap.
+          The model writes the audit, coached by that material. Accepted findings go in .ls/policy.yaml with a reason. Reports go in .ls/reports. Both stay on your machine.
         </p>
       </section>
 
       <section className="check-section" aria-labelledby="caps-title">
         <h2 id="caps-title">Caps</h2>
         <ul className="check-list">
-          <li>A guest read stops at 200 files and about 2MB.</li>
-          <li>Signed in, the same check reads up to 1,000 files and about 8MB, including one private repo you can already read.</li>
+          <li>The local read covers 5,000 files and 40MB in all, 100KB per file.</li>
+          <li>OSV covers up to 50 packages. The rest stay not checked.</li>
           <li>A partial result is not a pass.</li>
           <li>Unknown never becomes fixed.</li>
-          <li>No raw file contents are stored.</li>
+          <li>No file text leaves your machine unless you opt in to anonymous counts.</li>
         </ul>
-        <p>{SIGN_IN_POLICY}</p>
       </section>
     </SiteFrame>
   );

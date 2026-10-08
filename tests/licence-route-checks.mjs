@@ -17,11 +17,16 @@ const scan = read("src", "features", "scan", "LicenceScan.tsx");
 const queries = read("convex", "scans", "queries.ts");
 const schema = read("convex", "schema.ts");
 
-describe("the route exists", () => {
-  it("App imports the page and routes /licence to it", () => {
-    assert.match(app, /import LicencePage from "\.\/pages\/LicencePage"/);
+describe("the route is archived", () => {
+  it("App unroutes /licence and the share and passport pages", () => {
+    assert.doesNotMatch(app, /import LicencePage from "\.\/pages\/LicencePage"/);
+    assert.doesNotMatch(app, /<LicencePage \/>/);
+    assert.doesNotMatch(app, /<SharePage/);
+    assert.doesNotMatch(app, /<PassportPage/);
+    assert.match(app, /path\.startsWith\("\/s\/"\)/);
+    assert.match(app, /path\.startsWith\("\/p\/"\)/);
     assert.match(app, /path === "\/licence"/);
-    assert.match(app, /<LicencePage \/>/);
+    assert.match(app, /<Archived \/>/);
   });
 
   it("the page uses the site frame, one heading, no second main", () => {

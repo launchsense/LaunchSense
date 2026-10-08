@@ -111,12 +111,13 @@ describe("hosted MCP protocol", () => {
     assert.match(rep, /Reason: GitHub API quota is exhausted/);
   });
 
-  it("the connect page shows the hosted address and the home page does not tell people to clone", () => {
+  it("the connect page shows local setup and the home page tells people to clone", () => {
     const home = readFileSync(new URL("../src/pages/Home.tsx", import.meta.url), "utf8");
     const connect = readFileSync(new URL("../src/pages/Connect.tsx", import.meta.url), "utf8");
-    assert.match(connect, /https:\/\/harmless-chihuahua-667\.convex\.site\/mcp/);
+    assert.doesNotMatch(connect, /https:\/\/harmless-chihuahua-667\.convex\.site\/mcp/);
+    assert.match(connect, /git clone https:\/\/github\.com\/launchsense\/LaunchSense/);
+    assert.match(connect, /install\.sh/);
     assert.match(home, /href="\/connect"/);
-    assert.doesNotMatch(home, /git clone/);
-    assert.doesNotMatch(home, /install\.sh/);
+    assert.match(home, /SETUP_PROMPT/);
   });
 });

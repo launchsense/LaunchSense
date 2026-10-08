@@ -1,7 +1,4 @@
 import { useState } from "react";
-import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
-import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 
 const LINKS = [
   { href: "/why", label: "Why" },
@@ -21,18 +18,11 @@ function isCurrent(path: string, href: string): boolean {
   return path === href;
 }
 
+// Archived sign-in: the menu holds no account state. Sign-in existed only to
+// read a private repo for the web scan, so it went with it.
 export function TopMenu() {
-  const { signOut } = useAuthActions();
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const clearGitHubToken = useMutation(api.github.sessionToken.clearMyGitHubToken);
   const path = currentPath();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
-
-  async function signOutAndDropToken() {
-    await clearGitHubToken();
-    await signOut();
-  }
 
   return (
     <header className="top-menu">
@@ -57,27 +47,6 @@ export function TopMenu() {
             {link.label}
           </a>
         ))}
-        {isLoading ? (
-          <span className="auth-state">Checking...</span>
-        ) : isAuthenticated ? (
-          <span className="account">
-            <button
-              type="button"
-              className="text-button"
-              aria-expanded={accountOpen}
-              onClick={() => setAccountOpen((open) => !open)}
-            >
-              Signed in
-            </button>
-            {accountOpen && (
-              <span className="account-panel">
-                <button type="button" className="text-button" onClick={() => void signOutAndDropToken()}>
-                  Sign out
-                </button>
-              </span>
-            )}
-          </span>
-        ) : null}
       </nav>
     </header>
   );

@@ -46,9 +46,6 @@ export default function Why() {
         <h2 id="wont-title">What it will not say</h2>
         <p>It does not say if the app will sell. It does not change your code, and it does not block a deploy.</p>
         <p>
-          A share link shows counts, titles, and short explanations. It hides file paths, line numbers, and code. Links stay live once created, so read the page before you send it.
-        </p>
-        <p>
           The longer writing is on the <a href="/blog">blog</a>. The steps are on <a href="/how">How</a>.
         </p>
       </section>

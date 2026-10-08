@@ -1,6 +1,7 @@
-import GuestScan from "../features/scan/GuestScan";
 import LocalPath from "../features/scan/LocalPath";
 import { SiteFrame } from "../features/site/SiteFrame";
+
+const SETUP_PROMPT = `Set up the local LaunchSense check from https://github.com/launchsense/LaunchSense. Clone it if it is not on this machine, run ./install.sh from its root, answer its two questions as I tell you, and confirm the launchsense server entry points LAUNCHSENSE_ROOT at my checkout. Then run a local review of my checkout and show me the report. Nothing is uploaded.`;
 
 export default function Home() {
   return (
@@ -13,24 +14,27 @@ export default function Home() {
         <p className="beat-early beat-2">You do not know what to ask.</p>
         <h1 className="beat" id="launchsense-title">LaunchSense already asks.</h1>
         <p className="home-actions">
-          <a className="button" href="/connect">Connect the check</a>
+          <a className="button" href="/connect">Run it on your machine</a>
           <a href="/how">How it works</a>
         </p>
       </header>
-      <section className="scan-section" id="scan" aria-labelledby="scan-title">
-        <h2 id="scan-title">Taste it on a public repo</h2>
-        <GuestScan />
-        <p>The sample is a short public read. The check you keep is <a href="/connect">Connect</a>.</p>
-      </section>
       <section className="check-section" id="local" aria-labelledby="local-title">
-        <h2 id="local-title">Or run it on your own machine, with no limit</h2>
+        <h2 id="local-title">One way. Your machine. No limit.</h2>
         <p>
-          The sample above is a shared hosted read, so it can pause. The local check runs on
-          your machine, reads your working tree including work you have not committed, sends
+          LaunchSense audits your repo where it sits, through your coding tool.
+          It reads your working tree including work you have not committed, sends
           nothing to us, and has no hourly limit. Same checks, same plain report.
         </p>
         <LocalPath />
-        <p><a href="/connect">Both connections, in one place</a></p>
+      </section>
+      <section className="check-section" id="copy" aria-labelledby="copy-title">
+        <h2 id="copy-title">Copy this into your coding tool</h2>
+        <pre className="install-command">{SETUP_PROMPT}</pre>
+        <p>
+          Paste it into Cursor, Claude Code, or Codex with your repo open.
+          Then ask it to audit the repo.
+        </p>
+        <p><a href="/connect">Local setup in one place</a></p>
       </section>
     </SiteFrame>
   );

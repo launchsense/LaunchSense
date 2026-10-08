@@ -250,57 +250,25 @@ describe("sign in asks once for all four purposes", () => {
   });
 });
 
-describe("the Connect page discloses what the connection does", () => {
-  it("says what the address can reach, and what it cannot", () => {
+describe("the Connect page discloses local setup", () => {
+  it("names the local install and the one prompt, not a hosted address", () => {
     for (const line of [
-      "Before you add this address",
-      "one public",
-      "up to 200 files and about 2MB",
-      "We do not read the repository on your machine",
-      "We do not read private repositories through this address",
-      "We do not need an account for this address",
+      "Run it on your machine",
+      "git clone https://github.com/launchsense/LaunchSense",
+      "./install.sh",
+      "SETUP_PROMPT",
+      "Nothing is uploaded",
     ]) {
       assert.ok(connectText.includes(line), `the Connect page is missing a disclosure line: ${line}`);
     }
-  });
-
-  it("carries one unticked box", () => {
-    assert.equal([...connect.matchAll(/type="checkbox"/g)].length, 1, "one disclosure box");
-    assert.doesNotMatch(connect, /defaultChecked/, "the box must not start ticked");
-    assert.match(connect, /useState\(false\)/, "the box state starts false");
-  });
-
-  it("labels the box", () => {
-    assert.match(connect, /id="connect-ack"/);
-    assert.match(connect, /htmlFor="connect-ack"/);
-    assert.match(connect, /I have read what this connection does and what it stores/);
-  });
-
-  it("names it a disclosure and never calls it consent", () => {
-    assert.match(connect, /<legend>Disclosure<\/legend>/, "the box must be labelled a disclosure");
-    assert.match(connect, /This box is a disclosure, not an agreement/);
-    assert.doesNotMatch(
-      connect,
-      /(I agree|you consent|by ticking this you agree|consent to)/i,
-      "an unticked box on a page cannot be a consent basis, so the page must not call it one",
-    );
-  });
-
-  it("says the box does not create an account and does not sign you in", () => {
-    assert.ok(
-      connectText.includes("does not create an account and does not sign you in"),
-      "the box must say what it is not",
-    );
-  });
-
-  it("links the privacy notice", () => {
-    assert.match(connect, /href="\/privacy"/, "the Connect page must link the notice");
-    assert.match(connect, /Read the privacy notice/);
+    assert.ok(!connect.includes("harmless-chihuahua-667.convex.site/mcp"), "Connect must not name a hosted address");
+    assert.ok(!connect.includes("launchsense_scan_public"), "Connect must not name a hosted tool");
   });
 
   it("keeps the running text and the partial-result warning", () => {
     assert.match(connect, /A partial result is not a pass\. License lines are signals/);
-    assert.match(connect, /launchsense_scan_public/);
+    assert.match(connect, /humanOversightLevel/);
+    assert.match(connect, /prompt_guided/);
   });
 });
 
@@ -378,10 +346,9 @@ describe("the load-bearing facts match on both copies and match the code", () =>
   });
 });
 
-// The disclosure in section 6 and on the Connect page says the rate limit
-// counter holds no part of the caller's network address. That is a claim about
-// convex/, so it is checked against convex/ here. If the routes ever read the
-// address header again, this fails and the copy has to change with it.
+// The hosted counter disclosure lives in the privacy notice. The Connect page
+// is local setup only and carries no counter, so only the notice copies are
+// checked here. The code check stays: no route may read the caller address.
 describe("the counter disclosure is true of the code", () => {
   const http = read("convex", "http.ts");
   const limit = read("convex", "mcpLimit.ts");
@@ -399,10 +366,9 @@ describe("the counter disclosure is true of the code", () => {
     );
   });
 
-  it("the notice and the Connect page both say the same thing", () => {
+  it("the notice copies say the same thing and Connect stays local", () => {
     for (const [name, source] of [
       ["/privacy", privacyPageText],
-      ["Connect", connectText],
     ]) {
       assert.ok(
         source.includes("the counter holds no part of your network address"),
@@ -412,6 +378,10 @@ describe("the counter disclosure is true of the code", () => {
     assert.ok(
       privacyDocText.includes("the counter holds no part of your network address"),
       "docs/PRIVACY.md must state it too",
+    );
+    assert.ok(
+      !connectText.includes("the counter holds no part of your network address"),
+      "Connect is local setup only and carries no hosted counter",
     );
   });
 });

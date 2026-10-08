@@ -59,17 +59,23 @@ describe("the local path says what it is", () => {
   });
 });
 
-describe("the home page offers both doors", () => {
+describe("the home page offers one lane", () => {
   const home = readFileSync(new URL("../src/pages/Home.tsx", import.meta.url), "utf8");
 
-  it("keeps the instant sample as the primary action", () => {
-    assert.match(home, /Taste it on a public repo/);
-    assert.match(home, /<GuestScan \/>/);
+  it("has no hosted sample and no second door", () => {
+    assert.doesNotMatch(home, /GuestScan/);
+    assert.doesNotMatch(home, /Taste it on a public repo/);
+    assert.doesNotMatch(home, /Both connections|two lanes|both doors/i);
   });
 
   it("shows the free local check on the front page, not only behind a limit", () => {
-    assert.match(home, /Or run it on your own machine, with no limit/);
+    assert.match(home, /One way\. Your machine\. No limit/);
     assert.match(home, /<LocalPath \/>/);
+  });
+
+  it("hands over one setup prompt to copy", () => {
+    assert.match(home, /Copy this into your coding tool/);
+    assert.match(home, /SETUP_PROMPT/);
   });
 
   it("does not hide the local check or fake a limit on the front page", () => {
