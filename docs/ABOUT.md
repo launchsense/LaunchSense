@@ -13,8 +13,6 @@ You built the app with an AI coding tool. It works, and you are about to share t
 - A missing README, tests, or CI.
 - Duplicate files and huge files.
 
-The website paste and the hosted MCP check duplicate files and large files.
-
 ## Why use it
 
 You do not need the name of the problem. The checks are fixed, so a model does not invent a finding. You leave with a prompt for Codex, Cursor, or Claude. The report says what it did not read, and a gap is not a pass. It does not change your code, block a deploy, or judge whether anyone will pay.
@@ -25,13 +23,13 @@ Policy means the rules for the codebase. A license is one rule inside that, not 
 
 ## Who it is for
 
-People who ship fast with AI coding tools and have no name for these problems. A public repo needs no account. Sign in to read one private repo, or more of a public one. The Connect page shows the MCP address a coding tool adds.
+People who ship fast with AI coding tools and have no name for these problems. Your repo, public or private, on your machine, through your coding tool.
 
 ## The moment it is built for
 
 The moment before you share the link, whether the repo is public or still private. The leaked key or the copyleft license is already in the history. Checking the code before anyone else sees it is the job. Judging the market is not.
 
-What runs today is the public paste, a signed-in read of one repository on your GitHub token, and the same public read from the hosted MCP. A guest read stops at 200 files and about 2MB. Signed in, the cap is 1,000 files and about 8MB. The Connect page shows the MCP address.
+What runs today is the local review on your machine. No hourly limit. Nothing is uploaded unless you opt in.
 
 ## What it will not do
 

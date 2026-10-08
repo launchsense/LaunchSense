@@ -23,18 +23,16 @@ A model never decides a finding, a severity, a licence fact, consent, who a call
 
 The next step is a reinforcement learning loop, and it is not a trained model yet. A later scan shows what was fixed, what is still broken, and what is unknown. A person can use that record to change a check. The model does not add the check, and it does not train on the code.
 
-## Three ways in
+## One way in
 
-- Public repo, no account. Paste the GitHub URL. A guest read stops at 200 files and about 2MB.
-- Private repo, or a larger public read. Sign in with GitHub. The scan uses your token and stops at 1,000 files and about 8MB.
-- Coding tool. On the live site, open Connect LaunchSense. Add `https://harmless-chihuahua-667.convex.site/mcp`. That call reads one public GitHub repo on our server. You do not clone this repo.
+Clone this repo, run `./install.sh`, paste one setup prompt into Cursor, Claude Code, or Codex. Your tool audits your repo where it sits. No hourly limit. Nothing is uploaded unless you opt in.
 
 ## How to use
 
-1. Open the app and paste your repo link plus your live app URL.
-2. Press Run scan.
-3. Copy the top 3 prompt into your coding helper.
-4. Fix the items, then scan again.
+1. Clone and run `./install.sh`. Answer its two questions.
+2. Paste the setup prompt into your coding tool with your repo open.
+3. Ask it to audit the repo.
+4. Fix the items, then ask again. Accepted findings go in `.ls/policy.yaml` with a reason, so they are not raised again.
 
 ## What it solves
 
@@ -46,8 +44,6 @@ Things a vibe coder has no name for:
 - Risky code, like eval, or a database query built from text.
 - A missing README, tests, or CI.
 - Duplicate files and huge files.
-
-The website paste and the hosted MCP check duplicate files and large files.
 
 ## Why use it
 
@@ -79,23 +75,17 @@ The findings sit on standards you may not have heard of: OWASP Top 10, OWASP ASV
 - Dependencies, like known vulnerabilities, floating versions, and install scripts.
 - Licenses, like missing terms or copyleft terms that need a human decision.
 - Project hygiene, like README, tests, CI, and duplicate or large files.
-- Your live app, by fetching the served page. HTTPS, does it load, is there content, is the main action visible, is there a phone viewport tag.
 - The shape of your project: Repo DNA, plus a Share Readiness signal with coverage shown.
 
-## After the scan
+## After the review
 
-- Re-scan on the new commit and compare: fixed, still broken, new, back again, unknown.
+- Ask again on the new state and compare. Accepted findings in `.ls/policy.yaml` are not raised again.
 - Standards lines for OWASP ASVS 5.0.0, OWASP Top 10:2025, OSV, and three CWE labels. deps.dev and Scorecard stay not-checked. Signals, never a certification.
-- Seven missions in order, and achievements earned only when the scan proves them.
-- Plain text handoff for a developer friend with no coding agent.
-- One fix prompt for the top 3, ranked across your code and your live app.
+- One fix prompt for the top 3, ranked across your code.
 
 ## Limits
 
-- A guest paste uses the shared GitHub quota. A signed-in scan uses that person's token and does not change the guest meter.
-- The hosted MCP reads a public GitHub repo on our server. The Connect page shows the address. It does not read a repo that exists only on your laptop.
-- GitHub quota for guest scans is shared, so heavy use can pause those scans until the quota resets.
-- A guest scan reads at most 200 files and 2 MB. Signed in, the cap is 1,000 files and about 8MB. The rest is listed as not checked.
+- The local read covers 5,000 files and 40MB in all, 100KB per file. OSV covers up to 50 packages. The rest is listed as not checked.
 - Plain words and ordering are described under "AI, and where it is going." When no provider answers, fixed wording is shown, and the fixed table sets the order. The table is always the floor.
 - More detail: `docs/LIMITS.md`. Privacy detail: `docs/PRIVACY.md`. What gets counted: `docs/METRICS.md`.
 

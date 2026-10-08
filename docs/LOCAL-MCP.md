@@ -34,7 +34,6 @@ Set up the local LaunchSense check from https://github.com/launchsense/LaunchSen
 ## What you get
 
 - Unlimited local reviews of any repo on disk, public or private.
-- The hosted sample stays available for public repos. Same caps as the site.
 - Usage counts stay off unless you answered yes. Turn them off later with `LAUNCHSENSE_DIAGNOSTICS=off`.
 
 ## If it does not start
