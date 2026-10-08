@@ -39,12 +39,12 @@ function flat(source) {
 const app = read("src", "App.tsx");
 const footer = read("src", "features", "site", "SiteFooter.tsx");
 const authPanel = read("src", "features", "auth", "AuthPanel.tsx");
-const connect = read("src", "pages", "Connect.tsx");
+const start = read("src", "pages", "Start.tsx");
 const privacyPage = read("src", "pages", "Privacy.tsx");
 const privacyDoc = read("docs", "PRIVACY.md");
 
 const authPanelText = flat(authPanel);
-const connectText = flat(connect);
+const startText = flat(start);
 const privacyPageText = flat(privacyPage);
 const privacyDocText = flat(privacyDoc);
 
@@ -168,34 +168,31 @@ describe("the page and the repository file say the same thing", () => {
 describe("sign-in is archived", () => {
   it("AuthPanel file is deleted and no surface asks to sign in", () => {
     assert.equal(existsSync(join(repo, "src", "features", "auth", "AuthPanel.tsx")), false);
-    for (const [name, source] of [["Home", read("src", "pages", "Home.tsx")], ["Connect", read("src", "pages", "Connect.tsx")], ["How", read("src", "pages", "How.tsx")]]) {
+    for (const [name, source] of [["Home", read("src", "pages", "Home.tsx")], ["How", read("src", "pages", "How.tsx")]]) {
       assert.doesNotMatch(source, /Sign in with GitHub/, `${name} must not ask to sign in`);
     }
   });
 });
 
-describe("the Connect page discloses local setup", () => {
-  it("names the local install, the one prompt, and the policy source, never a scan", () => {
+describe("the Start page shows words, never commands", () => {
+  it("hands over one paste line and one setup prompt, with no clone command in view", () => {
     for (const line of [
-      "Run it on your machine",
-      "git clone https://github.com/launchsense/LaunchSense",
-      "./install.sh",
+      "PASTE_LINE",
       "SETUP_PROMPT",
       "Nothing is uploaded",
-      "Two addresses, two jobs",
-      "launchsense_get_skill",
+      "Answer no",
+      "Answer yes",
     ]) {
-      assert.ok(connectText.includes(line), `the Connect page is missing a disclosure line: ${line}`);
+      assert.ok(startText.includes(line), `the Start page is missing a disclosure line: ${line}`);
     }
-    assert.ok(connect.includes("harmless-chihuahua-667.convex.site/mcp"), "Connect must name the policy source");
-    assert.ok(!connect.includes("launchsense_scan_public"), "Connect must not name a scan tool");
-    assert.ok(!connect.includes("launchsense_get_report"), "Connect must not name a hosted report tool");
+    assert.ok(!start.includes("git clone"), "Start must not show a clone command");
+    assert.ok(!start.includes("launchsense_scan_public"), "Start must not name a scan tool");
+    assert.ok(!start.includes("launchsense_get_report"), "Start must not name a hosted report tool");
   });
 
-  it("keeps the running text and the partial-result warning", () => {
-    assert.match(connect, /A partial result is not a pass\. License lines are signals/);
-    assert.match(connect, /humanOversightLevel/);
-    assert.match(connect, /prompt_guided/);
+  it("keeps the partial-result warning and the honest finding line", () => {
+    assert.match(start, /A partial result is not a pass/);
+    assert.match(start, /nothing added or dropped/);
   });
 });
 
@@ -273,9 +270,9 @@ describe("the load-bearing facts match on both copies and match the code", () =>
   });
 });
 
-// The hosted counter disclosure lives in the privacy notice. The Connect page
-// is local setup only and carries no counter, so only the notice copies are
-// checked here. The code check stays: no route may read the caller address.
+// The counter disclosure lives in the privacy notice. The Start page shows
+// words only and carries no counter, so only the notice copies are checked
+// here. The code check stays: no route may read the caller address.
 describe("the counter disclosure is true of the code", () => {
   const http = read("convex", "http.ts");
   const limit = read("convex", "mcpLimit.ts");
@@ -293,7 +290,7 @@ describe("the counter disclosure is true of the code", () => {
     );
   });
 
-  it("the notice copies say the same thing and Connect stays local", () => {
+  it("the notice copies say the same thing and Start carries no counter", () => {
     for (const [name, source] of [
       ["/privacy", privacyPageText],
     ]) {
@@ -307,8 +304,8 @@ describe("the counter disclosure is true of the code", () => {
       "docs/PRIVACY.md must state it too",
     );
     assert.ok(
-      !connectText.includes("the counter holds no part of your network address"),
-      "Connect is local setup only and carries no hosted counter",
+      !startText.includes("the counter holds no part of your network address"),
+      "Start shows words only and carries no counter",
     );
   });
 });
@@ -317,7 +314,7 @@ describe("no new copy breaks the house style", () => {
   it("uses no em dash, en dash, ellipsis, or middle dot in the new surfaces", () => {
     for (const [name, source] of [
       ["Privacy.tsx", privacyPage],
-      ["Connect.tsx", connect],
+      ["Start.tsx", start],
       ["SiteFooter.tsx", footer],
     ]) {
       for (const character of [/\u2014/, /\u2013/, /\u2026/, /\u00b7/]) {

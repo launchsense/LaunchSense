@@ -2,7 +2,6 @@ import Home from "./pages/Home";
 import Start from "./pages/Start";
 import Why from "./pages/Why";
 import How from "./pages/How";
-import Connect from "./pages/Connect";
 import BlogIndex from "./pages/BlogIndex";
 import CaseStudies from "./pages/CaseStudies";
 import WhyPolicy from "./pages/WhyPolicy";
@@ -34,7 +33,7 @@ export default function App() {
   if (path === "/start") return <Start />;
   if (path === "/why") return <Why />;
   if (path === "/how") return <How />;
-  if (path === "/connect") return <Connect />;
+  if (path === "/connect") return <Archived />;
   if (path === "/privacy") return <Privacy />;
   if (path === "/licence") return <Archived />;
   if (path === "/blog/why-policy") return <WhyPolicy />;

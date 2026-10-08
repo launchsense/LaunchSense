@@ -19,17 +19,13 @@ here rather than invent it.
 
 ## 2. What you agree to when you use this
 
-There are three ways in, and each one is a different exchange.
+There is one way in, and one exchange.
 
-- Paste a public repository URL. We read it on our server and store what we found.
-- Sign in with GitHub. We use your token on our server to read one repository.
-- Add the coding tool address from the Connect page. Your tool asks our server to
-  read one public repository at a time.
+- Run the local review through your coding tool. It reads your working tree on your machine. Add the policy
+  address from the start page. Your tool reads skill, rules, checklists, and audit instructions from our server.
+  It never sends your code.
 
-We do not read your machine in any of the three. We store no copy of your code in our
-database. We never change your code and we never write to your repository.
-
-Nothing on this site is pre-ticked. Every box that asks for a decision starts unticked.
+We store no copy of your code in our database. We never change your code and we never write to your repository.
 
 ## 3. What you paste, and what we store from it
 
@@ -107,28 +103,11 @@ not a conformance claim. The same three words are in `docs/CONSENT-RECORD.md`.
 
 ## 6. What the coding tool connection sends
 
-The repository URL your tool passes, and nothing from your machine. The tool runs on
-your machine. It asks our server to read one public repository, up to 200 files and
-about 2MB. We store the repository name, the commit, the file paths, and what we
-found.
+Nothing from your machine. Your tool asks our policy source for skill, rules, checklists, and audit
+instructions. It takes no arguments and stores no code.
 
-This address needs no account and signs you in to nothing. We keep a rate limit counter
-so the service stays available. It is not linked to an account, and the counter holds no
-part of your network address. Those rows are not deleted automatically today.
-
-You can send an optional LaunchSense credential in an Authorization header. We keep its
-lookup id in the clear and a SHA-256 hash of the credential, never the credential itself, so
-a copy of our database cannot be replayed against the server. The rate limit counter then
-holds that credential's own id, which is why one tool cannot spend another tool's budget.
-The per-tool caps are a policy choice we have not measured against real traffic. Revoking a
-credential takes effect on the next request, because the revoked flag is read on every
-request rather than at an expiry. A credential that is presented and refused gets no scan,
-rather than being quietly treated as anonymous.
-
-A credential records the operator's label for a harness, such as "claude-code". That label is
-their claim, not something we verified. We cannot currently verify which harness sent a
-request: the scan reads the public repository with our own GitHub credential, so nothing
-about the call identifies a person. Treat every harness-level number as a caller claim.
+Policy calls are counted with no gate, and the counter holds no part of your network address. Opted-in
+diagnostic counts have no deletion window. Those rows are not deleted automatically today.
 
 ### What the coding tool connection records about its own use
 

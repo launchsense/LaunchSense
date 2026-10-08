@@ -1,14 +1,17 @@
+import { Hero } from "../components/Hero";
 import { SiteFrame } from "../features/site/SiteFrame";
 
 export default function Why() {
   return (
     <SiteFrame>
-      <header className="hero" aria-labelledby="why-title">
+      <Hero
+        id="why-title"
+        lead="You used an AI coding tool. The app works. You are new to this, or you have been shipping fast, and you are about to share the repo."
+        primaryAction={{ href: "/start", label: "Start the check" }}
+        secondaryAction={{ href: "/how", label: "How it works" }}
+      >
         <h1 id="why-title">This is for you if you just built it</h1>
-        <p className="lead">
-          You used an AI coding tool. The app works. You are new to this, or you have been shipping fast, and you are about to share the repo.
-        </p>
-      </header>
+      </Hero>
 
       <section className="check-section" aria-labelledby="who-title">
         <h2 id="who-title">Who it is for</h2>

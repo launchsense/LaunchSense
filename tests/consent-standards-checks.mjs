@@ -59,7 +59,6 @@ const installScript = read("install.sh");
 const authPanel = read("src", "features", "auth", "AuthPanel.tsx");
 const privacyDoc = read("docs", "PRIVACY.md");
 const privacyPage = read("src", "pages", "Privacy.tsx");
-const connectPage = read("src", "pages", "Connect.tsx");
 const limitsDoc = read("docs", "LIMITS.md");
 const howItWorks = read("docs", "HOW-IT-WORKS.md");
 const readYourReport = read("docs", "READ-YOUR-REPORT.md");
@@ -652,7 +651,6 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
   it("carries the C2PA term on the surfaces that talk about the AI roles", () => {
     const surfaces = [
       ["docs/PRIVACY.md", privacyDoc],
-      ["Connect", connectPage],
       ["docs/LIMITS.md", limitsDoc],
       ["docs/HOW-IT-WORKS.md", howItWorks],
       ["docs/READ-YOUR-REPORT.md", readYourReport],
@@ -688,7 +686,6 @@ describe("the AI disclosure states the C2PA human oversight level and what AI ne
   it("shows prompt_guided, and no other level, on the surfaces that name one", () => {
     for (const [name, source] of [
       ["docs/PRIVACY.md", privacyDoc],
-      ["Connect", connectPage],
       ["docs/LIMITS.md", limitsDoc],
       ["docs/HOW-IT-WORKS.md", howItWorks],
       ["docs/READ-YOUR-REPORT.md", readYourReport],

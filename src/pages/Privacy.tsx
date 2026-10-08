@@ -40,20 +40,17 @@ export default function Privacy() {
 
       <section className="check-section" aria-labelledby="what-you-agree">
         <h2 id="what-you-agree">2. What you agree to when you use this</h2>
-        <p>There are three ways in, and each one is a different exchange.</p>
+        <p>There is one way in, and one exchange.</p>
         <ul className="check-list">
-          <li>Paste a public repository URL. We read it on our server and store what we found.</li>
-          <li>Sign in with GitHub. We use your token on our server to read one repository.</li>
           <li>
-            Add the coding tool address from the <a href="/connect">Connect page</a>. Your tool
-            asks our server to read one public repository at a time.
+            Run the local review through your coding tool. It reads your working tree on your machine. Add the policy
+            address from the <a href="/start">start page</a>. Your tool reads skill, rules, checklists, and audit
+            instructions from our server. It never sends your code.
           </li>
         </ul>
         <p>
-          We do not read your machine in any of the three. We store no copy of your code in our
-          database. We never change your code and we never write to your repository.
+          We store no copy of your code in our database. We never change your code and we never write to your repository.
         </p>
-        <p>Nothing on this site is pre-ticked. Every box that asks for a decision starts unticked.</p>
       </section>
 
       <section className="check-section" aria-labelledby="what-you-paste">
@@ -157,24 +154,12 @@ export default function Privacy() {
       <section className="check-section" aria-labelledby="what-the-connection-sends">
         <h2 id="what-the-connection-sends">6. What the coding tool connection sends</h2>
         <p>
-          The repository URL your tool passes, and nothing from your machine. The tool runs on
-          your machine. It asks our server to read one public repository, up to 200 files and
-          about 2MB. We store the repository name, the commit, the file paths, and what we
-          found.
+          Nothing from your machine. Your tool asks our policy source for skill, rules, checklists, and audit
+          instructions. It takes no arguments and stores no code.
         </p>
         <p>
-          This address needs no account and signs you in to nothing. We keep a rate limit counter
-          so the service stays available. It is not linked to an account, and the counter holds
-          no part of your network address. Those rows are not deleted automatically today.
-        </p>
-        <p>
-          You can send an optional LaunchSense credential in an Authorization header. We keep
-          a lookup id in the clear and a SHA-256 hash of the credential, never the credential
-          itself, so a copy of our database cannot be replayed against the server. The rate
-          limit counter then holds that credential&apos;s own id, which is why one tool cannot
-          spend another tool&apos;s budget. Revoking a credential takes effect on the next
-          request. A credential that is presented and refused gets no scan, rather than being
-          quietly treated as anonymous.
+          Policy calls are counted with no gate, and the counter holds no part of your network address. Opted-in
+          diagnostic counts have no deletion window. Those rows are not deleted automatically today.
         </p>
       </section>
 

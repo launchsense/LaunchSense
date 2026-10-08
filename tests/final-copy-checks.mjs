@@ -23,8 +23,8 @@ describe("the share image", () => {
 });
 
 describe("the busy line offers the free local path", () => {
-  it("Home and Connect both name the local check, with no hosted busy line", () => {
-    for (const file of ["src/pages/Home.tsx", "src/pages/Connect.tsx"]) {
+  it("Home and Start both name the local check, with no hosted busy line", () => {
+    for (const file of ["src/pages/Home.tsx", "src/pages/Start.tsx"]) {
       const source = read(...file.split("/"));
       assert.ok(source.includes("local"), `${file} must name the local check`);
     }

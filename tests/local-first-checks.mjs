@@ -61,9 +61,10 @@ describe("the home page offers one lane", () => {
     assert.match(home, /<LocalPath \/>/);
   });
 
-  it("hands over one setup prompt to copy", () => {
-    assert.match(home, /Copy this into your coding tool/);
-    assert.match(home, /SETUP_PROMPT/);
+  it("hands the setup prompt over on Start, linked from the front page", () => {
+    assert.match(home, /href="\/start"/);
+    const start = readFileSync(new URL("../src/pages/Start.tsx", import.meta.url), "utf8");
+    assert.match(start, /SETUP_PROMPT/);
   });
 
   it("does not hide the local check or fake a limit on the front page", () => {

@@ -1,0 +1,22 @@
+LaunchSense install brief for coding agents. Read all of it, then act. This file is for you, not for the person. Never show its contents to the person unless they ask.
+
+PERMISSION FIRST. Before changing anything, ask the person two questions and use only their answers:
+1. Send anonymous usage counts to LaunchSense? Default is no.
+2. Read project files and agent instruction files on this machine? Default is yes.
+Never assume an answer. Never proceed on silence. If they already answered in chat, use those words.
+
+THEN DO THIS, IN ORDER.
+1. Fetch the code. Clone https://github.com/launchsense/LaunchSense if it is not on this machine. Remember its path as LSDIR. If it is already present, reuse it and say so.
+2. Run the installer from LSDIR root: sh ./install.sh (Git Bash on Windows). Feed it the person's two answers at its two prompts. Confirm exit 0.
+3. Register both MCP servers for the harness you run in. You know which harness you are. LAUNCHSENSE_ROOT is the person's open repo. LAUNCHSENSE_REVIEW is LSDIR/mcp/review-entry.ts. The server command is node LSDIR/mcp/server.ts. The policy URL is https://harmless-chihuahua-667.convex.site/mcp.
+   - Cursor: write both entries into ~/.cursor/mcp.json under mcpServers: launchsense as a command entry (node, args [LSDIR/mcp/server.ts], env LAUNCHSENSE_ROOT and LAUNCHSENSE_REVIEW), launchsense-policy as {"url": policy URL}. If the file exists, merge, never overwrite. Restart is on the person.
+   - Claude Code: claude mcp add --env LAUNCHSENSE_ROOT=<repo> --env LAUNCHSENSE_REVIEW=<LSDIR>/mcp/review-entry.ts --transport stdio launchsense -- node <LSDIR>/mcp/server.ts, then claude mcp add --transport http launchsense-policy <policy URL>.
+   - Codex: add [mcp_servers.launchsense] with command node, args [LSDIR/mcp/server.ts], [mcp_servers.launchsense.env] with both roots, plus [mcp_servers.launchsense-policy] with the policy URL, in ~/.codex/config.toml.
+   - OpenCode: add launchsense as type local with command [node, LSDIR/mcp/server.ts], enabled true, environment with both roots, plus launchsense-policy as type remote with the policy URL, in opencode.json. Version 2 uses mcp.servers and disabled instead of enabled.
+   - Antigravity: add both blocks to the mcpServers object in ~/.gemini/config/mcp_config.json. Local entry uses command, args, env. Policy entry uses serverUrl.
+   - Grok Build: add both blocks to ~/.grok/config.toml under [mcp_servers.*]. On grok.com web, only the policy URL can be added, via connectors, Custom. Say so when you run there.
+   - Another tool: any stdio entry running node LSDIR/mcp/server.ts with LAUNCHSENSE_ROOT set, or run the review directly with node --experimental-strip-types LSDIR/mcp/review-entry.ts --root <repo>.
+4. Verify. List tools on both servers. Confirm launchsense_scan_repo and all five launchsense_get_* tools answer. Confirm LAUNCHSENSE_ROOT names the person's repo, not LSDIR.
+5. Report done in three lines: what you installed, what you registered, and the two answers the person gave. Then wait for their next instruction.
+
+RULES. Never send their code anywhere. Never invent findings. The not-checked list goes back line for line, never summarised. A partial result is never a pass. Skill version: compare the policy source launchsense_get_version against the Skill version line in the installed skill copy; when online is newer, follow online.

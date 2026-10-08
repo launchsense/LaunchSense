@@ -4,7 +4,7 @@ LaunchSense checks the codebase, not the business. One lane, local. The local ch
 
 This stage is alpha. Alpha has no login. An auth slot exists and is not enforced.
 
-## Connect
+## Setup
 
 Local reads the files. Online serves the policies. Your tool reads the rules from online, guided by the skill, and the model writes the audit locally.
 

@@ -97,17 +97,14 @@ describe("online policy source", () => {
     assert.doesNotMatch(http, /\/api\/mcp\/scan/);
   });
 
-  it("the connect page shows both doors and the home page points at the start page", () => {
-    const home = readFileSync(new URL("../src/pages/Home.tsx", import.meta.url), "utf8");
-    const connect = readFileSync(new URL("../src/pages/Connect.tsx", import.meta.url), "utf8");
+  it("the start page hands over one paste line and one setup prompt, with no commands in view", () => {
     const start = readFileSync(new URL("../src/pages/Start.tsx", import.meta.url), "utf8");
-    assert.match(connect, /https:\/\/harmless-chihuahua-667\.convex\.site\/mcp/);
-    assert.match(connect, /Two addresses, two jobs/);
-    assert.match(connect, /launchsense_get_skill/);
-    assert.match(connect, /git clone https:\/\/github\.com\/launchsense\/LaunchSense/);
-    assert.match(connect, /install\.sh/);
-    assert.match(home, /href="\/start"/);
-    assert.match(home, /SETUP_PROMPT/);
+    assert.match(start, /PASTE_LINE/);
     assert.match(start, /SETUP_PROMPT/);
+    assert.doesNotMatch(start, /git clone/);
+    assert.doesNotMatch(start, /launchsense_scan_public/);
+    const home = readFileSync(new URL("../src/pages/Home.tsx", import.meta.url), "utf8");
+    assert.match(home, /href="\/start"/);
+    assert.doesNotMatch(home, /SETUP_PROMPT/);
   });
 });

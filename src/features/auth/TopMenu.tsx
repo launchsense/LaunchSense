@@ -3,7 +3,7 @@ import { useState } from "react";
 const LINKS = [
   { href: "/why", label: "Why" },
   { href: "/how", label: "How" },
-  { href: "/connect", label: "Connect" },
+  { href: "/start", label: "Start" },
   { href: "/blog", label: "Blog" },
 ] as const;
 

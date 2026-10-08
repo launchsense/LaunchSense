@@ -26,19 +26,22 @@ describe("the start page is the one link", () => {
     assert.doesNotMatch(start, /<main/);
   });
 
-  it("covers six steps plus stuck help, with the setup prompt to copy", () => {
-    for (const step of ["1. Check Node", "2. Clone and install", "3. Answer two questions", "4. Register", "5. Paste the setup prompt", "6. What happens next", "If you get stuck"]) {
+  it("covers three steps plus stuck help, with the setup prompt to copy", () => {
+    for (const step of ["1. Paste one line", "2. Answer two questions", "3. Paste the setup prompt", "4. What happens next", "If you get stuck"]) {
       assert.ok(start.includes(step), `the start page is missing: ${step}`);
     }
     assert.match(start, /SETUP_PROMPT/);
   });
 
-  it("names every harness with its own config", () => {
+  it("shows no commands and sends agents to the brief", () => {
+    assert.doesNotMatch(start, /git clone/);
+    assert.match(start, /\/install\.txt/);
+    const brief = read("public", "install.txt");
     for (const name of ["Cursor", "Claude Code", "Codex", "OpenCode", "Antigravity", "Grok"]) {
-      assert.ok(start.includes(name), `the start page names no ${name} setup`);
+      assert.ok(brief.includes(name), `the brief names no ${name} setup`);
     }
-    assert.match(start, /launchsense-policy/);
-    assert.match(start, /LAUNCHSENSE_ROOT/);
+    assert.match(brief, /launchsense-policy/);
+    assert.match(brief, /LAUNCHSENSE_ROOT/);
   });
 
   it("says honestly where a web page cannot reach", () => {
