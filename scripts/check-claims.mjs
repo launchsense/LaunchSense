@@ -14,7 +14,7 @@
 //             product is built on, so they must be backed by the code that
 //             makes them true. If that code is removed, this fails.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
 
@@ -227,6 +227,7 @@ const COPY_GLOBS = ["README.md", "CHANGELOG.md", "docs", "src", "shared/reports"
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".progress", "_generated"]);
 
 function walk(dir, out = []) {
+  if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
     if (SKIP_DIRS.has(name)) continue;
     const full = join(dir, name);
@@ -257,7 +258,11 @@ const source = readAllSource();
 // "never stores raw file text" is proved structurally: the fileContents table
 // must not have a body field at all, and the write mutation must not take one.
 function noFileBodyStored() {
-  const schema = readFileSync(join(ROOT, "convex", "schema.ts"), "utf8");
+  const schemaPath = join(ROOT, "convex", "schema.ts");
+  // Public minimum has no convex. Nothing there can hold a file body, so this
+  // check is satisfied by absence.
+  if (!existsSync(schemaPath)) return true;
+  const schema = readFileSync(schemaPath, "utf8");
   const block = schema.match(/fileContents: defineTable\([\s\S]*?\n  \}\)/);
   if (block === null) return true;
   if (/\bcontent:\s*v\./.test(block[0])) return false;
@@ -283,6 +288,7 @@ function copyFiles() {
   const out = [];
   for (const entry of COPY_GLOBS) {
     const full = join(ROOT, entry);
+    if (!existsSync(full)) continue;
     if (statSync(full).isDirectory()) walk(full, out);
     else out.push(full);
   }
