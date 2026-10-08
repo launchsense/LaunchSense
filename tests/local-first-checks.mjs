@@ -95,4 +95,26 @@ describe("the docs call the local check the better default", () => {
     assert.match(skill, /sends nothing to us/);
     assert.match(llms, /sends nothing to us/);
   });
+
+  it("describes one system, the check on your machine, and no second door", () => {
+    // The product is one system: the local check. The skill must not offer a
+    // second door or route a public URL anywhere.
+    assert.doesNotMatch(skill, /Two doors/, "the skill must not describe two doors");
+    assert.doesNotMatch(skill, /hosted/i, "the skill must not mention a hosted read");
+    assert.doesNotMatch(
+      skill,
+      /The public connection is the hosted MCP URL/,
+      "the skill description must not name a hosted connection",
+    );
+    assert.match(skill, /node mcp\/server\.ts/, "the skill must name how to start the local server");
+    assert.match(skill, /\.ls\/policy\.yaml/, "the skill must cover the policy file");
+    assert.match(skill, /\.ls\/reports\//, "the skill must cover the report files");
+  });
+
+  it("says the not-checked list goes back line for line, never summarised", () => {
+    // A summarised not-checked list reads as a complete one. A harness given the
+    // review output once returned "19 skips" as a summary instead of the entries.
+    assert.match(skill, /The not-checked list goes back as it is, line for line/);
+    assert.match(skill, /Do not summarise it/);
+  });
 });
