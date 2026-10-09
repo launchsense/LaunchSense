@@ -1,10 +1,10 @@
 # LaunchSense
 
-LaunchSense checks the codebase, not the business. One lane, local. The check runs on your machine, reads your working tree, sends nothing to us, and has no hourly limit.
+LaunchSense checks the codebase, not the business. One lane, local. The check runs on your machine, reads your working tree including uncommitted work, and has no hourly limit. It uploads no files and no file text. What it does send outward on an online run is named under Privacy, below.
 
-This repository is the public half: the check engine and the skill. The website, the policies, and the backend live in a separate private repository, `launchsense-core`. The policy text still reaches your tool through the policy source.
+This repository is the public half: the check engine, the skill, and the installer. The policy text is served online by the vendor and reaches your tool through the policy source. The website and the policy service are not part of this repository.
 
-This stage is alpha. Alpha has no login.
+Alpha has no login.
 
 ## Setup
 
@@ -32,83 +32,99 @@ The online client POSTs one JSON-RPC message and gets one JSON answer. A call is
 
 ## Installing from a coding agent
 
-`public/install.txt` is a plain-text brief for a coding agent. It asks the person the two permission questions first, then clones this repo, runs `./install.sh`, registers both servers for whichever harness it is, fetches the policy bundle once, and runs the first audit. One approval covers the whole first run.
+`public/install.txt` is a plain-text brief for a coding agent. It asks the person the two permission questions first, then clones this repo, runs `./install.sh` with the person's repo named by `--root`, registers both servers for whichever harness it is, fetches the policy bundle once, and runs the first audit. One approval covers the whole first run.
 
 ## Tools
 
 Online policy source, one closed and argument-free tool: `launchsense_get_policy`, which returns the whole bundle in one call. No repo URL, no file reads, no scans, no stored code. The skill fetches it once and keeps a local copy, so later runs make no policy calls and ask for no approvals.
 
-Local review runs `launchsense_scan_repo` against `LAUNCHSENSE_ROOT`. It takes one optional argument, `mode`: `tree` (the default) reviews the whole working tree, and `change` reviews only what changed since the base of the branch, named in the report. OSV covers up to 50 packages. `launchsense_report` reads the latest local report under `.ls/reports`. `launchsense_github` reports the local `gh` login. `launchsense_scan_public_notice` scans nothing: it names both doors so neither is mistaken for the other.
+Local review runs `launchsense_scan_repo` against `LAUNCHSENSE_ROOT`. It takes one optional argument, `mode`: `tree` (the default) reviews the whole working tree, and `change` scopes the findings to what changed since the base of the branch and names that base, while the whole allowed tree is still read for context. OSV covers up to 50 packages. `launchsense_report` reads the latest local report under `.ls/reports`, choosing it by the saved-report filename shape, not by any `.md` file. `launchsense_github` reports the local `gh` login. `launchsense_scan_public_notice` scans nothing: it names both doors so neither is mistaken for the other.
 
 Every report states its own completeness, in the body and the JSON, where a harness reads it: the existing `status` field is extended to `complete` or `partial`, and `statusNote` carries one line, `Review complete.` or `Review incomplete: <reasons in words>`. Completeness is per applicable check, so a check that does not apply to this repo (an npm lockfile check on a Python repo) is not a reason, and a check that applies and did not run is. The direct CLI exits 2 on an incomplete run; an explicit `--lenient` prints a warning and exits 0 instead, except for a cap hit or a lockfile in hand that was never queried, which never return 0. Over MCP the same facts arrive as report text and `isError` is reserved for a review that could not run at all. On a `change` run, an acceptance newly added to `.ls/policy.yaml` since the last report is reported as one info row naming the rule and the path: a disclosure, never above info.
 
 A partial result is not a pass.
 
-A partial result is not a pass.
-
 ## Checks
 
-Fixed checks cover secrets, code shapes, dependency names, license text, dependency license terms, and project hygiene, plus duplicate files and large files.
+Fixed checks cover secrets, code shapes, dependency names, license text, dependency license terms, and project hygiene, plus duplicate files and large files. They live in this repository: `shared/analyzers/secrets.ts` and `shared/analyzers/secretValue.ts` for credentials, `shared/analyzers/codePatterns.ts` for risky code shapes, `shared/analyzers/deps.ts` for manifests and floating versions, `shared/analyzers/licenses.ts` for license signals, `shared/analyzers/hygiene.ts` for project hygiene, `shared/review/extraChecks.ts` for duplicate and repeated content, `shared/adapters/osv.ts` for advisories, `shared/review/registry.ts` for registry facts, and `shared/policies/severity.ts` for the severity table. This is a known, fixed set, not a promise of full coverage.
 
-The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB per file. It does not read vendored trees, installed packages or tool caches (`.venv`, `venv`, `site-packages`, `node_modules`, and the common Python and JS caches), `.progress`, or binary files. Anything past a cap is listed as not checked.
+## What the review reads
 
-### The report
+The local review reads the tree under caps: 5,000 files and 40MB in all, and 100KB per file. Lockfiles (`package-lock.json` and `*-lock.json`) are excepted from the per-file cap and still sit inside the 40MB budget. Local metadata files, such as `.ls/policy.yaml` or an `.ignore` file, are read under a separate 1 MiB bound each, so an over-bound metadata file is refused whole and disclosed. The walk does not read vendored trees (`vendor`, `third_party`, `3rdparty`, `deps`), installed packages or tool caches (`node_modules`, `.venv`, `venv`, `site-packages`, `.tox`, `.mypy_cache`, `.pytest_cache`, and the rest of the named list), `.progress`, or binary files. Anything past a cap is listed as not checked.
 
-The report leads with the solution, not a wall of findings: START HERE, then the lead fix prompt and the next prompts to paste, each naming the file; then PLAN, the ordered fix steps, secrets first, each with its why, files, and checklist; then DETAIL, the findings, the not-checked list line for line, the licence suggestion, and one line pointing at the third-party notice file written beside the report.
+The line-level checks carry their own gates, and each one is named in the report when it fires: the secret checks do not judge lines over 2,000 characters, the code-shape checks do not judge lines over 500 characters, a file stops at 20 matched lines per file, and the per-file omission list stops at 10 rows with one count-only row for the rest, whose totals include every affected file.
 
-### The licence declaration
+Reads go through pinned directory handles, `/proc/self/fd` on Linux and `/dev/fd` on macOS, so other platforms are refused. A linked review root, or a linked ancestor of it, is refused before anything is read. Symbolic links inside the tree are not followed and are listed as skipped. Every child is re-checked against the directory listing by device and inode, so an entry swapped between the listing and the open is read from neither. Writes publish by rename, which is bounded rather than absolute, and no fsync is issued, so durability across a crash is not claimed.
 
-For a project that commits an npm `package-lock.json` with a `packages` map, every installed package, direct and transitive, is read for the licence it declares. Where the lockfile has no `license` field and an installed `package.json` is available, that manifest is the fallback, and a lockfile that disagrees with it reads as Unknown. A declaration that is not an SPDX expression, such as `MIT/X11`, reads as Unknown. `UNLICENSED` reads as `LicenseRef-Proprietary-UNLICENSED`. An `OR` expression stays a choice. A bare `GPL-2.0` is kept as declared and marked deprecated. `GPL-2.0+` normalizes to `GPL-2.0-or-later`.
+## Privacy
+
+The hosted policy source receives no repository source: its one tool takes no arguments, so there is nothing to send. Nothing here claims that no data ever leaves the machine, because that would be false. On an online run the engine sends:
+
+- to OSV, the ecosystem, name, and version of lockfile packages, at most 50 per run;
+- to deps.dev and ClearlyDefined, the package name and version, at most 15 non-dev packages per run;
+- to OpenSSF Scorecard, the `github.com/owner/repo` slug, only when `package.json` names one;
+- to the engine's optional decision lane, only when it is switched on. `shared/adapters/decision.ts` names the providers: a local Ollama model, a development instrument that is off unless `LAUNCHSENSE_LOCAL_DECISION=1` is set, which needs no key, TypeSafe at api.typesafe.ai, which runs when `TYPESAFE_API_KEY` is set, and Perplexity at api.perplexity.ai, which runs when `PERPLEXITY_API_KEY` is set. The installer sets neither the switch nor a key, so by default the engine makes no model request. The local rung's default address is loopback on this machine, and `LAUNCHSENSE_LOCAL_DECISION_URL` can point it elsewhere, so a local run is not guaranteed to stay on the machine. When the reorder path runs, its state carries the finding title, severity, and rule id, and a title can itself contain a file path, a line number, a host name, or a package name and version; the question keys are hash-derived, so the raw fingerprint is not sent. The unknown-next-look path sends only a fixed choice list and nothing about the repo;
+- to the usage endpoint, only when you answered yes at install: rule id counts, the harness name, the version, how long the review took, which order source ran, and governance counts. No code, no paths, no titles, no free text.
+
+Nothing else leaves the machine, and the policy fetch carries nothing about your repo. The model that writes the audit is the model your coding harness is configured with, on your provider. That inference is separate from this engine: its privacy depends on your harness and provider, and nothing this installer sets chooses it. The engine's decision lane above is operator configuration, not your harness's model, and the usage-counts question does not gate any of these calls; the only switch that covers all of them is `LAUNCHSENSE_OFFLINE=1`.
+
+`LAUNCHSENSE_OFFLINE=1` disables every outbound call for the run, usage included.
+
+Counts are a preference until an endpoint stores them. The installer records your answer in `~/.config/launchsense/config.json` and appends one line per decision, refusals included, to the append-only `~/.config/launchsense/consent.jsonl`, keyed by the notice version in force rather than by wording: `2026-10-05` for usage counts, `2026-10-06` for the expanded local file read. `install.sh --enterprise` and `LAUNCHSENSE_DIAGNOSTICS=off` leave counts off without asking.
+
+The report states the outcome in one closed line, and only one meaning per line: counts were sent, counts were not sent (the consent answer), counts were not sent because the run was offline, or counts were not sent because the send did not complete. Counts count as delivered only when the endpoint answers that the row was stored. No usage endpoint runs on the vendor's own address today, so an opted-in run reports honestly that the send did not complete unless `LAUNCHSENSE_API_URL` names an endpoint that stores the row. The saved report copy carries no usage-count line and no model quote, because both are decided after the copy is written.
+
+## The `.ls` files
+
+The review keeps its own state in a `.ls` folder under `LAUNCHSENSE_ROOT`. The folder is gitignored and stays on the machine.
+
+`.ls/policy.yaml` is the repo's own memory: the findings a person already accepted, each with a reason, so a later review does not raise them again. It is read once per run, before the walk, and the single read is shared by every later step. It is parsed in full and it is declarative only: no code, no anchors, no includes, no wildcards, and it cannot disable a rule or change a severity. Tab indentation, multiple documents, anchors or aliases, an unsupported version, and unknown keys are refused whole rather than half-read. An absent file changes nothing. A link, an unreadable file, or a file over the 1 MiB metadata bound is a refusal, never a silent absence. A wrong file is refused whole and nothing is suppressed. A file that would silence more than half the findings through one acceptance, or four fifths in total, is refused whole. An accepted finding is removed from the findings list and named in the not-checked list as accepted, so a suppression is never silent. An acceptance is written only after the person confirms the entry.
+
+`.ls/reports/` holds one saved copy per acknowledged run, all named from the run's own timestamp:
+
+- the report, `<stamp>.md`, where the stamp is the ISO time with its colons and dots replaced by hyphens;
+- the policy snapshot, `<stamp>.policy.yaml`, the exact bytes that were read, or an empty policy recorded when the file was absent, and nothing at all when the read was refused;
+- the third-party notice, `<stamp>-THIRD-PARTY-NOTICES.generated.md`.
+
+The first time the review writes `.ls/`, it adds one `.ls/` line to `.gitignore`, after the file-read acknowledgement, and says so when it cannot. It writes nothing else in your repo and never edits source code.
+
+## The report
+
+The report leads with the solution, not a wall of findings: START HERE, then the lead fix prompt and the next prompts to paste, each naming the file; then PLAN, the ordered fix steps, secrets first, each with its why, files, and checklist; then DETAIL, the findings, the not-checked list line for line, the licence suggestion, and one line pointing at the third-party notice file written beside the report. The notice text is not dumped into the report body.
+
+## Ignoring files
+
+Three sources exclude a path before it is read, and each skip is disclosed with its source. `.gitignore` is honoured through real Git, so nested files, negation, and directory rules are Git's own semantics, never a re-implementation. Outside a Git work tree, or when Git fails, the Git side is not applied and is named as not applied, and nothing is invented on its behalf. `.ignore` files are honoured for a documented subset only: comment lines, blank lines, and one clean segment per line naming a file or directory under that file's own folder. Glob characters, negation, anchored or slashed paths, and whitespace-bearing names are not honoured, and the report says so when it applies. A link, an unreadable file, or a file over the 1 MiB bound is refused and disclosed, and the paths it might have excluded are not read.
+
+## The licence declaration
+
+For a project that commits an npm `package-lock.json` with a `packages` map, every installed package, direct and transitive, is read for the licence it declares, and the review writes a third-party notice file named `THIRD-PARTY-NOTICES.generated.md`: the same lockfile gives the same bytes. Where the lockfile has no `license` field and an installed `package.json` is available, that manifest is the fallback, and a lockfile that disagrees with it reads as Unknown. A declaration that is not an SPDX expression, such as `MIT/X11`, reads as Unknown. `UNLICENSED` reads as `LicenseRef-Proprietary-UNLICENSED`. An `OR` expression stays a choice. A bare `GPL-2.0` is kept as declared and marked deprecated. `GPL-2.0+` normalizes to `GPL-2.0-or-later`.
 
 `shared/licensing/obligations.ts` holds one cited row per licence family: licence text, copyright notice, a NOTICE file where the licence has one, state of changes, source disclosure for copyleft, and the distribution clash for strong copyleft. It is a table of what a licence text asks for. It is not a legal engine, and it does not decide whether an obligation applies to how you ship.
 
-`npm run notices` writes the third-party notice artifact from the committed lockfile. Same lockfile in, byte-identical file out. The local review carries the same text.
-
-The guarded AI lookup runs only for an Unknown licence, only when a lane is supplied, and only with the package name, the version, and fixed wording in the prompt. The result is a suggestion with no rule id, no fingerprint, and no severity. No lane is wired in this release, so the path is refused and unknown stays unknown.
-
 Not checked on any surface: yarn.lock, pnpm-lock.yaml, Cargo, Go and PyPI dependency licences, a vendored tree, a per-file SPDX header or REUSE.toml, and registry freshness. A lockfile with no `packages` map reads as incomplete, not as zero licences.
 
-License lines are signals, not legal advice. Unknown stays unknown. A model may quote one next look. That quote is not a finding. The priority table always orders the report, and a decision model may reorder inside one severity band. The model does not choose which findings exist.
+License lines are signals, not legal advice. Unknown stays unknown. A model may quote one next look. That quote is not a finding. The priority table always orders the report, and a decision lane may reorder inside one severity band. The model does not choose which findings exist.
 
-### What the AI does and does not decide
+## What the AI does and does not decide
 
-Three paths reach a model, and all three need a configured key, so the fixed paths are what run by default.
+Two paths reach a model on this engine, both through the decision lane in `shared/adapters/decision.ts`, and both run only when the lane is switched on: `LAUNCHSENSE_LOCAL_DECISION=1` turns on the local rung and needs no key, and a hosted rung runs when `TYPESAFE_API_KEY` or `PERPLEXITY_API_KEY` is set. The installer sets neither, so the default is no model request at all. Both paths are soft: a failed lane changes nothing and the run continues.
 
-- `explain` rewrites a finding in plainer language. `shared/ai/deterministic.ts`.
-- `ordering` reorders findings that already exist, inside one severity band. `shared/adapters/decision.ts`, `shared/reports/priority.ts`. The local review's report states the provenance in plain words, then the order source and the count of positions a model moved.
-- `licence_lookup` suggests an id for an Unknown licence, refused unless a lane is supplied, never a licence fact. `shared/licensing/lookup.ts`.
+- `ordering` reorders findings that already exist, inside one severity band. `shared/adapters/decision.ts`, `shared/reports/priority.ts`. The reorder state carries the finding title, severity, and rule id, and the question carries the title inline, so a title that holds a file path, a line number, a host name, or a package coordinate carries that. The question keys are hash-derived from the fingerprint, so the raw fingerprint is not sent. The report states the provenance in plain words, then the order source and the count of positions a lane moved.
+- `unknownNext` picks one next-look sentence for an unknown gap, from a fixed list. `shared/review/unknownQuote.ts`. It sends a fixed choice list and no repository text. The quote is not a finding and does not turn an unknown into a licence or a pass.
 
-The `humanOversightLevel` is `prompt_guided` in every case, which in C2PA Technical Specification 2.4 means a person provided the request and nobody approved the output. No path here is `fully_autonomous` and none is `human_validated`. The vocabulary is borrowed and this is not a conformance claim.
+The guarded licence lookup for an Unknown licence exists in `shared/licensing/lookup.ts` and is refused unless a lane is configured; its answer is a suggestion, never a licence fact. The lane is injected by the caller, holds no key, and is not wired on this path, so nothing is asked. If a lane were supplied, the prompt would carry only the package name and version with fixed wording. The `humanOversightLevel` is `prompt_guided` in every case, which in C2PA Technical Specification 2.4 means a person provided the request and nobody approved the output. No path here is `fully_autonomous` and none is `human_validated`. The vocabulary is borrowed and this is not a conformance claim.
 
-The AI never decides a finding, a severity, a licence fact, consent, who a caller is, or whether a request is allowed. `shared/copy/aiDisclosure.ts` is the single source of that list, with the file behind each item.
+The AI never decides a finding, a severity, a licence fact, consent, who a caller is, or whether a request is allowed. Each of those is fixed code: `shared/analyzers`, `shared/policies/severity.ts`, `shared/licensing`, `install.sh`.
 
-## Surfaces
+## Fetching and refreshing the policy
 
-Two addresses, two jobs. Local reads the files. Online serves the policies.
-
-- The online policy source answers one closed tool with static text, `launchsense_get_policy`, returning the whole bundle in one call: version, skill, rules, checklist, and audit instructions. One call is one approval in the harness. No arguments, no repo URL, no file reads, no scans, no stored code. A call is counted with no gate.
-- A local stdio MCP server (`mcp/server.ts`, wired by `install.sh`) reviews a checkout on that machine. It is a Node script and imports only Node builtins, so it starts with `node mcp/server.ts`. It needs Node 24 or newer on `PATH`; without Node the installer says so and registers no server.
-- The governance file, `.ls/policy.yaml`, in the checkout the review reads. It is the repo's own memory: the findings a person already accepted, with a reason, so a later review does not raise them again. `shared/review/governance.ts` parses and validates it, and it is declarative only: no code, no anchors, no includes, no wildcards. A wrong file is refused whole and nothing is suppressed; a file that would silence more than half the findings by one acceptance, or four fifths in total, is refused whole. An accepted finding is removed from the findings list and named in the not-checked list as accepted, so a suppression is never silent. The folder is gitignored, and `mcp/review-entry.ts` writes one line to `.gitignore` the first time it creates it. `.ls/reports/<timestamp>.md` keeps a copy of each report next to the policy, written only when the local file read was acknowledged.
-  - It speaks MCP over stdio as newline-delimited JSON: one JSON message per line in, one JSON message per line out, with no length header. `initialize` negotiates one of four protocol versions (2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25) and answers 2025-03-26 when the client asks for nothing this server serves. Refused and error lines go to stderr, so stdout carries protocol only.
-  - One message may be up to 4 MiB (4,194,304 bytes, the trailing newline included). A longer line is answered with a JSON-RPC error, nothing runs, and the next message is still answered.
-  - Its tools are `launchsense_scan_repo`, which reviews the checkout and takes one optional `mode` argument (`tree`, the default, or `change`), `launchsense_report`, which reads the latest local report under `.ls/reports`, `launchsense_github`, which reports the local `gh` login, and `launchsense_scan_public_notice`, which scans nothing and names both doors so neither is mistaken for the other. A tool name this server does not have is a protocol error. An undeclared, wrong-typed, or wrong-enum argument is refused rather than ignored.
-  - `launchsense_scan_repo` reviews `LAUNCHSENSE_ROOT`, which `install.sh` sets to the checkout root, so it reads the checkout and not the `mcp` folder. `LAUNCHSENSE_ROOT` must be absolute, and a folder that is not a checkout is named in the answer.
-  - A report body over 1 MiB is refused and named, never returned as a whole report or a clipped success. The local review gives up after 10 minutes.
-  - It reads files locally and does not upload them. Usage counts are off unless you answer yes to one question. `install.sh` asks before it records anything and defaults to no; it keeps the answer, with the wording it agreed to, in `~/.config/launchsense/consent.jsonl`. With a yes it sends rule id counts, the harness name, the version, how long it took, and which order source ran. That share carries no code, paths, titles, or function names. `install.sh --enterprise` and `LAUNCHSENSE_DIAGNOSTICS=off` leave it off.
-
-## Standards records
-
-Generated from facts in this repository, none claiming more than the code does.
-
-- `npm run notices` writes the third-party notice file from the committed lockfile, deterministic: same lockfile in, byte-identical file out.
-- `npm run sbom` writes a CycloneDX 1.7 SBOM from the same inventory the notice file reads, with SPDX ids and package URLs. Same lockfile in, byte-identical document out, so it carries no timestamp unless you pass `--generated-at`. No hashes, because no tarball was downloaded, and no dependency graph, because the inventory carries no edges. An Unknown licence is written as the name `Unknown` with its reason, never as an id.
-- The licence suggestion, in `shared/licensing/suggest.ts`. It reads the licence ids and counts the repo declares, plus the repo allowlist from `.ls/policy.yaml`, and suggests one pick with a reason. It is a suggestion, never a licence fact, and it never writes a finding or a severity. Copyleft, source-available, and proprietary terms decline. The lane state carries licence ids and counts only: no package name, no path, no file text.
-- The standards mapping, in `shared/reports/standards.ts`. Each row labels findings the checks already made onto OWASP Top 10:2025, OWASP ASVS 5.0.0, CWE, CWE Top 25 (2024), NIST SSDF 1.1, SLSA 1.0, OSV, deps.dev, or OpenSSF Scorecard. A row is `partial` only where a check exists; everything else stays `not-checked`. `standardsCoverage()` reports two numbers that are never merged: what the product can check at all, and what this scan actually found. It is a signal, never a certification. Licensed frameworks (ISO, SOC 2, PCI, SIG, CAIQ) are cited by name only, never embedded.
+The skill fetches the bundle once and keeps the copy in the skill folder. Later runs read that copy and make no policy calls. Refresh only when the person asks for it, or when the person has approved an online fetch. There is no automatic version comparison without a call and no auto-update: a coaching change reaches you on the fetch you were asked to make, and a detector change is a code change that reaches you when this repo is pulled.
 
 ## Analytics
 
-A call to the policy source is counted on the server, because the call is to our service. No gate is placed on it, and the row carries the method and the outcome only, never a repository URL, file text, or a network address. Local audits are counted only if the person opts in. No PII either way.
+A call to the policy source is counted on the server, because the call is to our service. No gate is placed on it, and the row carries the method and the outcome only, never a repository URL, file text, or a network address. Local audits send counts only if the person opts in, and only when an endpoint is configured to store them, as Privacy states. No PII is claimed as a proven property anywhere; the payload fields are the ones listed above and nothing else.
 
 ## Do not claim
 
-The review does not say the app will sell. It does not edit the repo. It does not certify anything. It does not treat a source-available license as open source.
+The review does not say the app will sell. It does not edit the repo. It does not certify anything, and it is not a compliance badge. It does not treat a source-available license as open source. It does not say nothing leaves the machine: name the outbound calls instead. It does not promise full coverage: the checks are the fixed analyzers in this repository.

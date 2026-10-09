@@ -34,8 +34,25 @@ export interface CompletenessInput {
   advisoriesTimedOut: boolean;
   /** Lockfile packages left unqueried because of the OSV cap. */
   advisoriesSkipped: number;
+  /**
+   * Queried coordinates the answer did not cover with a readable entry: a short
+   * result list, a malformed entry, or an unreadable vulns field. A missing
+   * answer is not a pass, so any of these makes the run partial.
+   */
+  advisoriesUnanswered: number;
+  /**
+   * Advisory records the answer listed that could not be read. Counted, never
+   * dropped, so they make the run partial too.
+   */
+  advisoriesUnreadable: number;
   /** The registry terms lookup ran (it returns an array, empty or not). */
   registryQueried: boolean;
+  /** Lines over the 2,000 character line cap that no check judged. */
+  analyzerSkippedLines: number;
+  /** Lines within that cap but over the 500 character code-shape cap. */
+  analyzerCodeSkippedLines: number;
+  /** Matches withheld because a file was already at the 20 match cap. */
+  analyzerSuppressedMatches: number;
 }
 
 export interface Completeness {
@@ -80,6 +97,18 @@ export function completenessFor(input: CompletenessInput): Completeness {
       } else if (input.advisoriesSkipped > 0) {
         reasons.push(`${input.advisoriesSkipped} lockfile packages were not queried for advisories`);
       }
+      // An answer that did not cover every coordinate, or that listed a record
+      // it could not read, is not a clean answer. These stay separate from the
+      // cap: the cap is "we chose not to ask", this is "we asked and did not get
+      // a readable answer". Neither is a pass.
+      if (input.advisoriesQueried && !input.advisoriesTimedOut) {
+        if (input.advisoriesUnanswered > 0) {
+          reasons.push(`${input.advisoriesUnanswered} queried coordinate(s) had no readable advisory answer`);
+        }
+        if (input.advisoriesUnreadable > 0) {
+          reasons.push(`${input.advisoriesUnreadable} advisory record(s) in the answer were unreadable and are not listed`);
+        }
+      }
       if (!input.registryQueried) {
         reasons.push("dependency terms were not queried, so licence terms are unknown");
       }
@@ -92,6 +121,32 @@ export function completenessFor(input: CompletenessInput): Completeness {
   // ecosystem.
   if (input.unqueriedLockfileInHand) {
     reasons.push("a lockfile was in the files read and was not queried for versions");
+  }
+  // Lines the fixed line-level checks skipped inside a file that was read.
+  // The file is in the read, so "the file was read" would be the misleading
+  // half of the story. Each cap names the check that owns it, and the counts
+  // keep the gap measurable. Other checks still read those files under their
+  // own limits; a skipped line here is never a claim about any other check.
+  if (input.analyzerSkippedLines > 0) {
+    reasons.push(
+      input.analyzerSkippedLines === 1
+        ? `the secret checks did not judge ${input.analyzerSkippedLines} line over 2,000 characters`
+        : `the secret checks did not judge ${input.analyzerSkippedLines} lines over 2,000 characters`,
+    );
+  }
+  if (input.analyzerCodeSkippedLines > 0) {
+    reasons.push(
+      input.analyzerCodeSkippedLines === 1
+        ? `the code-shape checks did not judge ${input.analyzerCodeSkippedLines} line over 500 characters`
+        : `the code-shape checks did not judge ${input.analyzerCodeSkippedLines} lines over 500 characters`,
+    );
+  }
+  if (input.analyzerSuppressedMatches > 0) {
+    reasons.push(
+      input.analyzerSuppressedMatches === 1
+        ? `${input.analyzerSuppressedMatches} matched line was withheld by the secret checks' 20-match cap`
+        : `${input.analyzerSuppressedMatches} matched lines were withheld by the secret checks' 20-match cap`,
+    );
   }
   const status: Completeness["status"] = reasons.length === 0 ? "complete" : "partial";
   const note =

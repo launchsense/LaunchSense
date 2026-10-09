@@ -5,6 +5,7 @@ import { analyzeHygiene } from "../analyzers/hygiene.ts";
 import { analyzeLicenses } from "../analyzers/licenses.ts";
 import { parseManifests } from "../analyzers/deps.ts";
 import { scanSecrets } from "../analyzers/secrets.ts";
+import type { ScanOmissionFacts } from "../analyzers/secrets.ts";
 import { ANALYZER_VERSION } from "../analyzers/version.ts";
 import { severityForFinding } from "../policies/severity.ts";
 import type { Severity } from "../policies/severity.ts";
@@ -70,6 +71,19 @@ export interface AdvisoryCoverage {
   queried: number;
   skipped: number;
   timedOut: boolean;
+  /**
+   * Coordinates that were sent and got no readable answer: a result list
+   * shorter than the queries, a non-object entry, or an unreadable vulns field.
+   * Zero is clean only together with zero `unreadable`. A missing answer is not
+   * a pass, so this is never counted into a clean report.
+   */
+  unanswered: number;
+  /**
+   * Advisory records the answer named that could not be read or could not be
+   * listed: a non-object, a record with no string id, or a record past the
+   * per-coordinate listing cap. Counted, never dropped.
+   */
+  unreadable: number;
 }
 
 export interface ReviewReport {
@@ -113,6 +127,20 @@ export interface ReviewReport {
   licenseDeclaration: LicenseDeclaration | null;
   /** The structured licence suggestion. A suggestion, never a licence fact. */
   licenseSuggestion: LicenceSuggestion;
+  /**
+   * Lines the fixed line-level checks skipped and matches the caps withheld,
+   * as counts, from one scan pass. Null when every line was judged, so a
+   * report without this field describes a read with nothing omitted rather
+   * than an unknown one. `files` is every distinct file carrying at least
+   * one of the three facts, whichever fact it is. The per-file detail lives
+   * in the not-checked list; never line text, only counts.
+   */
+  analyzerOmissions: {
+    files: number;
+    longLines: number;
+    codeSkippedLines: number;
+    suppressedMatches: number;
+  } | null;
 }
 
 /** What the licence lane measured, and the file it can hand the builder. */
@@ -194,12 +222,12 @@ const TEXT: Record<string, { title: string; why: string }> = {
     why: "Assigning innerHTML can run markup as HTML. This is a shape, not proof of an exploit.",
   },
   "code.child-process": {
-    title: "A child process exec call is present",
-    why: "exec and execSync pass a string to a shell. This line was not run.",
+    title: "Child process capability or call is present",
+    why: "This rule's possible matches are a require or from import of child_process, and the execSync, execFile, and execFileSync calls. It does not identify which one this line hit. An import is a capability, not a run. execSync runs through a shell. execFile and execFileSync use no shell by default, so they only reach a shell when the caller opts in with { shell: true }. A bare exec call, a side-effect import, and a dynamic import are not matched. This is a signal, and the line was not run.",
   },
   "code.weak-crypto": {
     title: "A weak hash or cipher call is present",
-    why: "md5, sha1, or createCipher showed up as a call. This is not a certificate verdict.",
+    why: "This rule's possible matches are md5 or sha1 in createHash, the deprecated createCipher API with any quoted argument, and a broken name in createCipheriv such as des, des3, 3des, rc4, rc2, bf, blowfish, or ecb. A modern cipher such as aes-256-gcm is not flagged. This is not a certificate verdict.",
   },
   "code.cors-wildcard": {
     title: "A CORS wildcard is set",
@@ -239,6 +267,71 @@ function listNames(paths: string[]): string {
   const named = paths.map((path) => path.split("/").pop() ?? path);
   if (named.length === 1) return named[0] ?? "";
   return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+}
+
+/**
+ * The per-file rows for the not-checked list. At most ten files are listed,
+ * each with the counts of what its own checks skipped; the rest are carried
+ * by one count-only summary row, so the totals always name every affected
+ * file while the display stays bounded. Returns null when nothing was
+ * omitted, so the caller adds no row.
+ */
+export function analyzerOmissionRows(
+  omissions: ScanOmissionFacts,
+  rowsCap = 10,
+): NotChecked[] | null {
+  const entries = Object.keys(omissions.perFile)
+    .filter((path) => {
+      const facts = omissions.perFile[path];
+      return facts !== undefined && (facts.longLines > 0 || facts.skippedCodeLines > 0 || facts.capSuppressed > 0);
+    })
+    .map((path) => [path, omissions.perFile[path]] as const);
+  if (entries.length === 0) return null;
+  const parts = (facts: { longLines: number; skippedCodeLines: number; capSuppressed: number }): string => {
+    const reasons: string[] = [];
+    if (facts.longLines > 0) {
+      reasons.push(
+        facts.longLines === 1
+          ? `${facts.longLines} line over 2,000 characters skipped by the secret checks' 2,000-character gate`
+          : `${facts.longLines} lines over 2,000 characters skipped by the secret checks' 2,000-character gate`,
+      );
+    }
+    if (facts.skippedCodeLines > 0) {
+      reasons.push(
+        facts.skippedCodeLines === 1
+          ? `${facts.skippedCodeLines} line over 500 characters that the code-shape checks did not judge`
+          : `${facts.skippedCodeLines} lines over 500 characters that the code-shape checks did not judge`,
+      );
+    }
+    if (facts.capSuppressed > 0) {
+      reasons.push(
+        facts.capSuppressed === 1
+          ? `${facts.capSuppressed} further matched line past the 20-match cap was withheld`
+          : `${facts.capSuppressed} further matched lines past the 20-match cap were withheld`,
+      );
+    }
+    return reasons.join("; ") + ". Other checks may still read this file under their own limits.";
+  };
+  const rows: NotChecked[] = entries.slice(0, rowsCap).map(([path, facts]) => ({
+    scope: path,
+    reason: `Line-level caps on this file: ${parts(facts)}`,
+  }));
+  if (entries.length > rowsCap) {
+    // Count-only summary on purpose. Listing every remaining path is
+    // unbounded display for an unbounded repo; the aggregate totals always
+    // include these files, so nothing is silently dropped from the counts.
+    const restCount = entries.length - rowsCap;
+    const restSkipped = entries.slice(rowsCap).reduce((sum, [, facts]) => sum + facts.longLines + facts.skippedCodeLines, 0);
+    const restSuppressed = entries.slice(rowsCap).reduce((sum, [, facts]) => sum + facts.capSuppressed, 0);
+    const restParts: string[] = [];
+    if (restSkipped > 0) restParts.push(`${restSkipped} skipped lines`);
+    if (restSuppressed > 0) restParts.push(`${restSuppressed} withheld matches`);
+    rows.push({
+      scope: "line-level checks",
+      reason: `${restCount} more files carry the same line-level caps (${restParts.join(" and ")}). Their paths are not listed here; the totals include them.`,
+    });
+  }
+  return rows;
 }
 
 /**
@@ -307,11 +400,18 @@ export function buildLocalReport(
   advisories: AdvisoryCoverage | null = null,
   lockFileInHand: ReviewFile | undefined = undefined,
   allowedLicences: readonly string[] = [],
+  trackedEnvPaths: ReadonlySet<string> | null = null,
 ): ReviewReport {
   const paths = files.map((file) => file.path);
-  const secrets = scanSecrets(files);
+  // The scan result is the findings array with omission facts attached. The
+  // report carries both: the findings as before, and the omissions as counts
+  // in the not-checked list plus the aggregate field.
+  // trackedEnvPaths carries the paths Git really tracks. Null means tracked
+  // status is unknown, so `secret.tracked-env` cannot judge and must not fire.
+  const secretScan = scanSecrets(files, trackedEnvPaths);
+  const secretOmissions = secretScan.omissions ?? null;
   const findings: ReviewFinding[] = [];
-  for (const match of secrets) {
+  for (const match of secretScan) {
     const text = TEXT[match.ruleId] ?? {
       title: match.ruleId,
       why: "A fixed check matched this line.",
@@ -375,6 +475,11 @@ export function buildLocalReport(
 
   const notChecked = [...skipped];
   if (!inventory.complete) notChecked.push({ scope: "npm lockfile", reason: inventory.note });
+  // A skipped line is a check that did not run on that line. Naming the file
+  // and the count keeps the cap from reading as "nothing was there"; the caps
+  // themselves are unchanged, and no line text is disclosed, only counts.
+  const omissionRows = secretOmissions === null ? null : analyzerOmissionRows(secretOmissions, 10);
+  if (omissionRows !== null) notChecked.push(...omissionRows);
 
   // The declaration lane reads the lockfile the repo committed, which is already
   // in hand. The node_modules fallback is deliberately not passed here: the
@@ -479,6 +584,24 @@ export function buildLocalReport(
         reason: `Queried ${advisories.queried} lockfile packages. ${advisories.skipped} were not queried.`,
       });
     }
+    // A coordinate the answer did not cover is not a clean coordinate. A short
+    // result list, a malformed entry, or an unreadable vulns field all land in
+    // this count, and none of them may read as "no advisories found".
+    if (advisories.unanswered > 0) {
+      notChecked.push({
+        scope: "OSV",
+        reason: `${advisories.unanswered} of ${advisories.queried} queried coordinates had no readable answer. Those versions were not checked. Unknown stays unknown.`,
+      });
+    }
+    // Records the answer listed that could not be read, or that sat past the
+    // per-coordinate listing cap. Counted, so an unreadable or unlisted advisory
+    // can never hide behind a clean line.
+    if (advisories.unreadable > 0) {
+      notChecked.push({
+        scope: "OSV",
+        reason: `${advisories.unreadable} advisory record${advisories.unreadable === 1 ? "" : "s"} the answer named could not be read or could not be listed. Those are not cleared. Unknown stays unknown.`,
+      });
+    }
     const listed = advisories.hits.slice(0, 20);
     for (const hit of listed) {
       // An unknown advisory severity is real but unranked, so it lands at info,
@@ -569,6 +692,17 @@ export function buildLocalReport(
         ],
       };
 
+  // The aggregate the JSON carries. The scan computes it once; the report
+  // passes it through unchanged so no scan ever runs twice for the same facts.
+  const analyzerOmissions = secretOmissions === null
+    ? null
+    : {
+        files: secretOmissions.files,
+        longLines: secretOmissions.longLines,
+        codeSkippedLines: secretOmissions.codeSkippedLines,
+        suppressedMatches: secretOmissions.suppressedMatches,
+      };
+
   return {
     stage: "alpha",
     authRequired: false,
@@ -591,5 +725,6 @@ export function buildLocalReport(
     sbom,
     licenseDeclaration,
     licenseSuggestion,
+    analyzerOmissions,
   };
 }

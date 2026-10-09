@@ -6,7 +6,7 @@
 // NAME must look like a credential, and the VALUE must look like a credential. The
 // value gate lives in ./secretValue.ts.
 
-import { matchCodePattern } from "./codePatterns.ts";
+import { matchCodePattern, codePatternSkippedLine } from "./codePatterns.ts";
 import { looksLikeSecretValue, PROVIDER_SHAPES } from "./secretValue.ts";
 
 export interface ScannedFile {
@@ -21,7 +21,47 @@ export interface RawSecretMatch {
   snippet: string;
 }
 
+/**
+ * Per-file facts about lines this analyzer did not judge. Every cap keeps its
+ * own counter, so a deliberate once-per-file dedup is never confused with a
+ * match the reader never saw, and a long line is never confused with a
+ * code-shape skip. Only the checks in this analyzer stop at those caps; other
+ * analyzers still read the file under their own limits.
+ */
+export interface FileOmissionFacts {
+  /** Lines over this analyzer's 2,000 character line gate. */
+  longLines: number;
+  /** Lines within that gate but over the 500 character code-shape gate. */
+  skippedCodeLines: number;
+  /** Matches withheld because the file was already at the 20 match cap. */
+  capSuppressed: number;
+}
+
+/**
+ * Omission totals across every file scanned. Null when nothing was skipped,
+ * so a result without this field describes a scan that judged every line,
+ * rather than an unknown one. `files` is every distinct file carrying at
+ * least one of the three facts, whichever fact it is.
+ */
+export interface ScanOmissionFacts {
+  /** Distinct files with at least one omitted line or withheld match. */
+  files: number;
+  longLines: number;
+  codeSkippedLines: number;
+  suppressedMatches: number;
+  /**
+   * The per-file facts, keyed by relative path, on a null-prototype object.
+   * A repo can hold a file literally named __proto__ or constructor; a bare
+   * object literal would send those keys through the prototype chain and
+   * both hide the fact and mutate Object.prototype. Null prototype and own
+   * keys keep the payload safe and the counts visible.
+   */
+  perFile: Record<string, FileOmissionFacts>;
+}
+
 const MAX_MATCHES_PER_FILE = 20;
+/** The line length above which the whole line is not judged. */
+const MAX_LINE_LENGTH = 2000;
 
 function basename(path: string): string {
   const parts = path.split("/");
@@ -285,15 +325,30 @@ function valueAtIsCredential(line: string, at: number, opLen: number, name: stri
   return looksLikeSecretValue(value, quoted !== null, name);
 }
 
-function pushCapped(
-  out: RawSecretMatch[],
-  match: RawSecretMatch,
-  fileCount: { used: number },
-): void {
-  if (fileCount.used < MAX_MATCHES_PER_FILE) {
+interface CapCounters {
+  facts: FileOmissionFacts;
+  used: number;
+  /**
+   * Rules already surfaced in this file ONCE, by their first encounter
+   * through pushOncePerFile. It exists only for the once-per-file dedup: a
+   * once-per-file rule reports one line item per file, so its repeats are
+   * intentional and never counted. Per-line rules never enter this set; each
+   * of their withheld lines past the cap is a distinct withheld item.
+   */
+  seenRules: Set<string>;
+}
+
+function pushCapped(out: RawSecretMatch[], match: RawSecretMatch, counters: CapCounters): void {
+  if (counters.used < MAX_MATCHES_PER_FILE) {
     out.push(match);
-    fileCount.used++;
+    counters.used++;
+    return;
   }
+  // Past the cap: the match happened and the reader will not see it. Count it.
+  // A once-per-file rule reaches here only on its first encounter, because
+  // pushOncePerFile has already deduped its repeats, so a withheld once-rule
+  // counts exactly one instance and never its repeats.
+  counters.facts.capSuppressed++;
 }
 
 // Noisy rules report once per file. Forty console calls in one file is one
@@ -301,11 +356,45 @@ function pushCapped(
 function pushOncePerFile(
   out: RawSecretMatch[],
   match: RawSecretMatch,
-  fileCount: { used: number },
+  counters: CapCounters,
 ): void {
-  const already = out.some((m) => m.ruleId === match.ruleId && m.path === match.path);
-  if (already) return;
-  pushCapped(out, match, fileCount);
+  // One line item per file for a once-per-file rule: the first encounter
+  // marks seen, so every later repeat returns here and counts nothing,
+  // whether the first instance was pushed or withheld by the cap.
+  if (counters.seenRules.has(match.ruleId)) return;
+  counters.seenRules.add(match.ruleId);
+  pushCapped(out, match, counters);
+}
+
+/**
+ * Sum the per-file facts into the totals. Pure. Files with all-zero facts are
+ * left out: their absence means fully judged.
+ */
+export function totalOmissionFacts(
+  perFile: Map<string, FileOmissionFacts>,
+): ScanOmissionFacts {
+  const record: Record<string, FileOmissionFacts> = Object.create(null);
+  let files = 0;
+  let longLines = 0;
+  let skippedCodeLines = 0;
+  let totalSuppressedMatches = 0;
+  for (const [path, facts] of perFile) {
+    if (facts.longLines === 0 && facts.skippedCodeLines === 0 && facts.capSuppressed === 0) continue;
+    // Own keys via null prototype: a file literally named __proto__ or
+    // constructor cannot inherit from, or mutate, Object.prototype.
+    record[path] = facts;
+    files++;
+    longLines += facts.longLines;
+    skippedCodeLines += facts.skippedCodeLines;
+    totalSuppressedMatches += facts.capSuppressed;
+  }
+  return {
+    files,
+    longLines,
+    codeSkippedLines: skippedCodeLines,
+    suppressedMatches: totalSuppressedMatches,
+    perFile: record,
+  };
 }
 
 /**
@@ -338,16 +427,50 @@ export function trackedEnvHasLiveValue(content: string): boolean {
   return false;
 }
 
-export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
-  const out: RawSecretMatch[] = [];
+/**
+ * The tracked environment-file gate.
+ *
+ * `secret.tracked-env` is a claim about GIT STATE, not about a file name, so the
+ * caller supplies the set of paths Git actually tracks, measured with real Git
+ * (`git ls-files`) in mcp/review-entry.ts:
+ *
+ *   - a non-null set: the rule fires only when the file's path is in it.
+ *   - null: tracked status is UNKNOWN (not a Git tree, or Git failed). The rule
+ *     does not fire, because a file name asserting "tracked" is the defect this
+ *     gate closes; the caller discloses that the rule could not be judged.
+ *
+ * Untracked and gitignored env files are private local state and are never
+ * labelled tracked. `trackedEnvHasLiveValue` still decides the value question
+ * on the content exactly as before; only the tracking gate surrounds it.
+ */
+export function scanSecrets(
+  files: ScannedFile[],
+  trackedEnvPaths: ReadonlySet<string> | null = null,
+): RawSecretMatch[] & { omissions?: ScanOmissionFacts } {
+  const out: RawSecretMatch[] & { omissions?: ScanOmissionFacts } = [];
+  const perFile = new Map<string, FileOmissionFacts>();
 
   for (const file of files) {
+    let facts = perFile.get(file.path);
+    if (facts === undefined) {
+      facts = { longLines: 0, skippedCodeLines: 0, capSuppressed: 0 };
+      perFile.set(file.path, facts);
+    }
+    const counters: CapCounters = {
+      facts,
+      used: out.filter((m) => m.path === file.path).length,
+      seenRules: new Set<string>(),
+    };
     const base = basename(file.path);
-    // A tracked environment file leaks to everyone with repo access, but only when it
-    // actually carries a value. A tracked TEMPLATE with empty or placeholder values is
-    // the correct pattern, and `.env.local` holds the real values outside the repo.
+    // A TRACKED environment file leaks to everyone with repo access, but only
+    // when it actually carries a value. A tracked TEMPLATE with empty or
+    // placeholder values is the correct pattern, and `.env.local` holds the real
+    // values outside the repo. Tracking is measured with real Git, never
+    // inferred from the name: an untracked or gitignored `.env.local` is private
+    // local state. With no measured tracked set (null), the rule cannot judge
+    // and stays silent; the caller discloses that gap.
     if (base.startsWith(".env") && base !== ".env.example") {
-      if (trackedEnvHasLiveValue(file.content)) {
+      if (trackedEnvPaths !== null && trackedEnvPaths.has(file.path) && trackedEnvHasLiveValue(file.content)) {
         out.push({
           ruleId: "secret.tracked-env",
           path: file.path,
@@ -361,17 +484,26 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
     const lines = file.content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
-      if (line.length === 0 || line.length > 2000) continue;
+      if (line.length > MAX_LINE_LENGTH) {
+        // This analyzer's gate is unchanged: such a line is judged by no
+        // check in this analyzer. Other analyzers still read the file under
+        // their own limits, so this count never claims the file was
+        // unchecked whole. Naming the count is what stops a minified file
+        // from reading as fully judged by the checks that do stop here.
+        facts.longLines++;
+        continue;
+      }
+      if (line.length === 0) continue;
+      if (codePatternSkippedLine(line)) facts.skippedCodeLines++;
       const lineNo = i + 1;
       const client = isClientPath(file.path);
-      const fileCount = { used: out.filter((m) => m.path === file.path).length };
       if (/AKIA[0-9A-Z]{16}/.test(line)) {
         pushCapped(out, {
           ruleId: client ? "secret.client-exposure" : "secret.aws-key",
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        }, fileCount);
+        }, counters);
         continue;
       }
       if (/((ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/.test(line)) {
@@ -380,7 +512,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        }, fileCount);
+        }, counters);
         continue;
       }
       if (/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(line)) {
@@ -389,7 +521,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        }, fileCount);
+        }, counters);
         continue;
       }
       if (isHardcodedCredential(line, file.path)) {
@@ -398,7 +530,7 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        }, fileCount);
+        }, counters);
         continue;
       }
       const code = matchCodePattern(line);
@@ -409,10 +541,15 @@ export function scanSecrets(files: ScannedFile[]): RawSecretMatch[] {
           path: file.path,
           line: lineNo,
           snippet: line.trim(),
-        }, fileCount);
+        }, counters);
       }
     }
   }
 
+  // Attach the facts without disturbing array consumers: an array read by
+  // index, spread, or JSON.stringify is unchanged. Absent means nothing was
+  // skipped, so a caller that ignores the field still reads a truthful scan.
+  const totals = totalOmissionFacts(perFile);
+  if (totals.files > 0) out.omissions = totals;
   return out;
 }

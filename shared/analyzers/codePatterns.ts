@@ -7,8 +7,32 @@ export interface CodeHit {
   oncePerFile: boolean;
 }
 
+// The deprecated createCipher API derives its own key and IV from a password,
+// and Node marks it deprecated, so any algorithm passed through it is a weak
+// cipher call. `createCipheriv` is the modern API and only weak when its
+// algorithm is broken today. The names are matched on word boundaries inside
+// the quoted argument, so a modern `aes-256-gcm` and a word like `deserialize`
+// are not weak ciphers, while `des-cbc`, `des3`, `bf-cbc`, and `aes-128-ecb`
+// are. The original blanket `createCipheriv(["'])` flagged every modern cipher.
+const DEPRECATED_CIPHER_API = /createCipher\s*\(\s*['"]/i;
+const WEAK_CIPHER_ALGORITHM =
+  /createCipheriv\s*\(\s*['"][^'"]*\b(?:des|des3|3des|rc4|rc2|bf|blowfish|ecb)\b[^'"]*['"]/i;
+
+/** The line length above which no code-shape rule is evaluated. */
+export const CODE_PATTERN_MAX_LINE = 500;
+
+/**
+ * True when this line is over the code-shape line cap and was skipped by these
+ * rules. The gate itself is unchanged: a long line was never read by
+ * matchCodePattern. This exists so the skip is countable, and a countable skip
+ * can be disclosed, instead of reading as "nothing was there".
+ */
+export function codePatternSkippedLine(line: string): boolean {
+  return line.length > CODE_PATTERN_MAX_LINE;
+}
+
 export function matchCodePattern(line: string): CodeHit | null {
-  if (line.length > 500) return null;
+  if (codePatternSkippedLine(line)) return null;
   // A comment describes code, it is not code. Every rule below is a shape in
   // source, and a line whose first non-space character opens a comment is
   // prose about a shape, not the shape. This gate is what stops a README or a
@@ -49,7 +73,7 @@ export function matchCodePattern(line: string): CodeHit | null {
   if (/(?:require\(\s*['"](?:node:)?child_process['"]|from\s+['"](?:node:)?child_process['"])|\bexecSync\s*\(|\bexecFile(?:Sync)?\s*\(/.test(line)) {
     return { ruleId: "code.child-process", oncePerFile: false };
   }
-  if (/createHash\s*\(\s*['"](?:md5|sha1)['"]|createCipher(?:iv)?\s*\(\s*['"]/i.test(line)) {
+  if (/createHash\s*\(\s*['"](?:md5|sha1)['"]/i.test(line) || DEPRECATED_CIPHER_API.test(line) || WEAK_CIPHER_ALGORITHM.test(line)) {
     return { ruleId: "code.weak-crypto", oncePerFile: false };
   }
   if (/Access-Control-Allow-Origin['"]?\s*[:=]\s*['"]\*['"]|origin\s*:\s*['"]\*['"]/.test(line)) {

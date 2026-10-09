@@ -6,8 +6,9 @@ import { accountText } from "./github.ts";
 import { reviewRoot, reviewRootNote } from "./review.ts";
 import type { ReviewMode } from "./review.ts";
 import { maxReportBytes } from "./limits.ts";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { closeSync } from "node:fs";
+import { openReviewRoot } from "../root-boundary.ts";
+import { isSavedReportName, listDirectoryNames, openChildDirectory, readBoundedFile } from "../local-state.ts";
 
 export interface ToolRuntime {
   apiURL: string;
@@ -53,34 +54,70 @@ function scanMode(args: Record<string, unknown>): ReviewMode {
 }
 
 // readLatestLocalReport returns the newest report the local review wrote under
-// .ls/reports. Local only: it never asks any server, because reports stay on
-// the machine. Set LAUNCHSENSE_ROOT at the checkout, the same root the review
-// uses, so the report is for the checkout and not for the server folder.
+// .ls/reports. Local only: it never asks any server, because reports stay on the
+// machine. Set LAUNCHSENSE_ROOT at the checkout, the same root the review uses,
+// so the report is for the checkout and not for the server folder.
+//
+// The root is pinned and every component is opened from a pinned parent, with
+// the final component refusing a link. A linked `.ls`, a linked `.ls/reports`,
+// or a linked report file is refused rather than followed, so this read cannot
+// be redirected outside the checkout. Absence is still the ordinary "no report
+// yet" answer; a link or an unreadable file is a refusal and says so.
+//
+// Only a file whose name is the saved-report shape (a run stamp then `.md`) is
+// treated as a report. The third-party notice also ends in `.md`, and an
+// unrelated file a person dropped in the folder may too. Neither is a report, so
+// neither is returned as one. Files are never deleted or moved to make a
+// selection; a name that is not a report is simply skipped.
 function readLatestLocalReport(): string {
   const root = reviewRoot();
-  const dir = join(root, ".ls", "reports");
-  let names: string[];
+  const { fd: rootFd } = openReviewRoot(root);
   try {
-    names = readdirSync(dir).filter((n) => n.endsWith(".md")).sort();
-  } catch {
-    throw new Error("No local report yet. Run launchsense_scan_repo first.");
-  }
-  if (names.length === 0) {
-    throw new Error("No local report yet. Run launchsense_scan_repo first.");
-  }
-  const latest = names[names.length - 1];
-  if (latest === undefined) {
-    throw new Error("No local report yet. Run launchsense_scan_repo first.");
-  }
-  try {
-    const info = statSync(join(dir, latest));
-    if (info.size > maxReportBytes) {
-      throw new Error("The latest local report is over 1 MiB. Read it from .ls/reports directly.");
+    const ls = openChildDirectory(rootFd, ".ls");
+    if (ls.state === "absent") throw new Error("No local report yet. Run launchsense_scan_repo first.");
+    if (ls.state === "refused") throw new Error(`The local report folder could not be read: ${ls.reason}`);
+    const lsFd = ls.value;
+    try {
+      const listed = listDirectoryNames(lsFd, "reports");
+      if (listed.state === "absent") throw new Error("No local report yet. Run launchsense_scan_repo first.");
+      if (listed.state === "refused") throw new Error(`The local report folder could not be read: ${listed.reason}`);
+      const names = listed.value.filter((name) => isSavedReportName(name)).sort();
+      if (names.length === 0) throw new Error("No local report yet. Run launchsense_scan_repo first.");
+      const latest = names[names.length - 1];
+      if (latest === undefined) throw new Error("No local report yet. Run launchsense_scan_repo first.");
+      const reports = openChildDirectory(lsFd, "reports");
+      if (reports.state !== "ok") throw new Error("The latest local report could not be read as text.");
+      const reportsFd = reports.value;
+      try {
+        const read = readBoundedFile(reportsFd, latest, maxReportBytes);
+        if (read.state === "absent") {
+          // The named report was removed between the listing and the read. The
+          // older reports, if any, are still on disk and still readable, so name
+          // them rather than claiming there is no report at all.
+          const older = names.slice(0, -1);
+          if (older.length > 0) {
+            throw new Error(
+              `The newest local report was removed while it was being read. Older reports are still on disk under .ls/reports; read those.`,
+            );
+          }
+          throw new Error("No local report yet. Run launchsense_scan_repo first.");
+        }
+        if (read.state === "refused") {
+          if (read.code === "too_large") {
+            throw new Error("The latest local report is over 1 MiB. Read it from .ls/reports directly.");
+          }
+          if (read.code === "link") throw new Error(`The latest local report is a symbolic link: ${read.reason}`);
+          throw new Error("The latest local report could not be read as text.");
+        }
+        return read.value;
+      } finally {
+        closeSync(reportsFd);
+      }
+    } finally {
+      closeSync(lsFd);
     }
-    return readFileSync(join(dir, latest), "utf8");
-  } catch (error) {
-    if (error instanceof Error && /No local report|over 1 MiB/.test(error.message)) throw error;
-    throw new Error("The latest local report could not be read as text.");
+  } finally {
+    closeSync(rootFd);
   }
 }
 // scanRepo reviews the checkout named by LAUNCHSENSE_ROOT. It takes no arguments

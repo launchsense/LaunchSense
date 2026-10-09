@@ -132,13 +132,17 @@ const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[
     checklist: ["Confirm the value is not attacker-controlled."],
   },
   "code.child-process": {
-    title: "Review child process exec calls",
-    why: "exec passes a string to a shell. This review did not run it.",
-    checklist: ["Prefer execFile with an argument list when a shell is not required."],
+    title: "Review child process capability or calls",
+    why: "This rule's possible matches are a require or from import of child_process, and the execSync, execFile, and execFileSync calls. It does not identify which one this line hit. An import runs nothing. execSync runs through a shell. execFile and execFileSync use no shell by default and only reach one when the caller opts in with { shell: true }. A bare exec call, a side-effect import, and a dynamic import are not matched. This review did not run it.",
+    checklist: [
+      "If the call is execSync, or execFile or execFileSync with { shell: true }, and a string is built from input, pass an argument list instead and drop the shell option.",
+      "If the call is execFile or execFileSync by default, confirm the arguments are fixed and the file it runs is trusted.",
+      "If the line is only an import, confirm the capability is still needed before removing it.",
+    ],
   },
   "code.weak-crypto": {
     title: "Review weak hash or cipher calls",
-    why: "md5, sha1, or createCipher showed up as a call.",
+    why: "This rule's possible matches are md5 or sha1 in createHash, the deprecated createCipher API with any quoted argument, and a broken name in createCipheriv such as des, des3, 3des, rc4, rc2, bf, blowfish, or ecb. A modern cipher such as aes-256-gcm is not flagged.",
     checklist: ["Use a current hash or cipher if this protects a secret."],
   },
   "code.cors-wildcard": {

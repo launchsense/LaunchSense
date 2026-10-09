@@ -6,6 +6,10 @@
 
 export const OSV_TIMEOUT_MS = 15000;
 export const OSV_BATCH_CAP = 50;
+// The most advisory rows the report will list for one coordinate. Records past
+// this cap are counted as unreadable, never silently dropped, so the cap cannot
+// turn into a clean result.
+export const OSV_VULN_CAP = 20;
 
 export interface OsvVuln {
   id: string;
@@ -17,6 +21,27 @@ export interface OsvQuery {
   ecosystem: string;
   name: string;
   version: string;
+}
+
+/**
+ * The answer for one query coordinate.
+ *
+ * `vulns` empty is only a clean result when `answered` is true. A coordinate
+ * whose entry was missing from a short list, or whose entry was not an object,
+ * or whose `vulns` field was not an array, is `answered: false`. That is not a
+ * pass, and the caller must say so. Only a readable entry, whether `{}` or
+ * `{ "vulns": [] }`, is answered and clean.
+ */
+export interface OsvResult {
+  /** The readable advisory records for this coordinate. */
+  vulns: OsvVuln[];
+  /** True only when a readable entry came back for this exact coordinate. */
+  answered: boolean;
+  /**
+   * Records the answer listed that could not be read: a non-object, or a record
+   * with no string id. They are counted, never dropped into a clean result.
+   */
+  unreadable: number;
 }
 
 // Textual severities OSV reporters use, mapped to the scan's
@@ -127,10 +152,13 @@ export function pickSeverity(vuln: Record<string, unknown>): string {
 
 export async function queryOsvBatch(
   queries: OsvQuery[],
-): Promise<{ timedOut: boolean; results: OsvVuln[][] }> {
-  const empty = queries.map(() => []);
-  if (queries.length === 0) return { timedOut: false, results: empty };
+): Promise<{ timedOut: boolean; results: OsvResult[] }> {
+  if (queries.length === 0) return { timedOut: false, results: [] };
   const capped = queries.slice(0, OSV_BATCH_CAP);
+  // A request that did not finish answers nothing. Every coordinate is
+  // unanswered, which is not the same as a coordinate with no advisories.
+  const unansweredAll = (): OsvResult[] =>
+    capped.map(() => ({ vulns: [], answered: false, unreadable: 0 }));
   let response: Response;
   try {
     response = await fetch("https://api.osv.dev/v1/querybatch", {
@@ -145,50 +173,95 @@ export async function queryOsvBatch(
       signal: AbortSignal.timeout(OSV_TIMEOUT_MS),
     });
   } catch {
-    return { timedOut: true, results: capped.map(() => []) };
+    return { timedOut: true, results: unansweredAll() };
   }
   if (response.status !== 200) {
-    return { timedOut: true, results: capped.map(() => []) };
+    return { timedOut: true, results: unansweredAll() };
   }
   let data: unknown;
   try {
     data = await response.json();
   } catch {
-    return { timedOut: true, results: capped.map(() => []) };
+    return { timedOut: true, results: unansweredAll() };
   }
   if (typeof data !== "object" || data === null) {
-    return { timedOut: true, results: capped.map(() => []) };
+    return { timedOut: true, results: unansweredAll() };
   }
   const list = (data as Record<string, unknown>)["results"];
   if (!Array.isArray(list)) {
-    return { timedOut: true, results: capped.map(() => []) };
+    return { timedOut: true, results: unansweredAll() };
   }
-  const results: OsvVuln[][] = capped.map((_, i) => {
+  // The batch contract answers exactly one result per query, in order. A list
+  // that is LONGER than the queries means the response does not line up with
+  // what was sent, so position cannot be trusted for any coordinate. Nothing is
+  // read as clean here. This is carried by the unanswered count, and no new
+  // field is added: a count mismatch answers no coordinate.
+  if (list.length > capped.length) {
+    return { timedOut: false, results: unansweredAll() };
+  }
+  const results: OsvResult[] = capped.map((_, i) => {
+    // A result list shorter than the query list leaves the tail coordinates
+    // unanswered. A missing entry is not an empty answer, so it is never [].
+    if (i >= list.length) return { vulns: [], answered: false, unreadable: 0 };
     const entry = list[i];
-    if (typeof entry !== "object" || entry === null) return [];
-    const vulns = (entry as Record<string, unknown>)["vulns"];
-    if (!Array.isArray(vulns)) return [];
-    return vulns.slice(0, 20).flatMap((v): OsvVuln[] => {
-      if (typeof v !== "object" || v === null) return [];
+    // A result entry is a record. `typeof [] === "object"` and an array is not
+    // null, so the array case must be refused explicitly: otherwise an array
+    // entry slides through and its absent vulns key reads as a clean answer.
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return { vulns: [], answered: false, unreadable: 0 };
+    }
+    const raw = (entry as Record<string, unknown>)["vulns"];
+    // OSV omits the vulns key entirely for a coordinate with no advisories, so
+    // a readable object without the key is an answered, clean entry. A key that
+    // is present and not an array is a malformed answer, not a clean one.
+    if (raw === undefined) {
+      return { vulns: [], answered: true, unreadable: 0 };
+    }
+    if (!Array.isArray(raw)) {
+      return { vulns: [], answered: false, unreadable: 0 };
+    }
+    // The entry is readable: this coordinate was answered. What follows is how
+    // much of the answer could be read. A record that is not an object, or that
+    // carries no string id, or that sits past the listing cap, is listed but
+    // unreadable. It is counted, so an unreadable record can never read as clean.
+    const vulns: OsvVuln[] = [];
+    let unreadable = 0;
+    for (let j = 0; j < raw.length; j++) {
+      const v = raw[j];
+      if (j >= OSV_VULN_CAP) {
+        unreadable++;
+        continue;
+      }
+      if (typeof v !== "object" || v === null) {
+        unreadable++;
+        continue;
+      }
       const record = v as Record<string, unknown>;
       const id: unknown = record["id"];
-      if (typeof id !== "string") return [];
+      // An id that is a string but carries no visible character is not an id.
+      // It is counted as unreadable, so a blank id can never become a listed,
+      // cleared advisory. The check trims, so whitespace alone is not an id.
+      if (typeof id !== "string" || id.trim().length === 0) {
+        unreadable++;
+        continue;
+      }
       const summary = typeof record["summary"] === "string" ? record["summary"] : "";
-      return [{
+      vulns.push({
         id,
         summary: summary.slice(0, 200),
         severity: pickSeverity(record),
-      }];
-    });
+      });
+    }
+    return { vulns, answered: true, unreadable };
   });
   await fillEmptySummaries(results);
   return { timedOut: false, results };
 }
 
-async function fillEmptySummaries(results: OsvVuln[][]): Promise<void> {
+async function fillEmptySummaries(results: OsvResult[]): Promise<void> {
   const missing: OsvVuln[] = [];
-  for (const group of results) {
-    for (const vuln of group) {
+  for (const result of results) {
+    for (const vuln of result.vulns) {
       if (vuln.summary.length === 0) missing.push(vuln);
     }
   }
