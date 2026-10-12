@@ -49,6 +49,10 @@ No build step and no dependencies. The engine runs on Node 24 or newer with type
 node --experimental-strip-types mcp/review-entry.ts --root /path/to/your/repo
 ```
 
+## Public CI
+
+GitHub's required `check` verifies Node 24 syntax, local MCP startup, initialization and tool discovery in an isolated profile. It does not run a repository audit or the detector evals. Those tests stay in the separate product repository. A fixed check, not full coverage.
+
 ## License
 
 Open core. MIT, per file, for the files `LICENSE.txt` names, proprietary for the rest.

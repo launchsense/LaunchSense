@@ -1,0 +1,144 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Check syntax and local MCP startup
+        shell: bash
+        run: |
+          node --no-warnings --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { spawn, spawnSync } from 'node:child_process';
+          import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+          import { stripTypeScriptTypes } from 'node:module';
+          import { tmpdir } from 'node:os';
+          import { join, resolve } from 'node:path';
+
+          assert.equal(Number(process.versions.node.split('.')[0]), 24);
+          let checked = 0;
+          function syntax(folder) {
+            for (const entry of readdirSync(folder, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+              const path = join(folder, entry.name);
+              assert.equal(entry.isSymbolicLink(), false, 'engine source must not be a symlink');
+              if (entry.isDirectory()) syntax(path);
+              else if (entry.isFile() && entry.name.endsWith('.ts')) {
+                const source = stripTypeScriptTypes(readFileSync(path, 'utf8'), { mode: 'strip' });
+                const result = spawnSync(process.execPath, ['--no-warnings', '--input-type=module', '--check'], { input: source, timeout: 10000, stdio: 'pipe' });
+                assert.equal(result.error, undefined, 'syntax checker must finish');
+                assert.equal(result.status, 0, `syntax check failed for ${path}`);
+                checked++;
+              }
+            }
+          }
+          syntax('mcp');
+          syntax('shared');
+          assert.ok(checked > 0, 'engine source set must not be empty');
+
+          const scratch = mkdtempSync(join(tmpdir(), 'launchsense-ci-'));
+          const home = join(scratch, 'home');
+          const app = join(scratch, 'customer');
+          mkdirSync(home);
+          mkdirSync(app);
+          const child = spawn(process.execPath, ['--no-warnings', resolve('mcp/server.ts')], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            // No inherited token, provider keys, model flags or user HOME.
+            env: {
+              PATH: process.env.PATH, HOME: home,
+              LAUNCHSENSE_ROOT: app,
+              LAUNCHSENSE_REVIEW: resolve('mcp/review-entry.ts'),
+              LAUNCHSENSE_OFFLINE: '1', LAUNCHSENSE_DIAGNOSTICS: 'off',
+            },
+          });
+          let buffer = '';
+          let nextId = 0;
+          let stderrBytes = 0;
+          const pending = new Map();
+          function failPending(error) {
+            for (const waiter of pending.values()) { clearTimeout(waiter.timer); waiter.reject(error); }
+            pending.clear();
+          }
+          const closed = new Promise(resolveClose => child.once('close', (code, signal) => {
+            failPending(new Error('MCP ended before its answer'));
+            resolveClose({ code, signal });
+          }));
+          child.on('error', () => failPending(new Error('MCP failed to start')));
+          child.stdin.on('error', () => failPending(new Error('MCP input closed before its answer')));
+          child.stderr.on('data', chunk => { stderrBytes += chunk.length; });
+          child.stdout.on('data', chunk => {
+            buffer += chunk.toString();
+            if (buffer.length > 1024 * 1024) {
+              failPending(new Error('MCP output exceeded the check limit'));
+              child.kill();
+              return;
+            }
+            while (buffer.includes('\n')) {
+              const at = buffer.indexOf('\n');
+              const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);
+              if (!line.trim()) continue;
+              let reply;
+              try { reply = JSON.parse(line); }
+              catch { failPending(new Error('MCP emitted non-protocol output')); child.kill(); return; }
+              if (reply === null || typeof reply !== 'object' || Array.isArray(reply) || reply.jsonrpc !== '2.0') {
+                failPending(new Error('MCP emitted an invalid envelope')); child.kill(); return;
+              }
+              const waiter = pending.get(reply.id);
+              if (waiter) { clearTimeout(waiter.timer); pending.delete(reply.id); waiter.resolve(reply); }
+            }
+          });
+          function request(method, params) {
+            const id = ++nextId;
+            return new Promise((resolveReply, reject) => {
+              const timer = setTimeout(() => { pending.delete(id); reject(new Error('MCP response timeout')); }, 15000);
+              pending.set(id, { resolve: resolveReply, reject, timer });
+              child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+            });
+          }
+          try {
+            const hello = await request('initialize', {
+              protocolVersion: '2025-03-26', capabilities: {},
+              clientInfo: { name: 'public-ci', version: '1' },
+            });
+            assert.equal(hello.error, undefined);
+            assert.equal(hello.result.protocolVersion, '2025-03-26');
+            assert.equal(hello.result.serverInfo.name, 'launchsense');
+            child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+            const catalog = await request('tools/list', {});
+            assert.equal(catalog.error, undefined);
+            const tools = catalog.result.tools;
+            assert.deepEqual(tools.map(tool => tool.name).sort(), [
+              'launchsense_github', 'launchsense_report',
+              'launchsense_scan_public_notice', 'launchsense_scan_repo',
+            ]);
+            for (const tool of tools) assert.equal(tool.inputSchema.additionalProperties, false);
+            assert.deepEqual(tools.find(tool => tool.name === 'launchsense_scan_repo').inputSchema.properties.mode.enum, ['tree', 'change']);
+          } finally {
+            const timer = setTimeout(() => child.kill('SIGKILL'), 2000);
+            child.stdin.end();
+            const result = await closed;
+            clearTimeout(timer);
+            rmSync(scratch, { recursive: true, force: true });
+            assert.equal(result.signal, null, 'MCP must stop without being killed');
+            assert.equal(result.code, 0, 'MCP must exit normally');
+            assert.equal(stderrBytes, 0, 'MCP must not emit unexpected diagnostics');
+          }
+          console.log(`Public check: ${checked} TypeScript files parsed; local MCP initialization and four closed tools verified. No scan or detector coverage claimed.`);
+          NODE
