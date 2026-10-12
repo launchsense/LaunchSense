@@ -29,6 +29,8 @@ The report leads with the solution: START HERE, then PLAN, then DETAIL. The revi
 
 ## Layout
 
+On a rescan, accepted findings stay named in the not-checked list but no longer contribute to the lead's finding count, fix plan or prompts. Tree and change reviews rebuild these from the final findings. Files-read counts and applicable unrun checks remain unchanged. JSON, MCP scan output and an acknowledged saved report describe the same remaining work. Pull the newer engine for this behavior; refreshing the policy bundle alone does not update code.
+
 - `mcp/` - the local server and the review entry.
 - `shared/` - the checks, the severity table, the report builder, the governance reader.
 - `skills/launchsense/` - the skill your coding tool reads.

@@ -383,8 +383,8 @@ function derivePlanAndPrompts(findings: ReviewFinding[]): {
 
 /**
  * Rebuild the plan, lead, and prompts from the report's current findings. The
- * local review calls this after scoping a change run, so the recommended fixes
- * match the findings the report actually lists.
+ * local review calls this after governance and optional change scoping, so the
+ * recommended fixes match the findings the report actually lists in either mode.
  */
 export function refreshDerivations(report: ReviewReport): void {
   const derived = derivePlanAndPrompts(report.findings);
