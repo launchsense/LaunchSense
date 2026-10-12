@@ -5,7 +5,7 @@ description: Use when the repo you have open should be reviewed before you share
 
 # LaunchSense
 
-Skill version: 2026-10-09.
+Skill version: 2026-10-12.
 
 This skill reviews **your** checkout, the repository you installed it into, not only a checkout of LaunchSense itself. It runs on your machine, reads your working tree including uncommitted work, uploads no files and no file text, and has no hourly limit.
 
@@ -66,6 +66,7 @@ The review reads a governance file at `.ls/policy.yaml`, once per run, before th
 - An absent file changes nothing. A link, an unreadable file, or a file over the 1 MiB metadata bound is a refusal, never a silent absence.
 - A wrong file is refused whole and nothing is suppressed. A file that would silence more than half the findings through one acceptance, or four fifths in total, is refused whole too. A refusal is stated in the not-checked list.
 - An accepted finding is named in the not-checked list as accepted, so a reader can always see what was hidden and why.
+- In tree and change reviews, the lead, finding counts, fix plan and prompts are rebuilt from the final findings after acceptance and change filtering. An accepted finding does not contribute to those recommendations. Files-read counts and applicable unrun checks do not change because a finding was accepted. If the summaries disagree with the findings, keep that inconsistency visible rather than calling the result complete.
 - Do not commit it unless the repo owner says to.
 
 When the person accepts a finding, write the acceptance into `.ls/policy.yaml` with their reason. Do not write the file silently: show them the entry and let them confirm. Never remove an acceptance they made without asking.

@@ -1815,11 +1815,11 @@ async function main(): Promise<void> {
       // State which source was used, whether or not a row was found.
       report.scopeNote = `${report.scopeNote} Governance acceptances compared against ${acceptances.source}.`;
     }
-    // The plan, lead, and prompts were built from the whole tree, so they are
-    // rebuilt from the scoped findings or the report would recommend fixes it
-    // no longer lists.
-    refreshDerivations(report);
   }
+  // Governance and optional change scoping have now produced the final findings.
+  // Rebuild recommendations in both modes, or an accepted finding can remain in
+  // the lead/count, plan and prompts even though it is no longer raised.
+  refreshDerivations(report);
   // Completeness is computed here, after governance, from explicit facts and
   // never from the length of the skipped list. A check that does not apply to
   // this repo (npm on a repo with no package.json and no lockfile) is not a

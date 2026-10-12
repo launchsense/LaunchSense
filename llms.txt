@@ -44,6 +44,8 @@ Every report states its own completeness, in the body and the JSON, where a harn
 
 A partial result is not a pass.
 
+Governance and report consistency: in tree and change reviews, the lead, finding counts, fix plan and prompts are rebuilt from the final findings after acceptance and change filtering. Accepted findings stay named in the not-checked list but do not contribute to those recommendations. Acceptance does not change files-read counts or clear an applicable check that did not run. JSON, MCP scan output and an acknowledged saved report carry the same remaining findings and gaps; the saved report intentionally omits the tool's usage-count footer. The engine correction requires an updated checkout, not just a refreshed online policy bundle.
+
 ## Checks
 
 Fixed checks cover secrets, code shapes, dependency names, license text, dependency license terms, and project hygiene, plus duplicate files and large files. They live in this repository: `shared/analyzers/secrets.ts` and `shared/analyzers/secretValue.ts` for credentials, `shared/analyzers/codePatterns.ts` for risky code shapes, `shared/analyzers/deps.ts` for manifests and floating versions, `shared/analyzers/licenses.ts` for license signals, `shared/analyzers/hygiene.ts` for project hygiene, `shared/review/extraChecks.ts` for duplicate and repeated content, `shared/adapters/osv.ts` for advisories, `shared/review/registry.ts` for registry facts, and `shared/policies/severity.ts` for the severity table. This is a known, fixed set, not a promise of full coverage.
