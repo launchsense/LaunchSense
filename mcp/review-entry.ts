@@ -5,6 +5,7 @@ import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, read
 import { execFileSync } from "node:child_process";
 import { join, relative } from "node:path";
 import { directoryHandlePath, openReviewRoot } from "./root-boundary.ts";
+import { readProviderArtifact } from "./stream-provider-file.ts";
 import {
   MAX_LOCAL_METADATA_BYTES,
   ensureChildDirectory,
@@ -21,6 +22,7 @@ import type { DecisionQuestion } from "../shared/adapters/decision.ts";
 import { queryOsvBatch } from "../shared/adapters/osv.ts";
 import { buildLocalReport, OTHER_LOCKFILES, refreshDerivations } from "../shared/review/buildReport.ts";
 import type { AdvisoryCoverage, NotChecked, ReviewFile, ReviewFinding, ReviewReport } from "../shared/review/buildReport.ts";
+import type { StreamedArtifactScan } from "../shared/review/streamedArtifacts.ts";
 import { diagnosticPayload, diagnosticsAllowed, emptyGovOutcome } from "../shared/review/diagnostics.ts";
 import type { GovOutcome } from "../shared/review/diagnostics.ts";
 import { completenessFor } from "../shared/review/completeness.ts";
@@ -78,6 +80,7 @@ const OSV_CAP = 50;
 const MAX_FILES = 5000;
 const MAX_BYTES = 40_000_000;
 const FILE_CAP = 100_000;
+const STREAMED_PROVIDER_EXTENSIONS = new Set(["html", "htm", "js", "jsx", "mjs", "cjs"]);
 
 interface LocalConfig {
   tier?: string;
@@ -1145,13 +1148,15 @@ function walk(
   rootFd: number,
   exclusions: WalkExclusions,
   flags: WalkFlags = { capHit: false, vendored: false, agent: false, unreadable: false },
-): { files: ReviewFile[]; skipped: NotChecked[]; flags: WalkFlags } {
+): { files: ReviewFile[]; skipped: NotChecked[]; flags: WalkFlags; streamed: StreamedArtifactScan[] } {
   const files: ReviewFile[] = [];
   const skipped: NotChecked[] = [];
+  const streamed: StreamedArtifactScan[] = [];
   let bytes = 0;
 
   function visit(dir: string, expected?: { dev: number; ino: number }, source = dir): void {
-    let names: string[] = [];
+    const names: string[] = [];
+    const listedDirectories = new Map<string, boolean>();
     let directoryFd: number | undefined;
     let handlePath: string;
     try {
@@ -1162,7 +1167,15 @@ function walk(
       // Pin parent directories while reading their children. A rename or link
       // replacement cannot redirect a child read to a different directory.
       handlePath = directoryHandlePath(directoryFd);
-      names = readdirSync(handlePath);
+      const entries = readdirSync(handlePath, { withFileTypes: true });
+      // A directory's children have a slash after its name. Sort that prefix,
+      // not the bare directory name, so a.js precedes a/z.js under the budget.
+      entries.sort((a, b) => {
+        const left = a.name + (a.isDirectory() ? "/" : "");
+        const right = b.name + (b.isDirectory() ? "/" : "");
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
+      for (const entry of entries) { names.push(entry.name); listedDirectories.set(entry.name, entry.isDirectory()); }
     } catch {
       if (directoryFd !== undefined) closeSync(directoryFd);
       flags.unreadable = true;
@@ -1218,6 +1231,11 @@ function walk(
         skipped.push({ scope: relative(root, full).split("\\").join("/"), reason: "Symbolic link. Not followed or read." });
         continue;
       }
+      if (info.isDirectory() !== listedDirectories.get(name)) {
+        flags.unreadable = true;
+        skipped.push({ scope: relative(root, full).split("\\").join("/"), reason: "The entry type changed after listing, so it was not read." });
+        continue;
+      }
       if (info.isDirectory()) {
         visit(full, info, diskPath);
         continue;
@@ -1246,12 +1264,14 @@ function walk(
         skipped.push({ scope: path, reason: "Binary or media file." });
         continue;
       }
-      if (files.length >= MAX_FILES || info.size > MAX_BYTES - bytes) {
+      const lockfile = name.endsWith("-lock.json") || name === "package-lock.json";
+      const providerStreamEligible = !lockfile && STREAMED_PROVIDER_EXTENSIONS.has(ext);
+      if (files.length + streamed.length >= MAX_FILES || (!providerStreamEligible && info.size > MAX_BYTES - bytes)) {
         flags.capHit = true;
         skipped.push({ scope: path, reason: "Past the local read cap. Listed as not checked." });
         continue;
       }
-      if (info.size > FILE_CAP && !name.endsWith("-lock.json") && name !== "package-lock.json") {
+      if (info.size > FILE_CAP && !lockfile && !providerStreamEligible) {
         flags.capHit = true;
         skipped.push({ scope: path, reason: "Larger than 100KB. Not read." });
         continue;
@@ -1263,7 +1283,15 @@ function walk(
         fd = openSync(diskPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         const opened = fstatSync(fd);
         if (!opened.isFile() || opened.dev !== info.dev || opened.ino !== info.ino) throw new Error("Entry changed before read");
-        const lockfile = name.endsWith("-lock.json") || name === "package-lock.json";
+        if (providerStreamEligible && opened.size > FILE_CAP) {
+          const artifact = readProviderArtifact(fd, path, opened, MAX_BYTES - bytes);
+          bytes += artifact.coverage.bytesRead;
+          streamed.push(artifact);
+          const provider = artifact.coverage.checks.find(check => check.checkId === "provider-signatures");
+          if (provider?.state === "Partial" || provider?.state === "Not checked") flags.capHit = true;
+          if (provider?.state === "Unknown") flags.unreadable = true;
+          continue;
+        }
         if (opened.size > MAX_BYTES - bytes || (!lockfile && opened.size > FILE_CAP)) {
           flags.capHit = true;
           skipped.push({ scope: path, reason: "Past the local byte budget. Not read." });
@@ -1298,7 +1326,7 @@ function walk(
   }
 
   visit(root, fstatSync(rootFd), `${directoryHandlePath(rootFd)}/.`);
-  return { files, skipped, flags };
+  return { files, skipped, flags, streamed };
 }
 
 function rankLockPackages(packages: LockPackage[]): LockPackage[] {
@@ -1538,6 +1566,21 @@ function render(
   lines.push("DETAIL");
   lines.push(`Checks: fixed rules. No model decides a finding or a severity.`);
   lines.push(`Order source: ${report.orderSource}. Model moved ${report.orderMoved} item(s) inside a severity band. ${report.orderNote}`);
+  if (report.artifactCoverage.length > 0) {
+    lines.push(`Large artifacts: ${report.streamedProviderSummary.files} provider-only file(s), ${report.streamedProviderSummary.providerBytesChecked} bytes judged by supported signatures. Generic credentials, code shapes and other content checks were not run on them.`);
+    lines.push(`Known provider matches: ${report.streamedProviderSummary.knownDetectedMatches}; known unlisted matches: ${report.streamedProviderSummary.knownWithheldMatches}; unverifiable artifact outcomes: ${report.streamedProviderSummary.unknownDetectionFiles}. Streamed coordinates use zero-based byte offsets and one-based UTF8-byte columns.`);
+    for (const artifact of report.artifactCoverage) {
+      const provider = artifact.checks.find(check => check.checkId === "provider-signatures");
+      lines.push(`- ${artifact.path}: provider signatures ${provider?.state ?? "Unknown"}, ${provider?.bytesChecked ?? 0}/${artifact.totalBytes} bytes judged.`);
+    }
+    for (const identity of report.artifactIdentities) {
+      lines.push(`Artifact SHA-256 ${identity.path}: ${identity.sha256 ?? "Unknown: no stable complete artifact hash."}`);
+    }
+    for (const signal of report.artifactSignals) {
+      const raised = report.findings.some(finding => finding.fingerprint === signal.fingerprint);
+      lines.push(`Streamed signal ${signal.path}:${signal.line}:${signal.column} (byte ${signal.byteOffset}): ${signal.ruleId}; ${raised ? "raised" : "not raised after scope filtering or governance decisions"}.`);
+    }
+  }
   // Governance disclosures. These are info rows, so the plan and prompt builders
   // leave them out. They are printed here so the text report and the JSON carry
   // the same disclosure.
@@ -1658,7 +1701,7 @@ async function main(): Promise<void> {
     ignorePaths: new Map([...policyExclusions, ...gitExclusions]),
     ignorePrefixes: ignoreRead.covered,
   };
-  const { files, skipped } = walk(root, acknowledged, rootFd, exclusions, flags);
+  const { files, skipped, streamed } = walk(root, acknowledged, rootFd, exclusions, flags);
   const lock = files.find((file) => (file.path.split("/").pop() ?? "") === "package-lock.json");
   // Any lockfile the tree holds that was not inventoried and queried is a
   // version set that was in hand and unchecked: a Cargo.lock, a yarn.lock, or a
@@ -1682,7 +1725,7 @@ async function main(): Promise<void> {
   // measured, so tracked-env cannot fire and one not-checked line says so.
   const trackedEnvPaths: ReadonlySet<string> | null = gitFacts.tracked;
   const trackedEnvUnknown = trackedEnvPaths === null;
-  const report = buildLocalReport(files, skipped, registry, advisories, lock, readLicenceAllow(policyRead), trackedEnvPaths);
+  const report = buildLocalReport(files, skipped, registry, advisories, lock, readLicenceAllow(policyRead), trackedEnvPaths, streamed);
   // Tracked-state honesty, in the not-checked list. One line for the whole
   // rule, so the gap is named once and never per-file, whatever the file count.
   if (trackedEnvUnknown) {
@@ -1853,6 +1896,7 @@ async function main(): Promise<void> {
     analyzerSkippedLines: omissions?.longLines ?? 0,
     analyzerCodeSkippedLines: omissions?.codeSkippedLines ?? 0,
     analyzerSuppressedMatches: omissions?.suppressedMatches ?? 0,
+    artifactCoverage: report.artifactCoverage,
   });
   report.status = completeness.status;
   report.statusNote = completeness.note;

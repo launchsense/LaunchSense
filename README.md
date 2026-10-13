@@ -27,6 +27,42 @@ A partial result is not a pass. The not-checked list goes back line for line. Th
 
 The report leads with the solution: START HERE, then PLAN, then DETAIL. The review never edits your source code. It writes only its own state under `.ls/`, plus one `.ls/` line in `.gitignore`, and only after the local file-read question has been answered.
 
+## Large files: provider checks, not a full-file pass
+
+The review admits at most 5,000 files and reads at most 40,000,000 content bytes.
+Ordinary whole-content analysis uses a 100,000-byte buffer limit. Larger `.html`,
+`.htm`, `.js`, `.jsx`, `.mjs` and `.cjs` files can receive only a supported
+provider-signature stream with a 64 KiB read buffer. Both paths share the same
+file and byte budgets. The lockfile exception is unchanged; other large extensions
+remain skipped and listed as not checked.
+
+The stream checks AWS access-key shapes (`AKIA` plus 16 uppercase letters or digits),
+the five legacy GitHub token prefixes (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_` plus
+20 alphanumeric characters), `github_pat_` plus 20 letters, digits or underscores,
+and six standard private-key BEGIN labels: generic, RSA, EC, DSA, OPENSSH and ENCRYPTED.
+A matching shape is not proof that a credential is live. Generic credentials, risky
+code, repeated functions and other whole-content checks do not run on these files.
+Those checks stay `Not checked`, so a finished provider stream is still a partial review.
+
+Provider coverage is `Checked` only for a complete stable read, `Partial` for a
+judged prefix, `Not checked` when the byte budget leaves no provider bytes judged,
+or `Unknown` after a read error, mutation or NUL binary content. Invalidated
+observations are discarded, not reported as a clean zero. Detection continues after
+20 listed matches and retains the known unlisted count. Matched values and snippets
+are not returned.
+
+Streamed locations use zero-based byte offsets, one-based LF lines and one-based
+UTF-8 byte columns, not decoded character columns. A full artifact SHA-256 requires
+a complete stable read. JSON exposes `artifactCoverage`, `streamedProviderSummary`,
+`artifactIdentities` and listed `artifactSignals`. Saved text retains the safe
+coordinates and hash, and labels signals not raised after scope filtering or
+governance. A retained signal is not necessarily a final finding; a hash is not clearance.
+
+This needs an updated engine checkout, not just a coaching refresh. The stream uses
+Node builtins, adds no dependencies, executes no target code and makes no network
+requests. The Node version guard is not an operating-system sandbox. These signals
+do not guarantee security or provide SOC 2, ISO or any certification.
+
 ## Layout
 
 On a rescan, accepted findings stay named in the not-checked list but no longer contribute to the lead's finding count, fix plan or prompts. Tree and change reviews rebuild these from the final findings. Files-read counts and applicable unrun checks remain unchanged. JSON, MCP scan output and an acknowledged saved report describe the same remaining work. Pull the newer engine for this behavior; refreshing the policy bundle alone does not update code.

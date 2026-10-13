@@ -7,6 +7,9 @@
 // JSON, where a harness reads it. It is not carried as an exit code, because an
 // exit code does not reach the harness over MCP.
 
+import type { ArtifactCoverage } from "./artifactCoverage.ts";
+import { summarizeArtifactCoverage } from "./artifactCoverage.ts";
+
 export interface CompletenessInput {
   /** The local read cap was reached, so some files were not read. */
   capHit: boolean;
@@ -53,6 +56,8 @@ export interface CompletenessInput {
   analyzerCodeSkippedLines: number;
   /** Matches withheld because a file was already at the 20 match cap. */
   analyzerSuppressedMatches: number;
+  /** Per-check coverage for large files that received a provider-only pass. */
+  artifactCoverage?: readonly ArtifactCoverage[];
 }
 
 export interface Completeness {
@@ -65,61 +70,94 @@ export interface Completeness {
 
 export function completenessFor(input: CompletenessInput): Completeness {
   const reasons: string[] = [];
-  if (input.capHit) {
+  const source = typeof input === "object" && input !== null && !Array.isArray(input)
+    ? input : {} as CompletenessInput;
+  const valid = new Set<keyof CompletenessInput>();
+  const booleanFields = [
+    "capHit", "vendored", "agent", "unreadable", "govRefused", "govStale",
+    "npmApplicable", "unqueriedLockfileInHand", "lockfileInHand",
+    "advisoriesQueried", "advisoriesTimedOut", "registryQueried",
+  ] as const;
+  const countFields = [
+    "advisoriesSkipped", "advisoriesUnanswered", "advisoriesUnreadable",
+    "analyzerSkippedLines", "analyzerCodeSkippedLines", "analyzerSuppressedMatches",
+  ] as const;
+  for (const key of booleanFields) {
+    if (Object.hasOwn(source, key) && typeof source[key] === "boolean") valid.add(key);
+    else reasons.push(`coverage input ${key} is missing or invalid`);
+  }
+  for (const key of countFields) {
+    const value = source[key];
+    if (Object.hasOwn(source, key) && typeof value === "number" && Number.isSafeInteger(value) && value >= 0) valid.add(key);
+    else reasons.push(`coverage input ${key} is missing or invalid`);
+  }
+  if (Object.hasOwn(source, "inventoryComplete") &&
+      (source.inventoryComplete === null || typeof source.inventoryComplete === "boolean")) {
+    valid.add("inventoryComplete");
+  } else {
+    reasons.push("coverage input inventoryComplete is missing or invalid");
+  }
+  // Only validated facts may contribute a known reason. Invalid values are
+  // unknown, not false flags or zero counts, and never printed in the report.
+  const facts: Partial<CompletenessInput> = { ...source };
+  for (const key of [...booleanFields, ...countFields, "inventoryComplete"] as const) {
+    if (!valid.has(key)) delete facts[key];
+  }
+  if (facts.capHit === true) {
     reasons.push("the local read cap was reached, so some files were not read");
   }
-  if (input.vendored) {
+  if (facts.vendored === true) {
     reasons.push("a vendored tree was not read, so its notices were not checked");
   }
-  if (input.agent) {
+  if (facts.agent === true) {
     reasons.push("an agent instruction file was not read");
   }
-  if (input.unreadable) {
+  if (facts.unreadable === true) {
     reasons.push("a directory or file could not be read");
   }
-  if (input.govRefused) {
+  if (facts.govRefused === true) {
     reasons.push("the governance file was refused, so it suppressed nothing");
   }
-  if (input.govStale) {
+  if (facts.govStale === true) {
     reasons.push("the governance file was written for an older notice version");
   }
-  if (input.npmApplicable) {
-    if (!input.lockfileInHand) {
+  if (facts.npmApplicable === true) {
+    if (facts.lockfileInHand === false) {
       reasons.push("npm dependencies are declared but no npm lockfile was in the files read");
-    } else {
-      if (input.inventoryComplete === false) {
+    } else if (facts.lockfileInHand === true) {
+      if (facts.inventoryComplete === false) {
         reasons.push("the npm lockfile could not be fully inventoried");
+      } else if (facts.inventoryComplete === null) {
+        reasons.push("the npm lockfile inventory was not built, so inventory coverage is unknown");
       }
-      if (!input.advisoriesQueried) {
+      if (facts.advisoriesQueried === false) {
         reasons.push("the lockfile versions were not queried, so advisories are unknown");
-      } else if (input.advisoriesTimedOut) {
-        reasons.push("the advisory query did not finish");
-      } else if (input.advisoriesSkipped > 0) {
-        reasons.push(`${input.advisoriesSkipped} lockfile packages were not queried for advisories`);
-      }
-      // An answer that did not cover every coordinate, or that listed a record
-      // it could not read, is not a clean answer. These stay separate from the
-      // cap: the cap is "we chose not to ask", this is "we asked and did not get
-      // a readable answer". Neither is a pass.
-      if (input.advisoriesQueried && !input.advisoriesTimedOut) {
-        if (input.advisoriesUnanswered > 0) {
-          reasons.push(`${input.advisoriesUnanswered} queried coordinate(s) had no readable advisory answer`);
-        }
-        if (input.advisoriesUnreadable > 0) {
-          reasons.push(`${input.advisoriesUnreadable} advisory record(s) in the answer were unreadable and are not listed`);
-        }
-      }
-      if (!input.registryQueried) {
-        reasons.push("dependency terms were not queried, so licence terms are unknown");
       }
     }
+  }
+  // These are independently known gaps, even when another fact is unknown or
+  // the request timed out. A timeout must not hide a cap or a missing answer.
+  if (facts.advisoriesTimedOut === true) {
+    reasons.push("the advisory query did not finish");
+  }
+  if (facts.advisoriesSkipped !== undefined && facts.advisoriesSkipped > 0) {
+    reasons.push(`${facts.advisoriesSkipped} lockfile packages were not queried for advisories`);
+  }
+  if (facts.advisoriesUnanswered !== undefined && facts.advisoriesUnanswered > 0) {
+    reasons.push(`${facts.advisoriesUnanswered} queried coordinate(s) had no readable advisory answer`);
+  }
+  if (facts.advisoriesUnreadable !== undefined && facts.advisoriesUnreadable > 0) {
+    reasons.push(`${facts.advisoriesUnreadable} advisory record(s) in the answer were unreadable and are not listed`);
+  }
+  if (facts.npmApplicable === true && facts.lockfileInHand === true && facts.registryQueried === false) {
+    reasons.push("dependency terms were not queried, so licence terms are unknown");
   }
   // A lockfile the run read but did not inventory and query is a version set
   // that was in hand and was not checked. That is "not run", not "not
   // applicable": the report already names the file, and a partial result is
   // never a pass. This covers a second npm lockfile as well as another
   // ecosystem.
-  if (input.unqueriedLockfileInHand) {
+  if (facts.unqueriedLockfileInHand === true) {
     reasons.push("a lockfile was in the files read and was not queried for versions");
   }
   // Lines the fixed line-level checks skipped inside a file that was read.
@@ -127,26 +165,37 @@ export function completenessFor(input: CompletenessInput): Completeness {
   // half of the story. Each cap names the check that owns it, and the counts
   // keep the gap measurable. Other checks still read those files under their
   // own limits; a skipped line here is never a claim about any other check.
-  if (input.analyzerSkippedLines > 0) {
+  if (facts.analyzerSkippedLines !== undefined && facts.analyzerSkippedLines > 0) {
     reasons.push(
-      input.analyzerSkippedLines === 1
-        ? `the secret checks did not judge ${input.analyzerSkippedLines} line over 2,000 characters`
-        : `the secret checks did not judge ${input.analyzerSkippedLines} lines over 2,000 characters`,
+      facts.analyzerSkippedLines === 1
+        ? `the secret checks did not judge ${facts.analyzerSkippedLines} line over 2,000 characters`
+        : `the secret checks did not judge ${facts.analyzerSkippedLines} lines over 2,000 characters`,
     );
   }
-  if (input.analyzerCodeSkippedLines > 0) {
+  if (facts.analyzerCodeSkippedLines !== undefined && facts.analyzerCodeSkippedLines > 0) {
     reasons.push(
-      input.analyzerCodeSkippedLines === 1
-        ? `the code-shape checks did not judge ${input.analyzerCodeSkippedLines} line over 500 characters`
-        : `the code-shape checks did not judge ${input.analyzerCodeSkippedLines} lines over 500 characters`,
+      facts.analyzerCodeSkippedLines === 1
+        ? `the code-shape checks did not judge ${facts.analyzerCodeSkippedLines} line over 500 characters`
+        : `the code-shape checks did not judge ${facts.analyzerCodeSkippedLines} lines over 500 characters`,
     );
   }
-  if (input.analyzerSuppressedMatches > 0) {
+  if (facts.analyzerSuppressedMatches !== undefined && facts.analyzerSuppressedMatches > 0) {
     reasons.push(
-      input.analyzerSuppressedMatches === 1
-        ? `${input.analyzerSuppressedMatches} matched line was withheld by the secret checks' 20-match cap`
-        : `${input.analyzerSuppressedMatches} matched lines were withheld by the secret checks' 20-match cap`,
+      facts.analyzerSuppressedMatches === 1
+        ? `${facts.analyzerSuppressedMatches} matched line was withheld by the secret checks' 20-match cap`
+        : `${facts.analyzerSuppressedMatches} matched lines were withheld by the secret checks' 20-match cap`,
     );
+  }
+  if ("artifactCoverage" in source) {
+    try {
+      const summary = summarizeArtifactCoverage(source.artifactCoverage!);
+      if (summary.providerOnlyFiles > 0) {
+        const n = summary.providerOnlyFiles;
+        reasons.push(`${n} large ${n === 1 ? "file" : "files"} received provider-signature checks only; other content checks did not run`);
+      }
+    } catch {
+      reasons.push("coverage input artifactCoverage is missing or invalid");
+    }
   }
   const status: Completeness["status"] = reasons.length === 0 ? "complete" : "partial";
   const note =

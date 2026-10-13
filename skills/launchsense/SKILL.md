@@ -5,7 +5,7 @@ description: Use when the repo you have open should be reviewed before you share
 
 # LaunchSense
 
-Skill version: 2026-10-12.
+Skill version: 2026-10-12.1.
 
 This skill reviews **your** checkout, the repository you installed it into, not only a checkout of LaunchSense itself. It runs on your machine, reads your working tree including uncommitted work, uploads no files and no file text, and has no hourly limit.
 
@@ -83,11 +83,23 @@ The folder is written only when the local file read was acknowledged. It stays o
 
 ## Full review, not secrets only
 
-The local review reads the tree under caps: 5,000 files and 40MB in all, 100KB per file, with lockfiles excepted from the per-file cap and still inside the 40MB budget. Local metadata files, such as the policy or an `.ignore` file, are read under a separate 1 MiB bound each. It does not read vendored trees (`vendor`, `third_party`, `3rdparty`, `deps`), installed packages or tool caches (`node_modules`, `.venv`, `venv`, `site-packages`, `.tox`, `.mypy_cache`, `.pytest_cache`, and the rest of the named list), `.progress`, or binary files. Anything past a cap is listed as not checked.
+The local review admits at most 5,000 files and reads at most 40,000,000 actual working-tree content bytes. Ordinary whole-content analysis uses a 100,000-byte buffer limit; eligible larger files receive only the provider stream below. `package-lock.json` and names ending in `-lock.json` may exceed the per-file cap, never the remaining total budget. Binary content later skipped consumes that budget. Local metadata files, such as the policy or an `.ignore` file, are read under a separate 1 MiB bound each. The walk excludes vendored trees (`vendor`, `third_party`, `3rdparty`, `deps`), installed packages or tool caches (`node_modules`, `.venv`, `venv`, `site-packages`, `.tox`, `.mypy_cache`, `.pytest_cache`, and the rest of the named list), and `.progress`. Binary content is not analyzed. Anything past a cap is listed as not checked.
 
 The line-level checks carry their own gates, and the report names each one when it fires: the secret checks do not judge lines over 2,000 characters, the code-shape checks do not judge lines over 500 characters, a file stops at 20 matched lines, and the per-file omission list stops at 10 rows with one count-only row for the rest, whose totals include every affected file.
 
-It runs every check: secrets, risky code, deps, licenses, hygiene, duplicates, large files, plus OSV, registry facts, ordering, the fix plan, coverage, and the not-checked list. These are the fixed analyzers in this repository, a known set. It is not a certificate of full coverage.
+It runs applicable secrets, risky-code, dependency, licence, hygiene, duplicate and large-file checks within their limits, plus OSV, registry facts, ordering, the fix plan, coverage and the not-checked list where available. It does not run every check on every artifact. These are the fixed analyzers in this repository, a known set, not a certificate of full coverage.
+
+### Large artifacts: preserve the provider-only boundary
+
+Larger `.html`, `.htm`, `.js`, `.jsx`, `.mjs` and `.cjs` files can receive a provider-signature stream with a 64 KiB read buffer. Paths are sorted deterministically; stream bytes and admitted files consume the same global budgets, not extra allowances. Other large extensions remain skipped and the lockfile exception is unchanged.
+
+The stream checks only `AKIA` plus 16 uppercase letters or digits; the five legacy GitHub prefixes `ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_` plus 20 alphanumeric characters, or `github_pat_` plus 20 letters, digits or underscores; and six standard private-key BEGIN labels (generic, RSA, EC, DSA, OPENSSH, ENCRYPTED). Generic credentials, code shapes, repeated functions and other whole-content checks remain `Not checked` in `artifactCoverage`. Completing the provider stream leaves the overall review `Partial`, never a full-artifact pass.
+
+Provider coverage is `Checked` only for a complete stable read, `Partial` for a judged prefix, `Not checked` when no provider bytes were judged under the budget, or `Unknown` after read errors, mutation or NUL binary content. Discarded observations are not a clean zero. Detection continues after 20 listed matches and retains the known withheld count. Matched values and snippets are not returned.
+
+Streamed `byteOffset` is zero-based; line is one-based LF and column is a one-based UTF-8 byte column, not a decoded character column. A full artifact SHA requires a complete stable read. JSON exposes `artifactCoverage`, `streamedProviderSummary`, `artifactIdentities` and listed `artifactSignals`. Saved text retains safe coordinates and hashes and labels signals not raised after scope filtering or governance. Never treat an unraised signal, full hash or finished stream as clearance.
+
+This requires an updated engine checkout, not just refreshed coaching. The stream uses Node builtins, adds no dependencies, executes no target code and makes no network requests. The Node guard is not an operating-system sandbox; Linux remains verified, macOS allowed but unverified, and Windows refused. Do not claim all vulnerabilities are found, a security guarantee or SOC 2/ISO certification. Existing buffered secret-line and code-shape omissions are unchanged.
 
 ## The report leads with the solution
 
