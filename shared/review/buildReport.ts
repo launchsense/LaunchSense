@@ -5,6 +5,9 @@ import { analyzeHygiene } from "../analyzers/hygiene.ts";
 import { analyzeLicenses } from "../analyzers/licenses.ts";
 import { parseManifests } from "../analyzers/deps.ts";
 import { scanSecrets } from "../analyzers/secrets.ts";
+import { streamedArtifactGaps, summarizeStreamedArtifacts } from "./streamedArtifacts.ts";
+import type { StreamedArtifactScan } from "./streamedArtifacts.ts";
+import type { ArtifactCoverage } from "./artifactCoverage.ts";
 import type { ScanOmissionFacts } from "../analyzers/secrets.ts";
 import { ANALYZER_VERSION } from "../analyzers/version.ts";
 import { severityForFinding } from "../policies/severity.ts";
@@ -43,6 +46,9 @@ export interface ReviewFinding {
   title: string;
   why: string;
   fingerprint: string;
+  /** Streamed signatures use zero-based byte offsets and one-based UTF8-byte columns. */
+  byteOffset?: number;
+  column?: number;
 }
 
 export interface RegistryFact {
@@ -106,6 +112,11 @@ export interface ReviewReport {
    */
   scopeNote: string;
   notChecked: NotChecked[];
+  /** Provider-only large-artifact coverage, never whole-file analyzer clearance. */
+  artifactCoverage: ArtifactCoverage[];
+  streamedProviderSummary: ReturnType<typeof summarizeStreamedArtifacts>;
+  artifactIdentities: Array<{ path: string; sha256: string | null }>;
+  artifactSignals: Array<{ ruleId: string; path: string; line: number; column: number; byteOffset: number; fingerprint: string }>;
   findings: ReviewFinding[];
   lead: string;
   prompts: string[];
@@ -401,7 +412,11 @@ export function buildLocalReport(
   lockFileInHand: ReviewFile | undefined = undefined,
   allowedLicences: readonly string[] = [],
   trackedEnvPaths: ReadonlySet<string> | null = null,
+  streamed: readonly StreamedArtifactScan[] = [],
 ): ReviewReport {
+  const streamedProviderSummary = summarizeStreamedArtifacts(streamed);
+  const artifactCoverage = streamed.map(row => row.coverage);
+  const streamedRead = streamed.filter(row => row.result !== null && row.result.bytesChecked > 0);
   const paths = files.map((file) => file.path);
   // The scan result is the findings array with omission facts attached. The
   // report carries both: the findings as before, and the omissions as counts
@@ -411,12 +426,25 @@ export function buildLocalReport(
   const secretScan = scanSecrets(files, trackedEnvPaths);
   const secretOmissions = secretScan.omissions ?? null;
   const findings: ReviewFinding[] = [];
+  const artifactSignals: ReviewReport["artifactSignals"] = [];
   for (const match of secretScan) {
     const text = TEXT[match.ruleId] ?? {
       title: match.ruleId,
       why: "A fixed check matched this line.",
     };
     findings.push(finding(match.ruleId, match.path, match.line, text.title, text.why, match.snippet));
+  }
+  for (const artifact of streamedRead) {
+    if (artifact.result === null) continue;
+    for (const hit of artifact.result.hits) {
+      const text = TEXT[hit.ruleId];
+      if (text === undefined) throw new TypeError("Unclassified provider signature rule");
+      const row = finding(hit.ruleId, hit.path, hit.line, text.title, text.why, `provider-stream-v1 at byte ${hit.byteOffset}`);
+      row.byteOffset = hit.byteOffset;
+      row.column = hit.column;
+      findings.push(row);
+      artifactSignals.push({ ruleId: row.ruleId, path: row.path, line: row.line, column: hit.column, byteOffset: hit.byteOffset, fingerprint: row.fingerprint });
+    }
   }
 
   const deps = parseManifests(files);
@@ -473,7 +501,7 @@ export function buildLocalReport(
       }
     : inventoryNpmLock(lockFile.content, direct);
 
-  const notChecked = [...skipped];
+  const notChecked = [...skipped, ...streamedArtifactGaps(streamed)];
   if (!inventory.complete) notChecked.push({ scope: "npm lockfile", reason: inventory.note });
   // A skipped line is a check that did not run on that line. Naming the file
   // and the count keeps the cap from reading as "nothing was there"; the caps
@@ -667,10 +695,11 @@ export function buildLocalReport(
   const promptLines = derived.prompts;
 
   const filesSkipped = skipped.length;
-  const coverageNote = `We read ${files.length} files. ${filesSkipped} skips are listed. A partial result is not a pass.`;
+  const filesRead = files.length + streamedRead.length;
+  const coverageNote = `We read ${filesRead} files. ${filesSkipped} skips are listed. A partial result is not a pass.`;
   // The local review overrides this in change mode. Whole-tree stays the
   // default here, so a caller that does not set a scope still names one.
-  const scopeNote = `Reviewed: whole working tree, ${files.length} files.`;
+  const scopeNote = `Reviewed: whole working tree, ${filesRead} files.`;
   // Completeness is NOT decided here. A governance refusal and the walk's
   // explicit flags are not known in this builder, and inferring status from the
   // shared skipped list is exactly the shortcut this feature removes. The local
@@ -708,11 +737,15 @@ export function buildLocalReport(
     authRequired: false,
     status,
     statusNote,
-    filesRead: files.length,
+    filesRead,
     filesSkipped,
     coverageNote,
     scopeNote,
     notChecked,
+    artifactCoverage,
+    streamedProviderSummary,
+    artifactIdentities: streamed.map(row => ({ path: row.coverage.path, sha256: row.artifactSha256 })),
+    artifactSignals,
     findings,
     lead,
     prompts: promptLines,
