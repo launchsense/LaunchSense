@@ -19,9 +19,9 @@ Say this early, and say it accurately. The review uploads no files and no file t
 - to deps.dev and ClearlyDefined, the package name and version, at most 15 non-dev packages per run;
 - to OpenSSF Scorecard, the github.com/owner/repo slug, only when package.json names one;
 - to the engine's optional decision lane, only when it is switched on. `shared/adapters/decision.ts` names the providers: a local Ollama model, a development instrument that is off unless `LAUNCHSENSE_LOCAL_DECISION=1` is set, which needs no key, TypeSafe at api.typesafe.ai when `TYPESAFE_API_KEY` is set, and Perplexity at api.perplexity.ai when `PERPLEXITY_API_KEY` is set. The installer sets neither the switch nor a key, so by default no model request is made. The local rung's default address is loopback on this machine and can be pointed elsewhere, so a local run is not guaranteed to stay on the machine. When the reorder path runs, its state carries the finding title, severity, and rule id, and a title can itself hold a file path, a line number, a host name, or a package name and version; the question keys are hash-derived, so the raw fingerprint is not sent; the unknown-next-look path sends only a fixed choice list;
-- usage counts, only when the person said yes at install: rule id counts, the harness name, the version, how long the review took, which order source ran, and governance counts.
+- no local audit usage counts are sent to LaunchSense, even with an old opt-in or a configured endpoint. The installer asks only the file-read question and preserves historical usage ledger entries without writing a new usage decision.
 
-`LAUNCHSENSE_OFFLINE=1` turns every one of those off for the run, usage included. The usage question does not gate them; that switch is the only one that covers all of them. The policy fetch carries nothing about the repo. The model writing this audit is the model the person's harness is configured with, on the person's own provider; that inference is not this engine, and its privacy depends on that harness and provider, not on anything the installer sets.
+`LAUNCHSENSE_OFFLINE=1` turns the engine's outbound calls off for the run. There is no usage question; that switch covers the engine calls above. The policy fetch carries nothing about the repo. The model writing this audit is the model the person's harness is configured with, on the person's own provider; that inference is not this engine, and its privacy depends on that harness and provider, not on anything the installer sets.
 
 ## How it runs
 
@@ -75,7 +75,7 @@ When the person accepts a finding, write the acceptance into `.ls/policy.yaml` w
 
 Each acknowledged review writes its own files under `.ls/reports/`, all named from the run's timestamp, which is the ISO time with its colons and dots replaced by hyphens:
 
-- the report, `<stamp>.md`. It is written last, after every fallible side file, so the saved copy and the terminal report state the same status, findings, and gaps. The saved copy carries no usage-count line and no model quote, because both are decided after it is written.
+- the report, `<stamp>.md`. It is written last, after every fallible side file, so the saved copy and the terminal report state the same status, findings, and gaps. The saved copy carries no usage-count line and no model quote. The terminal report says `Usage counts were not sent.` JSON reports `diagnosticsSent: false` and `diagnosticsReason: "disabled"`.
 - the policy snapshot, `<stamp>.policy.yaml`: the exact bytes that were read, or an empty policy when the file was absent, and no snapshot at all when the read was refused.
 - the third-party notice, `<stamp>-THIRD-PARTY-NOTICES.generated.md`.
 

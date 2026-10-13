@@ -1,8 +1,8 @@
 #!/bin/sh
 # Local review for a checkout of this repository.
 # Everyone who uses LaunchSense runs this script. It installs the skill,
-# registers the local file review and the online policy source, and asks two
-# questions.
+# registers the local file review and the online policy source, and asks one
+# question about reading files in the project.
 #
 # The folder to review defaults to this checkout, and that default is printed
 # so it is never silent. Name your own repo with --root <folder> or
@@ -11,9 +11,10 @@
 # Both paths are written into the server config, so both are checked for
 # characters that would break it before anything is written.
 #
-# Usage counts are off until you say yes to one question. This script asks
-# before it records anything. It never writes an agreement you did not give.
-# The answer is remembered, so the question is asked once.
+# Usage counts are not collected on this machine: the local usage-count sender
+# is retired, so there is no usage question and nothing is ever sent. The
+# installer records no usage decision, and any earlier usage ledger lines are
+# left exactly as they were.
 
 set -eu
 # The engine path: this checkout. Canonical, physical path, so a symlinked or
@@ -21,9 +22,6 @@ set -eu
 # one that is validated and written.
 ROOT=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
 TIER=alpha
-# The wording of the question. Change this string and the question is asked
-# again, because the person is agreeing to new text.
-NOTICE_VERSION=2026-10-05
 # The wording of the local file-read acknowledgement. Its own version, because it
 # is its own question. Default is yes (operator decision), so the record and the
 # register call it an acknowledgement and not consent.
@@ -50,7 +48,7 @@ install.sh [--root <folder> | --repo <folder>] [--enterprise]
   --root, --repo <folder>  The repo to review. Must be an absolute, existing
                            folder. The default is this checkout, the folder
                            install.sh lives in.
-  --enterprise             Leave usage counts on this machine without asking.
+  --enterprise             Record the enterprise tier in the local config.
 USAGE
 }
 
@@ -194,63 +192,13 @@ fi
 
 mkdir -p "$CONFIG_DIR"
 
-# A tier or an environment switch can decide the answer without a question.
-# Neither one is a prompt, so each says so in the record it writes.
-FORCED_OFF=0
-FORCED_OFF_WHY=""
-if [ "$TIER" = "enterprise" ] || [ "${LAUNCHSENSE_TIER:-}" = "enterprise" ]; then
+# The tier is recorded in the local config. The usage-count sender is retired,
+# so the tier decides nothing about sending anymore; it is kept only so an
+# enterprise install still names its tier. No question and no record are tied
+# to it.
+if [ "${LAUNCHSENSE_TIER:-}" = "enterprise" ]; then
   TIER=enterprise
-  FORCED_OFF=1
-  FORCED_OFF_WHY="enterprise tier"
 fi
-case "${LAUNCHSENSE_DIAGNOSTICS:-}" in
-  off | OFF) FORCED_OFF=1; FORCED_OFF_WHY="LAUNCHSENSE_DIAGNOSTICS=off" ;;
-esac
-
-# The moment a decision was made, read back from the append-only log. A second
-# run must not overwrite the time the person answered, or the record moves every
-# time the installer is run. Only the answer for the wording in force now counts,
-# so a record for old text cannot supply the timestamp for new text, and the last
-# such line wins. $1 is the granted value. $2, when given, is the decision source
-# that must match too, so one forced switch cannot lend its time to another; an
-# empty $2 matches any source, which is what a remembered answer needs, because
-# its time belongs to the earlier decision under a different source label.
-# Parameter expansion only, no sed and no awk, so the installer still runs with an
-# almost empty PATH.
-decision_time_from_log() {
-  [ -f "$CONSENT_LOG" ] || return 0
-  FOUND=""
-  while IFS= read -r LINE; do
-    if [ -n "$2" ]; then
-      case "$LINE" in
-        *"\"noticeVersion\":\"$NOTICE_VERSION\""*"\"granted\":$1"*"\"source\":\"$2\""*) ;;
-        *) continue ;;
-      esac
-    else
-      case "$LINE" in
-        *"\"noticeVersion\":\"$NOTICE_VERSION\""*"\"granted\":$1"*) ;;
-        *) continue ;;
-      esac
-    fi
-    REST="${LINE#*\"decidedAt\":\"}"
-    FOUND="${REST%%\"*}"
-  done < "$CONSENT_LOG"
-  if [ -n "$FOUND" ]; then printf '%s' "$FOUND"; fi
-  return 0
-}
-
-# True when the same decision, for the same wording and the same source, is
-# already on the log. A repeat of an answer already on record is not a new
-# decision, so it writes no line. A changed answer is a new decision.
-decision_on_log() {
-  [ -f "$CONSENT_LOG" ] || return 1
-  while IFS= read -r LINE; do
-    case "$LINE" in
-      *"\"noticeVersion\":\"$1\""*"\"granted\":$2"*"\"source\":\"$3\""*) return 0 ;;
-    esac
-  done < "$CONSENT_LOG"
-  return 1
-}
 
 # The same test for a named purpose. Two purposes share one ledger, so a line is
 # only a repeat of the decision being asked about when the purpose matches too.
@@ -283,26 +231,17 @@ decision_time_from_log_purpose() {
   return 0
 }
 
-# An answer already on record for this exact wording is kept, so a second run
-# does not ask again. Only a new wording asks again.
-REMEMBERED=""
+# The previous local config, when it exists, so the file-read acknowledgement
+# below can keep a remembered answer for the wording in force now. Read once.
 PRIOR=""
 if [ -f "$CONFIG" ]; then
   PRIOR=$(cat "$CONFIG")
-  case "$PRIOR" in
-    *'"diagnosticsConsent"'*'"noticeVersion": "'"$NOTICE_VERSION"'"'*)
-      case "$PRIOR" in
-        *'"agreed": true'*) REMEMBERED="true" ;;
-        *) REMEMBERED="false" ;;
-      esac
-      ;;
-  esac
 fi
 
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || printf 'unknown')
 
 echo "LaunchSense local review for this checkout."
-echo "This script installs the skill, registers the local file review and the online policy source, and asks two questions."
+echo "This script installs the skill, registers the local file review and the online policy source, and asks one question about reading files in this project."
 echo "This local review reads files on this machine. It does not upload them."
 if [ "$TARGET_SET" -eq 1 ]; then
   echo "The review target is the folder you named: $TARGET_ROOT"
@@ -311,75 +250,18 @@ else
   echo "To review another repo, name it: sh install.sh --root /absolute/path/to/your/repo (also --repo)."
 fi
 
-GRANTED=false
-# These three carry the JSON fragment, so an absent decision is a real null
-# rather than a bare word that would make the file unreadable. DECIDED_AT is the
-# moment the answer was given, not the moment this file was last rewritten, so a
-# second run does not move the record.
-DECIDED_AT="$NOW"
-GRANTED_AT='null'
-REFUSED_AT='null'
-SOURCE=""
-
-if [ "$FORCED_OFF" -eq 1 ]; then
-  SOURCE="$FORCED_OFF_WHY"
-  SAVED="$(decision_time_from_log false "$FORCED_OFF_WHY")"
-  if [ -n "$SAVED" ]; then DECIDED_AT="$SAVED"; fi
-  REFUSED_AT="\"$DECIDED_AT\""
-  echo "Usage counts stay on this machine. The $FORCED_OFF_WHY switch decided that, so no question was asked."
-elif [ "$REMEMBERED" = "true" ]; then
-  GRANTED=true
-  SOURCE="remembered yes"
-  SAVED="$(decision_time_from_log true "")"
-  if [ -n "$SAVED" ]; then DECIDED_AT="$SAVED"; fi
-  GRANTED_AT="\"$DECIDED_AT\""
-  echo "You already said yes to this question. Usage counts stay on."
-elif [ "$REMEMBERED" = "false" ]; then
-  SOURCE="remembered no"
-  SAVED="$(decision_time_from_log false "")"
-  if [ -n "$SAVED" ]; then DECIDED_AT="$SAVED"; fi
-  REFUSED_AT="\"$DECIDED_AT\""
-  echo "You already said no to this question. Usage counts stay on this machine."
-else
-  SOURCE="prompt"
-  printf '%s\n' "Send anonymous usage counts to LaunchSense?"
-  printf '%s\n' "This sends rule id counts, the harness name, the version, how long the"
-  printf '%s\n' "review took, and which order source ran."
-  printf '%s\n' "It does not send code, file paths, finding titles, or function names."
-  printf '%s\n' "The review reads files on this machine. It does not upload them."
-  printf '%s\n' "Type yes to send. Type no to keep it on this machine. Default is no."
-  printf '%s' "yes or no: "
-  # An end of input is a no, not a failure, so the installer still finishes and
-  # a non-interactive run cannot fail the install. `read` returns non-zero at
-  # end of input, which `set -e` would otherwise turn into an exit.
-  DIAG_ANSWER=""
-  read -r DIAG_ANSWER || DIAG_ANSWER=""
-  case "$DIAG_ANSWER" in
-    y | Y | yes | YES | Yes)
-      GRANTED=true
-      GRANTED_AT="\"$DECIDED_AT\""
-      ;;
-    *)
-      REFUSED_AT="\"$DECIDED_AT\""
-      echo "Usage counts stay on this machine."
-      ;;
-  esac
-fi
-
-if [ "$GRANTED" = "true" ]; then
-  DIAGNOSTICS=on
-  GRANTED_JSON=true
-else
-  DIAGNOSTICS=off
-  GRANTED_JSON=false
-fi
+# Usage counts are not collected on this machine: the local usage-count sender
+# is retired. There is no usage question, no usage decision, and no usage line
+# written to the ledger. Any earlier usage ledger lines are left untouched.
+# These two names stay in the config, always false and off, because the local
+# review still reads them as a compatibility shape; they grant nothing.
 
 # The local file-read acknowledgement. Default is yes: pressing enter allows the
 # expanded read, which is the project files and the agent instruction files. A
 # pre-answered question is not a freely given agreement, so this is recorded and
 # described as an acknowledgement, and the lawful basis is contract, not consent.
-# Like the usage question, it is asked once per wording: an answer already on
-# record for this version is kept, so a second run does not ask again or add a line.
+# It is asked once per wording: an answer already on record for this version is
+# kept, so a second run does not ask again or add a line.
 FILES_GRANTED=false
 FILES_REMEMBERED=""
 if [ -f "$CONFIG" ]; then
@@ -414,7 +296,7 @@ FILES_GRANTED_JSON=false
 if [ "$FILES_GRANTED" = "true" ]; then FILES_GRANTED_JSON=true; fi
 # The moment of the decision. A remembered answer keeps the time it was first
 # given, read back from the ledger line for this purpose, so a later run does not
-# move the recorded moment the way the usage question already avoids.
+# move the recorded moment.
 FILES_DECIDED_AT="$NOW"
 if [ -n "$FILES_REMEMBERED" ]; then
   SAVED_FILES="$(decision_time_from_log_purpose files "$FILES_GRANTED_JSON")"
@@ -422,14 +304,10 @@ if [ -n "$FILES_REMEMBERED" ]; then
 fi
 FILES_DECIDED_AT_JSON="\"$FILES_DECIDED_AT\""
 
-# One append-only line per real decision, including a refusal. A refusal is
-# evidence too. This file is the record we cannot see from here. A run that only
-# repeats a decision already on record for this wording writes no line, and a
-# changed answer is a new decision and does write one.
-if [ "${SOURCE#remembered}" = "$SOURCE" ] && ! decision_on_log "$NOTICE_VERSION" "$GRANTED_JSON" "$SOURCE"; then
-  printf '{"purpose":"usage","noticeVersion":"%s","granted":%s,"decidedAt":"%s","source":"%s"}\n' \
-    "$NOTICE_VERSION" "$GRANTED_JSON" "$DECIDED_AT" "$SOURCE" >> "$CONSENT_LOG"
-fi
+# One append-only line per real file-read decision, including a refusal. A run
+# that only repeats a decision already on record for this wording writes no
+# line. The usage sender is retired, so no usage line is written here at all,
+# and any earlier usage lines in this shared ledger are left byte-for-byte.
 if [ -z "$FILES_REMEMBERED" ] && ! decision_on_log_purpose files "$FILES_NOTICE_VERSION" "$FILES_GRANTED_JSON"; then
   printf '{"purpose":"files","noticeVersion":"%s","granted":%s,"decidedAt":"%s","source":"prompt"}\n' \
     "$FILES_NOTICE_VERSION" "$FILES_GRANTED_JSON" "$FILES_DECIDED_AT" >> "$CONSENT_LOG"
@@ -438,16 +316,8 @@ fi
 cat > "$CONFIG" <<EOF
 {
   "tier": "$TIER",
-  "agreed": $GRANTED_JSON,
-  "diagnostics": "$DIAGNOSTICS",
-  "diagnosticsConsent": {
-    "granted": $GRANTED_JSON,
-    "noticeVersion": "$NOTICE_VERSION",
-    "decidedAt": "$DECIDED_AT",
-    "grantedAt": $GRANTED_AT,
-    "refusedAt": $REFUSED_AT,
-    "source": "$SOURCE"
-  },
+  "agreed": false,
+  "diagnostics": "off",
   "filesConsent": {
     "acknowledged": $FILES_GRANTED_JSON,
     "noticeVersion": "$FILES_NOTICE_VERSION",
@@ -458,13 +328,8 @@ cat > "$CONFIG" <<EOF
 }
 EOF
 
-if [ "$DIAGNOSTICS" = "on" ]; then
-  echo "Diagnostics: on, because you said yes. Nothing else is sent."
-else
-  echo "Diagnostics: off."
-fi
+echo "Usage counts are not sent from this machine. The local usage-count sender is retired, so there is nothing to turn on or off."
 echo "Recorded in $CONFIG and $CONSENT_LOG."
-echo "To turn it off later, run: LAUNCHSENSE_DIAGNOSTICS=off sh \"$ROOT/install.sh\", or set granted to false in that file."
 
 SKILL_SRC="$ROOT/skills/launchsense/SKILL.md"
 for dest in \

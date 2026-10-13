@@ -32,7 +32,7 @@ The online client POSTs one JSON-RPC message and gets one JSON answer. A call is
 
 ## Installing from a coding agent
 
-`public/install.txt` is a plain-text brief for a coding agent. It asks the person the two permission questions first, then clones this repo, runs `./install.sh` with the person's repo named by `--root`, registers both servers for whichever harness it is, fetches the policy bundle once, and runs the first audit. One approval covers the whole first run.
+`public/install.txt` is a plain-text brief for a coding agent. It asks the person the file-read question first, then clones this repo, runs `./install.sh` with the person's repo named by `--root`, registers both servers for whichever harness it is, fetches the policy bundle once, and runs the first audit. One approval covers the whole first run.
 
 ## Tools
 
@@ -76,15 +76,15 @@ The hosted policy source receives no repository source: its one tool takes no ar
 - to deps.dev and ClearlyDefined, the package name and version, at most 15 non-dev packages per run;
 - to OpenSSF Scorecard, the `github.com/owner/repo` slug, only when `package.json` names one;
 - to the engine's optional decision lane, only when it is switched on. `shared/adapters/decision.ts` names the providers: a local Ollama model, a development instrument that is off unless `LAUNCHSENSE_LOCAL_DECISION=1` is set, which needs no key, TypeSafe at api.typesafe.ai, which runs when `TYPESAFE_API_KEY` is set, and Perplexity at api.perplexity.ai, which runs when `PERPLEXITY_API_KEY` is set. The installer sets neither the switch nor a key, so by default the engine makes no model request. The local rung's default address is loopback on this machine, and `LAUNCHSENSE_LOCAL_DECISION_URL` can point it elsewhere, so a local run is not guaranteed to stay on the machine. When the reorder path runs, its state carries the finding title, severity, and rule id, and a title can itself contain a file path, a line number, a host name, or a package name and version; the question keys are hash-derived, so the raw fingerprint is not sent. The unknown-next-look path sends only a fixed choice list and nothing about the repo;
-- to the usage endpoint, only when you answered yes at install: rule id counts, the harness name, the version, how long the review took, which order source ran, and governance counts. No code, no paths, no titles, no free text.
+- local audit usage counts are not sent to LaunchSense. The sender is retired, even with an old opt-in or a configured endpoint.
 
-Nothing else leaves the machine, and the policy fetch carries nothing about your repo. The model that writes the audit is the model your coding harness is configured with, on your provider. That inference is separate from this engine: its privacy depends on your harness and provider, and nothing this installer sets chooses it. The engine's decision lane above is operator configuration, not your harness's model, and the usage-counts question does not gate any of these calls; the only switch that covers all of them is `LAUNCHSENSE_OFFLINE=1`.
+Nothing else leaves the machine, and the policy fetch carries nothing about your repo. The model that writes the audit is the model your coding harness is configured with, on your provider. That inference is separate from this engine: its privacy depends on your harness and provider, and nothing this installer sets chooses it. The engine's decision lane above is operator configuration, not your harness's model. Removing the usage sender does not disable these calls; the switch that covers the engine calls is `LAUNCHSENSE_OFFLINE=1`.
 
-`LAUNCHSENSE_OFFLINE=1` disables the engine's outbound calls for the run, usage included. It does not control your coding harness's network use or its separately approved policy fetch; use the cached coaching copy for an offline review.
+`LAUNCHSENSE_OFFLINE=1` disables the engine's outbound calls for the run. It does not control your coding harness's network use or its separately approved policy fetch; use the cached coaching copy for an offline review.
 
-Counts are a preference until an endpoint stores them. The installer records your answer in `~/.config/launchsense/config.json` and appends one line per decision, refusals included, to the append-only `~/.config/launchsense/consent.jsonl`, keyed by the notice version in force rather than by wording: `2026-10-05` for usage counts, `2026-10-06` for the expanded local file read. `install.sh --enterprise` and `LAUNCHSENSE_DIAGNOSTICS=off` leave counts off without asking.
+The installer asks only the file-read question. It preserves historical usage decisions in `~/.config/launchsense/consent.jsonl` byte-for-byte and writes no new usage grant, refusal or withdrawal. The file-read acknowledgement remains keyed to notice version `2026-10-06`. Compatibility fields in `~/.config/launchsense/config.json` keep usage off; they are not new consent decisions.
 
-The report states the outcome in one closed line, and only one meaning per line: counts were sent, counts were not sent (the consent answer), counts were not sent because the run was offline, or counts were not sent because the send did not complete. Counts count as delivered only when the endpoint answers that the row was stored. No usage endpoint runs on the vendor's own address today, so an opted-in run reports honestly that the send did not complete unless `LAUNCHSENSE_API_URL` names an endpoint that stores the row. The saved report copy carries no usage-count line and no model quote, because both are decided after the copy is written.
+The terminal report says `Usage counts were not sent.` JSON always reports `diagnosticsSent: false` with the closed reason `diagnosticsReason: "disabled"`. Old opt-ins and `LAUNCHSENSE_API_URL` do not reactivate the sender. The saved report copy carries no usage-count line and no model quote.
 
 ## The `.ls` files
 
@@ -135,7 +135,7 @@ The skill fetches the bundle once and keeps the copy in the skill folder. Later 
 
 ## Analytics
 
-A call to the policy source is counted on the server, because the call is to our service. No gate is placed on it, and the row carries the method and the outcome only, never a repository URL, file text, or a network address. Local audits send counts only if the person opts in, and only when an endpoint is configured to store them, as Privacy states. No PII is claimed as a proven property anywhere; the payload fields are the ones listed above and nothing else.
+A call to the policy source is counted on the server, because the call is to our service. No gate is placed on it. The current route records closed method/tool/outcome labels and a fixed `unknown` client label, not repository source. Local audits send no usage counts. Recorded initialization events are not unique users or proven unique sessions. The vendor's read-only statistics command is not shipped in this engine-only repository. No PII is claimed as a proven property of provider logs or retained production rows.
 
 ## Do not claim
 
