@@ -469,7 +469,7 @@ export const NOT_FILLED_FIELDS: readonly NotFilled[] = [
   },
   {
     field: "event.type=consent_withdrawn",
-    why: "No withdrawal path is built. A person can refuse a purpose in the sign-in panel and that refusal is stored as granted false in consentRecords, and install.sh can be re-run with LAUNCHSENSE_DIAGNOSTICS=off, which writes a refusal line. Neither is a withdrawal: nothing in this product turns a stored decision off, and there is no button and no route to do it.",
+    why: "No withdrawal path is built. A person can refuse a purpose in the sign-in panel and that refusal is stored as granted false in consentRecords. Nothing in this product turns a stored decision off: there is no button, no install flag that writes a withdrawal, and no route that does it.",
   },
   {
     field: "integrity.record_hash (as written by the installer)",

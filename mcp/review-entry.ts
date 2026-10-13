@@ -23,7 +23,7 @@ import { queryOsvBatch } from "../shared/adapters/osv.ts";
 import { buildLocalReport, OTHER_LOCKFILES, refreshDerivations } from "../shared/review/buildReport.ts";
 import type { AdvisoryCoverage, NotChecked, ReviewFile, ReviewFinding, ReviewReport } from "../shared/review/buildReport.ts";
 import type { StreamedArtifactScan } from "../shared/review/streamedArtifacts.ts";
-import { diagnosticPayload, diagnosticsAllowed, emptyGovOutcome } from "../shared/review/diagnostics.ts";
+import { emptyGovOutcome } from "../shared/review/diagnostics.ts";
 import type { GovOutcome } from "../shared/review/diagnostics.ts";
 import { completenessFor } from "../shared/review/completeness.ts";
 import { LOCAL_FILES_NOTICE_VERSION } from "../shared/consent/vocabulary.ts";
@@ -1454,79 +1454,11 @@ async function maybeQuote(report: ReviewReport): Promise<{ id: string; quote: st
   return { id: answer.choice, quote };
 }
 
-// Why the usage counts were or were not sent. Closed labels only: no free text,
-// no paths, no PII. Carried on --json next to the boolean.
-type DiagnosticsReason =
-  | "sent"
-  | "not-opted-in"
-  | "offline"
-  | "api-url-missing"
-  | "payload-refused"
-  | "send-failed"
-  | "not-stored";
-
-async function sendDiagnostics(
-  report: ReviewReport,
-  config: LocalConfig,
-  started: number,
-  suggestionId: string | null,
-  gov: GovOutcome,
-  offline: boolean,
-): Promise<{ sent: boolean; reason: DiagnosticsReason }> {
-  const allowed = diagnosticsAllowed(config);
-  // The consent gate is stated first, so an offline run that was also never
-  // opted in reads as its own refusal and not as an offline story. Offline is
-  // an additional refusal after consent, never a widening of what may be sent.
-  if (!allowed) return { sent: false, reason: "not-opted-in" };
-  // An offline run makes no outbound request of any kind, including this one.
-  // The check sits here, inside sendDiagnostics and before any fetch, so the
-  // guard cannot be missed by a future caller.
-  if (offline) return { sent: false, reason: "offline" };
-  const counts: Record<string, number> = {};
-  for (const item of report.findings) counts[item.ruleId] = (counts[item.ruleId] ?? 0) + 1;
-  if (suggestionId !== null) counts[`suggest.${suggestionId}`] = 1;
-  const payload = diagnosticPayload({
-    stage: "alpha",
-    tier: config.tier === "pro" ? "pro" : "alpha",
-    harness: config.harness ?? "local",
-    version: "alpha",
-    durationMs: Date.now() - started,
-    orderSource: report.orderSource,
-    orderMoved: report.orderMoved,
-    laneAnswered: report.laneAnswered,
-    suggestionSource: report.licenseSuggestion.source,
-    ruleCounts: counts,
-    govDetected: gov.detected,
-    govRefused: gov.refused,
-    govStale: gov.stale,
-    govSuppressedFingerprint: gov.suppressedFingerprint,
-    govSuppressedRulePath: gov.suppressedRulePath,
-    govSuppressedRule: gov.suppressedRule,
-    govIgnored: gov.ignored,
-    govSandbag: gov.sandbag,
-  });
-  if (payload === null) return { sent: false, reason: "payload-refused" };
-  const base = process.env["LAUNCHSENSE_API_URL"];
-  if (base === undefined || base.length === 0) return { sent: false, reason: "api-url-missing" };
-  try {
-    const response = await fetch(`${base.replace(/\/$/, "")}/api/mcp/usage`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (response.status !== 200) return { sent: false, reason: "send-failed" };
-    // The route reports whether the row was actually stored. A 200 with
-    // stored:false means the counts were refused, and the review must not tell
-    // the person they were sent when nothing was written.
-    const body = (await response.json().catch(() => null)) as { stored?: unknown } | null;
-    return body !== null && body["stored"] === true
-      ? { sent: true, reason: "sent" }
-      : { sent: false, reason: "not-stored" };
-  } catch {
-    return { sent: false, reason: "send-failed" };
-  }
-}
+// The local usage-count sender is retired. This machine makes no usage request
+// at all, whatever an old config's consent answer says and whatever
+// LAUNCHSENSE_API_URL holds. The reason stays a closed label so a harness reads
+// one fixed meaning, and the run never tells the person a send happened.
+const DISABLED_DIAGNOSTICS_REASON = "disabled";
 
 function render(
   report: ReviewReport,
@@ -1611,29 +1543,16 @@ function render(
     for (const item of report.notChecked) lines.push(`- ${item.scope}: ${item.reason}`);
   }
   lines.push(`Licence suggestion: ${report.licenseSuggestion.pick ?? "none"} (source: ${report.licenseSuggestion.source}). ${report.licenseSuggestion.note}`);
-  // Each line means exactly one thing, and the line is emitted only when the
-  // run's own decision is known. "null" is the saved copy, which is written
-  // before the send is decided, so it asserts nothing at all. "sent" means the
-  // counts reached the endpoint. "not-opted-in" is the consent answer and only
-  // the consent answer. "offline" is the offline refusal. Every other reason is
-  // an opted-in run whose send did not complete, which reads as its own line so
-  // the bare consent line keeps its one meaning.
+  // The local usage-count sender is retired, so the only state a run can print
+  // is that nothing was sent. "null" is the saved copy, which carries no
+  // usage-count line at all; every other caller prints the one not-sent line.
   if (diagnostics !== null) {
-    if (diagnostics.reason === "sent") {
-      lines.push("Usage counts were sent. No file text was included.");
-    } else if (diagnostics.reason === "offline") {
-      lines.push("Usage counts were not sent: this run was offline.");
-    } else if (diagnostics.reason === "not-opted-in") {
-      lines.push("Usage counts were not sent.");
-    } else {
-      lines.push("Usage counts were not sent: the send did not complete.");
-    }
+    lines.push("Usage counts were not sent.");
   }
   return lines.join("\n");
 }
 
 async function main(): Promise<void> {
-  const started = Date.now();
   const requestedRoot = argRoot();
   // A linked root or ancestor would bypass all walker exclusions. Refuse it
   // before Git, governance reads, analysis, or local report writes.
@@ -1950,7 +1869,8 @@ async function main(): Promise<void> {
     }
   }
   const quoted = offline ? null : await maybeQuote(report);
-  const sent = await sendDiagnostics(report, config, started, quoted?.id ?? null, gov, offline);
+  // The sender is retired: no run sends usage counts, and the report says so.
+  const sent = { sent: false as const, reason: DISABLED_DIAGNOSTICS_REASON };
   const isJson = process.argv.includes("--json");
   if (isJson) {
     // One JSON document per line, terminated. Piping this into jq or a file
