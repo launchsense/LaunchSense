@@ -42,7 +42,7 @@ export function toolDefs(): ToolDef[] {
     },
     {
       name: "launchsense_report",
-      description: "Read the latest local LaunchSense report on this machine, written under .ls/reports by a local review.",
+      description: "Read the latest saved local Markdown report under .ls/reports. A scan returns its report directly; saving an optional copy requires the current report-saving acknowledgement.",
       inputSchema: objectSchema({}),
     },
     {

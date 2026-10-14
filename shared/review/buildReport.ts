@@ -2,7 +2,8 @@
 // No network. Registry facts are passed in when the caller looked them up.
 
 import { analyzeHygiene } from "../analyzers/hygiene.ts";
-import { analyzeLicenses } from "../analyzers/licenses.ts";
+import { analyzeLicenses, isRootLicensingCandidate } from "../analyzers/licenses.ts";
+import type { RootLicensingInput } from "../analyzers/licenses.ts";
 import { parseManifests } from "../analyzers/deps.ts";
 import { scanSecrets } from "../analyzers/secrets.ts";
 import { streamedArtifactGaps, summarizeStreamedArtifacts } from "./streamedArtifacts.ts";
@@ -23,6 +24,7 @@ import type { LicenceSuggestion } from "../licensing/suggest.ts";
 import { clashSignal } from "./clash.ts";
 import { countNamedHosts, deadCopies, generatedMarkers, modelCards, networkHints, repeatedFunctions, NETWORK_HINT_CAP } from "./extraChecks.ts";
 import { inventoryNpmLock } from "./lockfile.ts";
+import { npmManifestDeclarations } from "./npmIdentity.ts";
 import { noLockfileInventory, readNpmDependencyLicenses } from "../licensing/dependencies.ts";
 import { buildNoticeArtifact } from "../licensing/notice.ts";
 import type { LicenseSuggestion } from "../licensing/lookup.ts";
@@ -112,6 +114,8 @@ export interface ReviewReport {
    */
   scopeNote: string;
   notChecked: NotChecked[];
+  /** Root licensing kinds, unread inputs or scope statements left unresolved. */
+  unresolvedLicenseInputs: number;
   /** Provider-only large-artifact coverage, never whole-file analyzer clearance. */
   artifactCoverage: ArtifactCoverage[];
   streamedProviderSummary: ReturnType<typeof summarizeStreamedArtifacts>;
@@ -413,6 +417,7 @@ export function buildLocalReport(
   allowedLicences: readonly string[] = [],
   trackedEnvPaths: ReadonlySet<string> | null = null,
   streamed: readonly StreamedArtifactScan[] = [],
+  discoveredRootLicensing: readonly RootLicensingInput[] = [],
 ): ReviewReport {
   const streamedProviderSummary = summarizeStreamedArtifacts(streamed);
   const artifactCoverage = streamed.map(row => row.coverage);
@@ -461,7 +466,18 @@ export function buildLocalReport(
     );
   }
 
-  const licenses = analyzeLicenses(paths, files, files.length > 0);
+  // Content admission and filename discovery are separate facts. Exact root
+  // names in skip/stream/walk metadata remain evidence, never a read exemption.
+  // Do not parse prose for filenames or put metadata into other content lanes.
+  const rootInputs: RootLicensingInput[] = [
+    ...discoveredRootLicensing,
+    ...skipped.filter(row => isRootLicensingCandidate(row.scope)).map(row => ({ path: row.scope, unreadReason: row.reason })),
+    ...streamed.filter(row => isRootLicensingCandidate(row.coverage.path)).map(row => ({
+      path: row.coverage.path,
+      unreadReason: "Provider-only artifact input. Whole-content licensing text was not admitted.",
+    })),
+  ];
+  const licenses = analyzeLicenses(paths, files, files.length > 0, rootInputs);
   // A licence policy the lane calls Allowed is not a finding. The hosted path
   // emits nothing in that case, and the local path must agree, or a clean MIT
   // repo carries a medium "needs attention" row on one door and not the other.
@@ -473,7 +489,7 @@ export function buildLocalReport(
     findings.push(
       finding(
         "license.policy",
-        licenses.files[0] ?? "(repo)",
+        (licenses.policy === "Unknown" ? licenses.unresolved[0]?.path : undefined) ?? licenses.files[0] ?? licenses.unresolved[0]?.path ?? "(repo)",
         1,
         licenses.detected.length > 0 ? `License signals: ${licenses.detected.join(", ")}` : "No license signal in the files read",
         licenses.note,
@@ -485,6 +501,7 @@ export function buildLocalReport(
 
   const lockFile = files.find((file) => (file.path.split("/").pop() ?? "") === "package-lock.json");
   const direct = new Set(deps.deps.filter((dep) => dep.ecosystem === "npm").map((dep) => dep.name));
+  const declarations = lockFile === undefined ? [] : npmManifestDeclarations(files, lockFile.path);
   // Only the npm lockfile is inventoried here. A Cargo.lock or a yarn.lock was
   // still a lockfile in the read, so it must not be reported as "no lockfile
   // was in hand". It is named, and named as not read for versions.
@@ -499,9 +516,10 @@ export function buildLocalReport(
           ? "No npm lockfile was in the files read. The dependency inventory is incomplete."
           : `No npm lockfile was in the files read. ${listNames(otherLocks)} was in the files read and was not read for versions. The dependency inventory is incomplete.`,
       }
-    : inventoryNpmLock(lockFile.content, direct);
+    : inventoryNpmLock(lockFile.content, direct, declarations);
 
   const notChecked = [...skipped, ...streamedArtifactGaps(streamed)];
+  for (const row of licenses.unresolved) notChecked.push({ scope: row.path, reason: row.reason });
   if (!inventory.complete) notChecked.push({ scope: "npm lockfile", reason: inventory.note });
   // A skipped line is a check that did not run on that line. Naming the file
   // and the count keeps the cap from reading as "nothing was there"; the caps
@@ -516,7 +534,7 @@ export function buildLocalReport(
   const declarationInventory =
     lockFile === undefined
       ? noLockfileInventory()
-      : readNpmDependencyLicenses(lockFile.content, { directNames: direct });
+      : readNpmDependencyLicenses(lockFile.content, { directNames: direct, declarations });
   const artifact = buildNoticeArtifact(declarationInventory);
   // The guarded lookup has no lane on this path, so it is never called. The
   // refusal is recorded rather than omitted, because "we did not ask" and "we
@@ -742,6 +760,7 @@ export function buildLocalReport(
     coverageNote,
     scopeNote,
     notChecked,
+    unresolvedLicenseInputs: licenses.unresolved.length,
     artifactCoverage,
     streamedProviderSummary,
     artifactIdentities: streamed.map(row => ({ path: row.coverage.path, sha256: row.artifactSha256 })),

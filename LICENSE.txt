@@ -20,8 +20,11 @@ except the test files that load proprietary modules, which stay under
 Section 3 with the surfaces they verify:
 
   tests/analytics-pii-checks.mjs
+  tests/client-name-checks.mjs
   tests/consent-record-lane-checks.mjs
-  tests/mcp-remote-checks.mjs
+  tests/mcp-usage-stats-checks.mjs
+  tests/policy-governance-coaching-checks.mjs
+  tests/policy-artifact-coaching-checks.mjs
 
 The rule is functional, not just this list: any test file that imports or
 loads a module outside the open scope stays under Section 3. The list above

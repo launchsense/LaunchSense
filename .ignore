@@ -1,18 +1,7 @@
-# Paths search tools should skip even during a broad search, as a mechanical
-# guard on top of the installer's own skip list.
-node_modules/
-dist/
-.venv/
-venv/
-site-packages/
-__pycache__/
-
-# Local-only folders. Not part of the engine, never committed.
-.progress/
-state/
-.agents/
-.codex/
-AGENTS.md
-.impeccable/
-.code-review-graph/
-research/
+# Generated/local app outputs are not engine inputs.
+node_modules
+dist
+build
+coverage
+.cache
+.dry-run-cache

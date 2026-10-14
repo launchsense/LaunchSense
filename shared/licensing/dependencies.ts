@@ -14,12 +14,20 @@
 import { normalizeDeclaration, normalizeSpdxId } from "./spdx.ts";
 import type { NormalizedDeclaration } from "./spdx.ts";
 import { UNKNOWN_LICENSE } from "./spdx.ts";
+import { isRecord, npmEntryIdentity, validNpmName, validNpmVersion } from "../review/npmIdentity.ts";
+import type { NpmDeclaration } from "../review/npmIdentity.ts";
 
 export type DependencyDepth = "direct" | "transitive";
 
 export interface DependencyLicense {
   name: string;
   version: string;
+  /** Exact lockfile install location; never a published name or install alias. */
+  installedPath?: string;
+  /** False means display provenance only, never a published npm coordinate. */
+  identityResolved?: boolean;
+  /** SBOM grouping keeps every installed location rather than losing copies. */
+  installedPaths?: string[];
   depth: DependencyDepth;
   dev: boolean;
   /** The string as declared, or null when nothing was declared. */
@@ -54,12 +62,14 @@ export interface DependencyLicenseInventory {
 export interface DependencyLicenseOptions {
   /** Names the manifests declare directly, so direct and transitive stay apart. */
   directNames?: ReadonlySet<string>;
+  /** Declarations from the currently read manifests, relative to this lockfile. */
+  declarations?: readonly NpmDeclaration[];
   /**
    * Reads the installed package.json for a component, as text. Injected rather
    * than read from disk here, so this module stays pure and the hosted scan
    * passes nothing when it has no node_modules to read.
    */
-  readInstalledManifest?: (name: string) => string | null;
+  readInstalledManifest?: (installedPath: string) => string | null;
   /** Ceiling on installed-manifest reads, named in the note when it binds. */
   fallbackLimit?: number;
 }
@@ -81,39 +91,26 @@ const NOT_COVERED = [
   "what a registry says today, which can differ from the lockfile",
 ];
 
-/**
- * The package name from a lockfile key.
- *
- * The last `node_modules/` wins, so a nested copy reads as its own name. A
- * scoped name such as `@auth/core` keeps its slash: the remainder is a name, not
- * a path, and dropping the scope would merge two different packages under one
- * id. What is refused is a remainder that is itself a path.
- */
-function nameFromPath(pathKey: string): string | null {
-  const marker = "node_modules/";
-  const at = pathKey.lastIndexOf(marker);
-  if (at < 0) return null;
-  const name = pathKey.slice(at + marker.length);
-  if (name.length === 0 || name.includes(marker)) return null;
-  return name;
-}
-
 function emptyInventory(note: string): DependencyLicenseInventory {
   return { components: [], complete: false, counted: 0, unknown: 0, note, notCovered: [...NOT_COVERED] };
 }
 
 /** npm's own licence field, in the shape a manifest actually declares it. */
-function npmLicenseField(content: string): string | null {
+function npmLicenseField(content: string, name: string, version: string): { license: string | null; reason: string | null } {
   try {
     const data = JSON.parse(content) as unknown;
-    if (typeof data === "object" && data !== null) {
-      const lic = (data as Record<string, unknown>)["license"];
-      if (typeof lic === "string" && lic.trim().length > 0) return lic.trim();
+    if (isRecord(data)) {
+      if (("name" in data && (!validNpmName(data["name"]) || data["name"] !== name)) ||
+          ("version" in data && (!validNpmVersion(data["version"]) || data["version"] !== version))) {
+        return { license: null, reason: "the installed manifest name or exact version conflicts with the lockfile identity" };
+      }
+      const lic = data["license"];
+      return { license: typeof lic === "string" && lic.trim().length > 0 ? lic.trim() : null, reason: null };
     }
   } catch {
     // An unreadable installed manifest declares nothing that can be measured.
   }
-  return null;
+  return { license: null, reason: "the installed manifest is not a readable package record" };
 }
 
 /**
@@ -210,7 +207,7 @@ function resolve(
 function sortComponents(components: DependencyLicense[]): DependencyLicense[] {
   return [...components].sort((a, b) =>
     a.name === b.name
-      ? a.version.localeCompare(b.version)
+      ? a.version.localeCompare(b.version) || (a.installedPath ?? "").localeCompare(b.installedPath ?? "")
       : a.name.localeCompare(b.name),
   );
 }
@@ -233,11 +230,11 @@ export function readNpmDependencyLicenses(
   } catch {
     return emptyInventory("The npm lockfile did not parse, so no dependency licence was read.");
   }
-  if (typeof data !== "object" || data === null) {
+  if (!isRecord(data)) {
     return emptyInventory("The npm lockfile did not parse, so no dependency licence was read.");
   }
-  const packages = (data as Record<string, unknown>)["packages"];
-  if (typeof packages !== "object" || packages === null) {
+  const packages = data["packages"];
+  if (!isRecord(packages)) {
     // A lockfile with no packages map is incomplete, not a project with zero
     // dependencies. Saying zero would be a pass nobody measured.
     return emptyInventory(
@@ -251,25 +248,53 @@ export function readNpmDependencyLicenses(
   let fallbackReads = 0;
   let fallbackSkipped = 0;
   let linkEntries = 0;
+  let unresolvedIdentities = 0;
+  let unresolvedStructures = 0;
 
-  for (const [pathKey, raw] of Object.entries(packages as Record<string, unknown>)) {
-    if (pathKey === "" || typeof raw !== "object" || raw === null) continue;
-    const name = nameFromPath(pathKey);
-    if (name === null) continue;
-    const record = raw as Record<string, unknown>;
+  for (const [pathKey, raw] of Object.entries(packages)) {
+    if (pathKey === "") {
+      if (!isRecord(raw)) unresolvedStructures += 1;
+      continue;
+    }
+    const record = isRecord(raw) ? raw : {};
     // A workspace link has no version and is not an installed npm dependency, so
     // there is no licence to read. Count it and name it rather than dropping it,
     // or a workspace lockfile reads as a complete project with zero packages.
-    if (record["link"] === true) {
+    if (!pathKey.includes("node_modules") || record["link"] === true) {
       linkEntries += 1;
       continue;
     }
-    const version = record["version"];
-    if (typeof version !== "string" || version.length === 0) continue;
-    const nested = pathKey.split("node_modules/").length > 2;
-    const depth: DependencyDepth = !nested && directNames.has(name) ? "direct" : "transitive";
+    const identity = npmEntryIdentity(pathKey, raw, packages, options.declarations);
+    const { name, version } = identity;
+    // Depth is the installed path name's membership, not the published name's:
+    // the manifests declare the install key, so that is what marks a direct
+    // dependency.
+    const depth: DependencyDepth = !identity.nested && directNames.has(identity.installedName) ? "direct" : "transitive";
     const dev = record["dev"] === true;
 
+    // An explicit name that cannot be read leaves the published identity
+    // unresolved. The component keeps its installed path for provenance, but no
+    // licence is attributed to it, because a declaration cannot be attached to a
+    // package we cannot name. It stays Unknown with the reason named.
+    if (identity.reason !== null) {
+      unresolvedIdentities += 1;
+      components.push({
+        name,
+        version,
+        installedPath: pathKey.slice(0, 4096),
+        identityResolved: false,
+        depth,
+        dev,
+        declared: null,
+        spdx: UNKNOWN_LICENSE,
+        unknownReason: identity.reason,
+        deprecated: false,
+        operator: "single",
+        exceptions: [],
+        source: "none",
+      });
+      continue;
+    }
     const rawLockLicense = record["license"];
     const lockDeclared =
       typeof rawLockLicense === "string" && rawLockLicense.trim().length > 0
@@ -277,6 +302,7 @@ export function readNpmDependencyLicenses(
         : null;
 
     let manifestDeclared: string | null = null;
+    let manifestReason: string | null = null;
     // Read the installed manifest whenever a reader is supplied, not only when
     // the lockfile is silent. It is the cross-check that catches a lockfile
     // whose licence field and the shipped package's own licence field disagree,
@@ -285,8 +311,12 @@ export function readNpmDependencyLicenses(
     if (options.readInstalledManifest !== undefined) {
       if (fallbackReads < fallbackLimit) {
         fallbackReads += 1;
-        const text = options.readInstalledManifest(name);
-        manifestDeclared = text === null ? null : npmLicenseField(text);
+        // Only a validated exact installed relative path reaches this callback.
+        // Root, nested and scoped copies must never read each other's manifest.
+        const text = options.readInstalledManifest(pathKey);
+        const manifest = text === null ? null : npmLicenseField(text, name, version);
+        manifestDeclared = manifest?.license ?? null;
+        manifestReason = manifest?.reason ?? null;
       } else {
         // The cross-check is capped, so an entry past the cap was not checked at
         // all. Count it whether or not the lockfile declared a licence, because
@@ -298,7 +328,15 @@ export function readNpmDependencyLicenses(
 
     const source: DependencyLicense["source"] =
       lockDeclared !== null ? "lockfile" : manifestDeclared !== null ? "installed-manifest" : "none";
-    components.push(resolve(name, version, depth, dev, lockDeclared, manifestDeclared, source));
+    const component = resolve(name, version, depth, dev, lockDeclared, manifestDeclared, source);
+    component.installedPath = pathKey;
+    component.identityResolved = true;
+    if (manifestReason !== null) {
+      unresolvedIdentities += 1;
+      component.spdx = UNKNOWN_LICENSE;
+      component.unknownReason = manifestReason;
+    }
+    components.push(component);
   }
 
   const sorted = sortComponents(components);
@@ -308,15 +346,29 @@ export function readNpmDependencyLicenses(
     fallbackSkipped > 0
       ? ` ${fallbackSkipped} entry(s) were not checked against an installed manifest, because the cross-check stops at ${fallbackLimit} per lockfile.`
       : "";
+  // An entry whose declared name or version could not be read is an incomplete
+  // read, not a clean skip. The reason is named, and the read is not complete.
+  const unresolvedParts: string[] = [];
+  if (unresolvedIdentities > 0) {
+    unresolvedParts.push(`${unresolvedIdentities} had an unresolved package identity, installed path, record or exact version`);
+  }
+  if (unresolvedStructures > 0) {
+    unresolvedParts.push(`${unresolvedStructures} had an invalid root package record`);
+  }
+  const unresolvedNote =
+    unresolvedParts.length === 0
+      ? ""
+      : ` ${unresolvedParts.join(", and ")}; those entries were not resolved, so this read is incomplete.`;
   const note =
     `The npm lockfile lists ${sorted.length} installed packages: ${direct} direct and ${sorted.length - direct} transitive. ` +
     (unknown === 0
       ? "Every one declared a licence this product reads."
       : `${unknown} of them read as ${UNKNOWN_LICENSE}, and an unknown licence is not a licence.`) +
-    capped;
+    capped +
+    unresolvedNote;
   return {
     components: sorted,
-    complete: true,
+    complete: unresolvedParts.length === 0 && linkEntries === 0,
     counted: sorted.length,
     unknown,
     note,

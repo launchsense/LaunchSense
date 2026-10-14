@@ -56,6 +56,8 @@ export interface CompletenessInput {
   analyzerCodeSkippedLines: number;
   /** Matches withheld because a file was already at the 20 match cap. */
   analyzerSuppressedMatches: number;
+  /** Root licensing inputs whose kind, content or grant scope is unresolved. */
+  unresolvedLicenseInputs: number;
   /** Per-check coverage for large files that received a provider-only pass. */
   artifactCoverage?: readonly ArtifactCoverage[];
 }
@@ -81,6 +83,7 @@ export function completenessFor(input: CompletenessInput): Completeness {
   const countFields = [
     "advisoriesSkipped", "advisoriesUnanswered", "advisoriesUnreadable",
     "analyzerSkippedLines", "analyzerCodeSkippedLines", "analyzerSuppressedMatches",
+    "unresolvedLicenseInputs",
   ] as const;
   for (const key of booleanFields) {
     if (Object.hasOwn(source, key) && typeof source[key] === "boolean") valid.add(key);
@@ -185,6 +188,9 @@ export function completenessFor(input: CompletenessInput): Completeness {
         ? `${facts.analyzerSuppressedMatches} matched line was withheld by the secret checks' 20-match cap`
         : `${facts.analyzerSuppressedMatches} matched lines were withheld by the secret checks' 20-match cap`,
     );
+  }
+  if (facts.unresolvedLicenseInputs !== undefined && facts.unresolvedLicenseInputs > 0) {
+    reasons.push(`${facts.unresolvedLicenseInputs} root licensing input(s) remain unresolved`);
   }
   if ("artifactCoverage" in source) {
     try {

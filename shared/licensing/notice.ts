@@ -54,7 +54,8 @@ function componentLine(component: DependencyLicense): string {
   const dev = component.dev ? ", dev" : "";
   const declared = component.declared === null ? "no licence field declared" : component.declared;
   const deprecated = component.deprecated ? " (deprecated SPDX id)" : "";
-  return `- ${component.name}@${component.version} (${depth}${dev}) declares ${declared}${deprecated}`;
+  const location = component.installedPath === undefined ? "" : `; installed at ${component.installedPath}`;
+  return `- ${component.name}@${component.version} (${depth}${dev}) declares ${declared}${deprecated}${location}`;
 }
 
 /** The notices that apply to one component, in the order the table states them. */
@@ -138,10 +139,9 @@ export function buildNoticeArtifact(
   const groups = new Map<string, DependencyLicense[]>();
   const seenComponents = new Set<string>();
   for (const component of inventory.components) {
-    // A lockfile lists one entry per install path, so the same name and version
-    // can appear several times when several packages depend on it. A person
-    // reading this file needs the component once, not once per path.
-    const componentKey = `${component.name}@${component.version}:${component.spdx}`;
+    // Exact install provenance distinguishes nested copies and conflicts. Legacy
+    // inventories without a path retain their existing coordinate grouping.
+    const componentKey = `${component.name}@${component.version}:${component.spdx}:${component.installedPath ?? ""}`;
     if (seenComponents.has(componentKey)) continue;
     seenComponents.add(componentKey);
     const key = sectionKey(component);
