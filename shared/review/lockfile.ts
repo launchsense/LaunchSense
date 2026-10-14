@@ -1,9 +1,12 @@
-// Full npm lockfile inventory. Direct and transitive stay apart.
-// This is not run by the website scan.
+// Only validated published npm identities and exact versions are queryable.
+// Installed paths, alias declarations and incomplete counts stay separate.
+import { isRecord, npmEntryIdentity } from "./npmIdentity.ts";
+import type { NpmDeclaration } from "./npmIdentity.ts";
 
 export interface LockPackage {
   name: string;
   version: string;
+  installedPath: string;
   depth: "direct" | "transitive";
   dev: boolean;
 }
@@ -14,52 +17,44 @@ export interface LockInventory {
   note: string;
 }
 
-function nameFromPath(pathKey: string): string | null {
-  const marker = "node_modules/";
-  const at = pathKey.lastIndexOf(marker);
-  if (at < 0) return null;
-  const name = pathKey.slice(at + marker.length);
-  if (name.length === 0 || name.includes("/node_modules/")) return null;
-  return name;
-}
-
-export function inventoryNpmLock(text: string, directNames: ReadonlySet<string>): LockInventory {
+export function inventoryNpmLock(
+  text: string,
+  directNames: ReadonlySet<string>,
+  declarations: readonly NpmDeclaration[] = [],
+): LockInventory {
   let data: unknown;
-  try {
-    data = JSON.parse(text) as unknown;
-  } catch {
+  try { data = JSON.parse(text) as unknown; } catch {
     return { packages: [], complete: false, note: "The npm lockfile did not parse. The inventory is incomplete." };
   }
-  if (typeof data !== "object" || data === null) {
-    return { packages: [], complete: false, note: "The npm lockfile did not parse. The inventory is incomplete." };
+  if (!isRecord(data) || !isRecord(data["packages"])) {
+    return { packages: [], complete: false, note: "This lockfile has no valid packages map. The inventory is incomplete." };
   }
-  const packages = (data as Record<string, unknown>)["packages"];
-  if (typeof packages !== "object" || packages === null) {
-    return {
-      packages: [],
-      complete: false,
-      note: "This lockfile has no packages map. The inventory is incomplete.",
-    };
-  }
+  const packages = data["packages"];
   const out: LockPackage[] = [];
-  for (const [pathKey, raw] of Object.entries(packages as Record<string, unknown>)) {
-    if (pathKey === "") continue;
-    if (typeof raw !== "object" || raw === null) continue;
-    const version = (raw as Record<string, unknown>)["version"];
-    const name = nameFromPath(pathKey);
-    if (name === null || typeof version !== "string" || version.length === 0) continue;
-    const dev = (raw as Record<string, unknown>)["dev"] === true;
-    const nested = pathKey.split("node_modules/").length > 2;
-    out.push({
-      name,
-      version,
-      depth: !nested && directNames.has(name) ? "direct" : "transitive",
-      dev,
-    });
+  let unresolved = 0;
+  let links = 0;
+  for (const [pathKey, raw] of Object.entries(packages)) {
+    if (pathKey === "") {
+      if (!isRecord(raw)) unresolved += 1;
+      continue;
+    }
+    // Workspace source entries and links are not a supported installed format.
+    // Disclose their omission rather than claiming workspace coverage.
+    if (!pathKey.includes("node_modules") || (isRecord(raw) && raw["link"] === true)) {
+      links += 1;
+      continue;
+    }
+    const identity = npmEntryIdentity(pathKey, raw, packages, declarations);
+    if (identity.reason !== null) { unresolved += 1; continue; }
+    out.push({ name: identity.name, version: identity.version, installedPath: pathKey,
+      depth: !identity.nested && directNames.has(identity.installedName) ? "direct" : "transitive",
+      dev: isRecord(raw) && raw["dev"] === true });
   }
+  const omissions = links > 0 ? ` ${links} workspace/source link entry(s) are not inventoried; workspace dependency coverage is not provided.` : "";
   return {
     packages: out,
-    complete: true,
-    note: out.length === 0 ? "The lockfile listed no packages." : `Lockfile lists ${out.length} packages.`,
+    complete: unresolved === 0 && links === 0,
+    note: `Lockfile lists ${out.length} packages with validated queryable coordinates.` +
+      (unresolved > 0 ? ` ${unresolved} entry(s) have an unresolved identity, path, record or exact version and are not offered as coordinates. The inventory is incomplete.` : "") + omissions,
   };
 }

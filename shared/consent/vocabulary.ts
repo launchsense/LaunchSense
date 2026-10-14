@@ -82,21 +82,25 @@ export const DIAGNOSTICS_NOTICE_WORDING: readonly string[] = [
 export const DIAGNOSTICS_NOTICE_VERSION = "2026-10-05";
 
 /**
- * The wording the local review shows before it reads the person's own files and
- * their agent instructions. This is an acknowledgement, not consent: the default
- * is yes (operator decision, 2026-10-06), and a pre-answered question is not a
- * freely given agreement. The record and the register say "acknowledged" for that
- * reason. Nothing is uploaded; the read happens on the person's machine.
+ * The wording the local review shows before it reads the person's agent
+ * instruction files and saves its local report copy. This is an acknowledgement,
+ * not consent: the default is yes (operator decision, 2026-10-06), and a
+ * pre-answered question is not a freely given agreement. The record and the
+ * register say "acknowledged" for that reason. Ordinary project files are read
+ * only for a review the person asks for, so this question is not a gate on the
+ * ordinary review. Nothing is uploaded; the read and the saved copy happen on the
+ * person's machine.
  */
 export const LOCAL_FILES_NOTICE_WORDING: readonly string[] = [
-  "Allow the local LaunchSense server to read files in this project folder,",
-  "including agent instruction files like AGENTS.md and CLAUDE.md?",
-  "The reads happen on this machine. Nothing is uploaded.",
+  "Allow the local LaunchSense server to read agent instruction files like AGENTS.md,",
+  "and to save its local report copy under .ls/reports?",
+  "Those stay on this machine. Nothing is uploaded.",
+  "An ordinary review you ask for still reads the project files.",
   "Default is yes. Press enter to allow, or type no to refuse.",
 ];
 
-/** The notice version for the local file-read acknowledgement. */
-export const LOCAL_FILES_NOTICE_VERSION = "2026-10-06";
+/** The notice version for the local agent-file/report acknowledgement. */
+export const LOCAL_FILES_NOTICE_VERSION = "2026-10-14";
 
 /** Where the append-only ledger lives, relative to the person's home directory. */
 export const CONSENT_LEDGER_PATH = ".config/launchsense/consent.jsonl";
@@ -400,7 +404,7 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [  {
     notice_version: LOCAL_FILES_NOTICE_VERSION,
     notice_wording_in_this_build: LOCAL_FILES_NOTICE_WORDING,
     ledger: LOCAL_LEDGER.system,
-    collection_method: "one_question_before_the_expanded_read_default_is_yes",
+    collection_method: "one_question_before_the_agent_file_read_and_report_save_default_is_yes",
     processing_method: "read_on_the_person's_own_machine_only_never_uploaded",
     pii_information: [
       { type: "file_paths", sensitive: false, source: "the person's own checkout" },

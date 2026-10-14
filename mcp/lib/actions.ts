@@ -22,6 +22,12 @@ const NOTICE =
   "This server reviews the files on this machine and does not download GitHub. " +
   "Use launchsense_scan_repo for the checkout.";
 
+const NO_SAVED_REPORT =
+  "No local report yet in .ls/reports (no saved copy is available). " +
+  "launchsense_scan_repo returns the report directly; after scanning, use that returned output. " +
+  "If this root has not been scanned, run launchsense_scan_repo for its first report. " +
+  "Saved copies are optional and require the current report-saving acknowledgement; a scan does not always save a copy.";
+
 // callTool runs one tool by name. It throws on a failure, and the caller turns
 // that into a tool result with isError set, because a tool that ran and failed
 // is a result and not a protocol error.
@@ -61,8 +67,9 @@ function scanMode(args: Record<string, unknown>): ReviewMode {
 // The root is pinned and every component is opened from a pinned parent, with
 // the final component refusing a link. A linked `.ls`, a linked `.ls/reports`,
 // or a linked report file is refused rather than followed, so this read cannot
-// be redirected outside the checkout. Absence is still the ordinary "no report
-// yet" answer; a link or an unreadable file is a refusal and says so.
+// be redirected outside the checkout. Absence names the unavailable saved copy,
+// not an unproven scan or saving history. The scan's direct output remains usable;
+// a link or an unreadable file is a refusal and says so.
 //
 // Only a file whose name is the saved-report shape (a run stamp then `.md`) is
 // treated as a report. The third-party notice also ends in `.md`, and an
@@ -74,17 +81,17 @@ function readLatestLocalReport(): string {
   const { fd: rootFd } = openReviewRoot(root);
   try {
     const ls = openChildDirectory(rootFd, ".ls");
-    if (ls.state === "absent") throw new Error("No local report yet. Run launchsense_scan_repo first.");
+    if (ls.state === "absent") throw new Error(NO_SAVED_REPORT);
     if (ls.state === "refused") throw new Error(`The local report folder could not be read: ${ls.reason}`);
     const lsFd = ls.value;
     try {
       const listed = listDirectoryNames(lsFd, "reports");
-      if (listed.state === "absent") throw new Error("No local report yet. Run launchsense_scan_repo first.");
+      if (listed.state === "absent") throw new Error(NO_SAVED_REPORT);
       if (listed.state === "refused") throw new Error(`The local report folder could not be read: ${listed.reason}`);
       const names = listed.value.filter((name) => isSavedReportName(name)).sort();
-      if (names.length === 0) throw new Error("No local report yet. Run launchsense_scan_repo first.");
+      if (names.length === 0) throw new Error(NO_SAVED_REPORT);
       const latest = names[names.length - 1];
-      if (latest === undefined) throw new Error("No local report yet. Run launchsense_scan_repo first.");
+      if (latest === undefined) throw new Error(NO_SAVED_REPORT);
       const reports = openChildDirectory(lsFd, "reports");
       if (reports.state !== "ok") throw new Error("The latest local report could not be read as text.");
       const reportsFd = reports.value;
@@ -100,7 +107,7 @@ function readLatestLocalReport(): string {
               `The newest local report was removed while it was being read. Older reports are still on disk under .ls/reports; read those.`,
             );
           }
-          throw new Error("No local report yet. Run launchsense_scan_repo first.");
+          throw new Error(NO_SAVED_REPORT);
         }
         if (read.state === "refused") {
           if (read.code === "too_large") {

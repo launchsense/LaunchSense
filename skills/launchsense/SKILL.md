@@ -5,7 +5,7 @@ description: Use when the repo you have open should be reviewed before you share
 
 # LaunchSense
 
-Skill version: 2026-10-12.1.
+Skill version: 2026-10-14.2.
 
 This skill reviews **your** checkout, the repository you installed it into, not only a checkout of LaunchSense itself. It runs on your machine, reads your working tree including uncommitted work, uploads no files and no file text, and has no hourly limit.
 
@@ -39,7 +39,7 @@ Local reads the files. Online serves the policies. Read the rules, run `launchse
 
 Run the installer from the checkout of LaunchSense itself, and name the repo to review so it is never guessed: `sh ./install.sh --root /absolute/path/to/the/person's/repo` (also `--repo`). The flag takes an absolute, existing folder, and it is the repo to review. With no flag the installer targets the folder it lives in, which is LaunchSense, not the person's repo, and it prints that target. Neither path may hold a quote, a backslash, a dollar sign, a backtick, or a control character, because both are written into the server config; a bad path is refused and nothing is registered. If the installer reports that Node is missing or older than 24, the server was not registered: say so, and do not report a finished install. The review itself needs a pinned directory handle, which is available on Linux and macOS and refused on other platforms, Windows included.
 
-After `./install.sh` finishes, run the first audit immediately, on the repo the person has open, and show them the report. Setup is not done until they have seen one real result. Ask for approval once, covering the policy fetch and this one review, so the whole first run is smooth.
+After `./install.sh` finishes, run the first audit immediately, on the repo the person has open, and show them the report. Setup is not done until they have seen one real result. Ask for approval once, covering the policy fetch and this one review, so the whole first run is smooth. The installer's own one question is not that approval: it asks only whether it may read the agent instruction files and save the local report copy, and it does not gate the ordinary review. This approved review is what authorizes reading the working tree.
 
 ## Check for updates
 
@@ -112,6 +112,8 @@ A solution here is the ranked, ordered fix path the fixed rules produce. It is n
 For an npm project with a committed `package-lock.json`, the review reads the licence every installed package declares, direct and transitive, and writes a third-party notice file named `THIRD-PARTY-NOTICES.generated.md`. That file is deterministic: the same lockfile gives the same bytes. It names each component with its licence, states what that licence text asks for with the clause it came from, and lists what was not read. It is a declaration, not legal advice.
 
 - An Unknown licence stays Unknown. It is never a finding, never a severity, and never folded into a permissive group.
+- A licence document is a recognised licence basename with no extension or a plain document extension; `COPYING.LESSER` and `COPYING.LIB` are also recognised. Known source kinds, including `.mjs`, `.zig` and `.jl`, retain code and secret checks without setting policy from quoted licence text. Unsupported root licensing inputs and listed-but-unread root documents remain unresolved, with not-checked coverage rows; a permissive manifest cannot clear them. Scope-limiting wording needs review, and unsupported or contradictory scope is `Unknown`, not an invented grant or restriction. Scope checks inspect all supplied content within existing caller read limits, not legal permission. Quote those gaps and do not call the whole project mirrorable.
+- Each local `gh` metadata command has a 10-second deadline and a combined 65,536-byte output allowance. A failed exit or invalid privacy field is unavailable, not proof of absence or public visibility. Supported credential spans are refused even inside plain identifiers; repository detection is unchanged.
 - The review also suggests one licence for the project, from the ids and counts the repo declares plus the allowlist in `.ls/policy.yaml`. It is a suggestion, not a licence fact, and copyleft or proprietary terms decline because those need a person. A lane may order the candidates; it cannot turn a decline into a pick.
 - An OR expression stays a choice. Ask which one was chosen.
 - yarn.lock, pnpm-lock.yaml, Cargo, Go and PyPI dependency licences, vendored trees and per-file SPDX headers are not read.

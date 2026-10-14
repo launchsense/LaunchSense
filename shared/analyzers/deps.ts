@@ -23,6 +23,23 @@ export interface DepsResult {
 
 const EXACT_NPM = /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/;
 
+// The npm scripts that are lifecycle declarations rather than ordinary custom
+// scripts. `npm install` runs preinstall, install, postinstall and the prepare
+// family (preprepare, prepare, postprepare); `npm publish` runs prepublish and
+// prepublishOnly. Each declared hook is a real execution point and is reported
+// once, at its own severity, at the manifest that declares it. The review never
+// runs any of them; a declaration is a signal, not an observation.
+const INSTALL_SCRIPTS = [
+  "preinstall",
+  "install",
+  "postinstall",
+  "prepublish",
+  "preprepare",
+  "prepare",
+  "postprepare",
+  "prepublishOnly",
+];
+
 function isPinnedNpm(version: string): boolean {
   const v = version.trim();
   if (EXACT_NPM.test(v)) return true;
@@ -80,7 +97,7 @@ function parsePackageJson(path: string, text: string, out: DepsResult): void {
   }
   const scripts = record["scripts"];
   if (typeof scripts === "object" && scripts !== null) {
-    for (const name of ["postinstall", "preinstall", "prepublish", "prepublishOnly"]) {
+    for (const name of INSTALL_SCRIPTS) {
       if (typeof (scripts as Record<string, unknown>)[name] === "string") {
         out.installScripts.push({ manifest: path, script: name });
       }

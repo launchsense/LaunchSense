@@ -63,6 +63,16 @@ Node builtins, adds no dependencies, executes no target code and makes no networ
 requests. The Node version guard is not an operating-system sandbox. These signals
 do not guarantee security or provide SOC 2, ISO or any certification.
 
+## Report output and saved copies
+
+`launchsense_scan_repo` returns its report directly. After scanning, use that
+returned output, including when saving was declined. `launchsense_report` reads
+only an available saved Markdown copy under `.ls/reports`; it does not cache the
+last scan output. Saving an optional copy requires the current file-read/report-
+saving acknowledgement. No saved copy does not prove whether this root was scanned
+or how saving was answered. For an unscanned root, run a first scan for its direct
+output; scanning does not always save a copy.
+
 ## Layout
 
 On a rescan, accepted findings stay named in the not-checked list but no longer contribute to the lead's finding count, fix plan or prompts. Tree and change reviews rebuild these from the final findings. Files-read counts and applicable unrun checks remain unchanged. JSON, MCP scan output and an acknowledged saved report describe the same remaining work. Pull the newer engine for this behavior; refreshing the policy bundle alone does not update code.

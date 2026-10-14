@@ -32,6 +32,7 @@ import type { GovAccept } from "../shared/review/governance.ts";
 import { fingerprintFinding } from "../shared/redaction.ts";
 import { ANALYZER_VERSION } from "../shared/analyzers/version.ts";
 import { inventoryNpmLock } from "../shared/review/lockfile.ts";
+import { npmManifestDeclarations } from "../shared/review/npmIdentity.ts";
 import type { LockInventory, LockPackage } from "../shared/review/lockfile.ts";
 import { findingsToAsk, laneCanReorder, questionIdFor, rankFromAnswers, rankState } from "../shared/reports/priority.ts";
 import type { RankableFinding } from "../shared/reports/priority.ts";
@@ -41,6 +42,8 @@ import type { PromptFinding } from "../shared/reports/topPrompt.ts";
 import { lookupPackages, scorecardFact } from "../shared/review/registry.ts";
 import { quoteForChoice, suggestionOptions } from "../shared/review/unknownQuote.ts";
 import { parseManifests } from "../shared/analyzers/deps.ts";
+import { isRootLicensingCandidate } from "../shared/analyzers/licenses.ts";
+import type { RootLicensingInput } from "../shared/analyzers/licenses.ts";
 
 // Vendored trees. Skipping them keeps thousands of third-party lines out of a
 // review that is about this repo's own code, and every skip is disclosed in the
@@ -582,20 +585,47 @@ function acceptanceFindings(rows: GovAccept[], source: string): ReviewFinding[] 
   });
 }
 
-// git runs one git command in the checkout and returns its trimmed stdout, or
-// marks the call as failed. stderr is dropped so a git message never leaks into
-// the report; the caller decides what a failure means.
-function gitStdio(root: string): Array<"ignore" | "pipe" | number> {
-  const stdio: Array<"ignore" | "pipe" | number> = ["ignore", "pipe", "ignore"];
+/**
+ * Bound on a single git command's stdout. A NUL path listing or a check-ignore
+ * reply for a large untracked tree (an ignored dependency folder) is name
+ * metadata, not file content: one path per entry. This is a bounded allowance,
+ * not unbounded metadata. Above it the command fails and the caller takes the
+ * fail-safe (no repository content is read). It is far below the file-content
+ * budgets and does not change them.
+ */
+const GIT_STDOUT_MAX_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Preserve the pinned review-root descriptor at its own number in a child's
+ * stdio, so a `/proc/self/fd/<n>` root path still resolves inside the child.
+ * Git resolves that path after exec; only the exact pinned directory descriptor
+ * is kept, never an arbitrary open file.
+ */
+function preserveRootFd(
+  stdio: Array<"ignore" | "pipe" | number>,
+  root: string,
+): Array<"ignore" | "pipe" | number> {
   const handle = root.match(/^\/(?:proc\/self|dev)\/fd\/(\d+)$/);
   if (handle !== null) {
     const fd = Number(handle[1]);
-    // Git resolves its own /proc/self/fd path after exec. Preserve exactly the
-    // pinned directory descriptor at that number, not arbitrary open files.
     while (stdio.length <= fd) stdio.push("ignore");
     stdio[fd] = fd;
   }
   return stdio;
+}
+
+// git runs one git command in the checkout and returns its trimmed stdout, or
+// marks the call as failed. stderr is dropped so a git message never leaks into
+// the report; the caller decides what a failure means.
+function gitStdio(root: string): Array<"ignore" | "pipe" | number> {
+  return preserveRootFd(["ignore", "pipe", "ignore"], root);
+}
+
+// gitStdio for a probe that must also read git's stderr. The not-a-repository
+// message is the one signal that tells an ordinary non-Git folder apart from a
+// git that refused for another reason; stderr is matched, never printed.
+function gitStdioCapture(root: string): Array<"ignore" | "pipe" | number> {
+  return preserveRootFd(["ignore", "pipe", "pipe"], root);
 }
 
 function git(root: string, args: string[]): { ok: boolean; out: string } {
@@ -614,16 +644,68 @@ function git(root: string, args: string[]): { ok: boolean; out: string } {
 // entries. NUL separation is how a path with a space, a tab, or a non-ASCII
 // character survives without git quoting it and breaking the match against the
 // walk's own paths.
+//
+// The framing is validated before the entries are used: genuinely empty stdout
+// is a valid empty listing; any other reply must be NUL-terminated, and every
+// record between the delimiters must be a nonempty relative repository path
+// with no leading slash and no parent traversal. An empty record is a malformed
+// byte sequence, not an empty listing, so it is refused rather than filtered
+// away (filtering it would turn a malformed reply into a clean "nothing here"
+// answer). This is a bound on the shape of git's answer, not a claim that git
+// itself is trusted.
 function gitNul(root: string, args: string[]): { ok: boolean; entries: string[] } {
   try {
     const out = execFileSync("git", ["-C", root, ...args], {
       encoding: "utf8",
       stdio: gitStdio(root),
+      maxBuffer: GIT_STDOUT_MAX_BYTES,
     });
-    const entries = out.split("\u0000").filter((entry) => entry !== "");
+    if (out === "") return { ok: true, entries: [] };
+    if (!out.endsWith("\u0000")) return { ok: false, entries: [] };
+    const entries = out.slice(0, -1).split("\u0000");
+    for (const entry of entries) {
+      if (entry === "") return { ok: false, entries: [] };
+      if (entry.startsWith("/") || entry.split("/").includes("..")) return { ok: false, entries: [] };
+    }
     return { ok: true, entries };
   } catch {
     return { ok: false, entries: [] };
+  }
+}
+
+/**
+ * Ask git whether this folder is a working tree, and keep four outcomes apart.
+ *
+ *   - "worktree": git answered true.
+ *   - "not_worktree": git ran and answered false, or failed with git's own
+ *     "not a git repository" message. This is an ordinary non-Git folder.
+ *   - "missing": no git binary could be run at all. NOT a non-Git folder: the
+ *     folder might be a work tree this run cannot measure.
+ *   - "error": git ran but refused for another reason (a corrupt tree, dubious
+ *     ownership, a permission problem). Also not a non-Git folder.
+ *
+ * LC_ALL=C fixes the one message this matches, so a localized git cannot turn an
+ * ordinary non-Git folder into an error. stderr is matched, never printed.
+ */
+function probeGitWorkTree(root: string): "worktree" | "not_worktree" | "missing" | "error" {
+  try {
+    const out = execFileSync("git", ["-C", root, "rev-parse", "--is-inside-work-tree"], {
+      encoding: "utf8",
+      stdio: gitStdioCapture(root),
+      env: { ...process.env, LC_ALL: "C" },
+    });
+    // Only the explicit answers git documents are accepted. Any other successful
+    // output is an inconsistent reply, not a non-Git folder: it is carried as an
+    // error so the caller takes the fail-safe instead of reading the tree.
+    const answer = out.trim();
+    if (answer === "true") return "worktree";
+    if (answer === "false") return "not_worktree";
+    return "error";
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "missing";
+    const stderr = (error as { stderr?: Buffer | string }).stderr;
+    const text = typeof stderr === "string" ? stderr : stderr?.toString("utf8") ?? "";
+    return /not a git repository/i.test(text) ? "not_worktree" : "error";
   }
 }
 
@@ -638,24 +720,28 @@ function gitNul(root: string, args: string[]): { ok: boolean; entries: string[] 
  * Fail closed, and say which source is not applied rather than pretending it is
  * clean:
  *   - inside a Git work tree, `.gitignore` is honoured through real Git (`git
- *     check-ignore`); if Git fails, the Git side is not applied, nothing
- *     invented on its behalf, and the untracked set stays unknown.
+ *     check-ignore`). If Git cannot answer which paths are ignored (a failure,
+ *     or an inconsistent reply), the Git side is not applied and nothing is
+ *     invented on its behalf. The walk then reads no repository content at all:
+ *     a failed answer could hide any untracked path, and the independent
+ *     `.ignore` metadata cannot be safely read either, so reading any content
+ *     could broaden past an exclusion. Coverage is narrowed, never broadened.
  *   - not inside a Git work tree: there is no Git answer at all. Disclosed once,
  *     plainly; `.gitignore` and tracked status are not applied and not invented.
  *   - an `.ignore` file that is a link, unreadable, or over the 1 MiB metadata
- *     bound is refused and disclosed; the paths it might have excluded are NOT
- *     read. Absence is ordinary.
+ *     bound is refused and disclosed, and the subtree it could have excluded is
+ *     withheld; the paths it might have excluded are NOT read. Absence is
+ *     ordinary.
  *
  * What is deliberately not claimed: nested `.gitignore` files under a non-Git
  * tree (Git only runs inside its own tree), and `.ignore` glob characters. The
  * subset is named in docs/LIMITS.md and in the not-checked line itself.
  *
- * Where the word "Git" fails to name an available binary at all (no `git` on
- * PATH), every command below fails the same way, so the same not-git
- * disclosure covers it: the folder reports not a Git working tree as far as
- * this run could measure, the ignore source is named as not applied, and
- * tracked-env is named as not judged. Nothing is invented on a missing
- * binary's behalf either.
+ * A git binary that cannot be run at all is NOT a non-Git folder. The folder
+ * might be a work tree this run cannot measure, so it takes the same fail-safe
+ * as a failed lookup: no repository content is read, the ignore source is named
+ * as not applied, and tracked-env is named as not judged. Nothing is invented
+ * on a missing binary's behalf either.
  */
 const IGNORE_SUBSET_NOTE =
   "This .ignore file is honoured for a documented subset only: comment lines, blank lines, and " +
@@ -666,16 +752,22 @@ const IGNORE_SUBSET_NOTE =
 interface GitExclusionFacts {
   /** True only when `git rev-parse --is-inside-work-tree` answered true. */
   insideWorkTree: boolean;
-  /** null when tracked status is unknown: not a Git tree, or Git failed. */
-  tracked: Set<string> | null;
-  /** A failure in check-ignore or ls-files inside an otherwise valid tree. */
+  /** git could not be run at all: no binary on PATH. Not a non-Git folder. */
+  gitMissing: boolean;
+  /** A git probe or listing failed for a reason that is not "not a repository". */
   failed: boolean;
+  /** null when tracked status is unknown: not a Git tree, or Git could not answer. */
+  tracked: Set<string> | null;
 }
 
-type GitIgnoreStatus =
+type GitIgnoreStatus = (
   | { state: "applied"; ignoredPaths: ReadonlySet<string> }
   | { state: "not_a_git_tree" }
-  | { state: "failed" };
+  | { state: "unavailable"; cause: "missing" | "failed" }
+) & {
+  /** Validated candidate names survive independently of ignore classification. */
+  observedPaths: ReadonlySet<string>;
+};
 
 /**
  * Compute the tracked set and the Git work tree fact. Run once per review,
@@ -689,11 +781,21 @@ type GitIgnoreStatus =
  * outside it.
  */
 function gitTrackedSet(root: string): GitExclusionFacts {
-  const inside = git(root, ["rev-parse", "--is-inside-work-tree"]);
-  if (!inside.ok || inside.out.trim() !== "true") return { insideWorkTree: false, tracked: null, failed: false };
+  const probe = probeGitWorkTree(root);
+  if (probe === "missing") {
+    return { insideWorkTree: false, gitMissing: true, failed: false, tracked: null };
+  }
+  if (probe === "error") {
+    return { insideWorkTree: false, gitMissing: false, failed: true, tracked: null };
+  }
+  if (probe === "not_worktree") {
+    return { insideWorkTree: false, gitMissing: false, failed: false, tracked: null };
+  }
   const listed = gitNul(root, ["ls-files", "-z"]);
-  if (!listed.ok) return { insideWorkTree: true, tracked: null, failed: true };
-  return { insideWorkTree: true, tracked: new Set(listed.entries), failed: false };
+  if (!listed.ok) {
+    return { insideWorkTree: true, gitMissing: false, failed: true, tracked: null };
+  }
+  return { insideWorkTree: true, gitMissing: false, failed: false, tracked: new Set(listed.entries) };
 }
 
 /**
@@ -706,14 +808,7 @@ function gitTrackedSet(root: string): GitExclusionFacts {
  * always a pipe here and the caller asserts on the answer it gets back.
  */
 function gitStdioWithInput(root: string): Array<"ignore" | "pipe" | number> {
-  const stdio: Array<"ignore" | "pipe" | number> = ["pipe", "pipe", "ignore"];
-  const handle = root.match(/^\/(?:proc\/self|dev)\/fd\/(\d+)$/);
-  if (handle !== null) {
-    const fd = Number(handle[1]);
-    while (stdio.length <= fd) stdio.push("ignore");
-    stdio[fd] = fd;
-  }
-  return stdio;
+  return preserveRootFd(["pipe", "pipe", "ignore"], root);
 }
 
 /**
@@ -740,28 +835,34 @@ function gitStdioWithInput(root: string): Array<"ignore" | "pipe" | number> {
  * which would exclude a file the negation re-includes, so it is not used. The
  * answer is exactly the ignored set, nothing invented.
  *
- * On any Git failure the source is not applied and the caller discloses it;
- * the paths that might be ignored are then still read, which is exactly why
- * that state is reported and never presented as clean.
+ * On any Git failure or inconsistent reply the source is not applied and the
+ * caller discloses it; the paths that might be ignored are NOT read. The caller
+ * refuses the whole walk in that state (it reads no repository content), so a
+ * failure can never fall back to reading a path whose ignore status is unknown.
  */
 function computeGitIgnores(root: string, facts: GitExclusionFacts): GitIgnoreStatus {
-  if (!facts.insideWorkTree) return { state: "not_a_git_tree" };
+  if (facts.gitMissing) return { state: "unavailable", cause: "missing", observedPaths: new Set() };
+  if (facts.failed) return { state: "unavailable", cause: "failed", observedPaths: new Set() };
+  if (!facts.insideWorkTree) return { state: "not_a_git_tree", observedPaths: new Set() };
   const candidates = gitNul(root, ["ls-files", "--others", "-z"]);
-  if (!candidates.ok) return { state: "failed" };
+  if (!candidates.ok) return { state: "unavailable", cause: "failed", observedPaths: new Set() };
   // Directory entries carry a trailing slash. Git's own check-ignore answers
   // with the same trailing slash for directory patterns, but the exclusion set
   // holds clean relative paths, so both sides are normalised once, here.
   const normalised = candidates.entries.map((entry) => (entry.endsWith("/") ? entry.slice(0, -1) : entry));
+  const observedPaths = new Set(normalised);
   const answer = checkGitIgnoreSet(root, normalised);
-  if (answer === null) return { state: "failed" };
-  return { state: "applied", ignoredPaths: answer };
+  if (answer === null) return { state: "unavailable", cause: "failed", observedPaths };
+  return { state: "applied", ignoredPaths: answer, observedPaths };
 }
 
 /**
  * check-ignore (plain, -z) answers NUL-separated, exactly the candidates Git
- * judged ignored, nothing else and nothing invented. exit 1 with no output
- * means "none of these are ignored", which is a real answer; any other
- * failure is a refusal.
+ * judged ignored, nothing else and nothing invented. Two shapes are real
+ * answers: exit 0 with a NUL-terminated list of ignored paths drawn from the
+ * candidates this call sent, and exit 1 with no output ("none of these are
+ * ignored"). Anything else is an inconsistent reply and is refused, so a broken
+ * or dishonest answer can never be read as a clean exclusion pass.
  */
 function checkGitIgnoreSet(root: string, candidates: string[]): Set<string> | null {
   if (candidates.length === 0) return new Set();
@@ -770,19 +871,86 @@ function checkGitIgnoreSet(root: string, candidates: string[]): Set<string> | nu
       encoding: "utf8",
       input: `${candidates.join("\u0000")}\u0000`,
       stdio: gitStdioWithInput(root),
+      maxBuffer: GIT_STDOUT_MAX_BYTES,
     });
-    const entries = out.split("\u0000").filter((entry) => entry !== "");
+    // Success must be a nonempty, NUL-terminated list, and every record must be a
+    // candidate this call sent. An empty success, a missing final NUL, an empty
+    // path record, or a path that was never a candidate is inconsistent, so it
+    // is refused rather than filtered into a clean answer.
+    if (out === "" || !out.endsWith("\u0000")) return null;
+    const sent = new Set(candidates);
     const ignored = new Set<string>();
-    for (const path of entries) {
-      if (path === "") continue;
-      if (path.endsWith("/")) ignored.add(path.slice(0, -1));
-      else ignored.add(path);
+    for (const record of out.slice(0, -1).split("\u0000")) {
+      if (record === "") return null;
+      const path = record.endsWith("/") ? record.slice(0, -1) : record;
+      if (!sent.has(path)) return null;
+      ignored.add(path);
     }
+    if (ignored.size === 0) return null;
     return ignored;
   } catch (error) {
     const status = (error as NodeJS.ErrnoException & { status?: number }).status;
-    if (status === 1) return new Set();
+    // exit 1 means "none of these are ignored" only when it printed nothing.
+    if (status === 1) {
+      const stdout = (error as { stdout?: Buffer | string }).stdout;
+      const text = typeof stdout === "string" ? stdout : stdout?.toString("utf8") ?? "";
+      return text === "" ? new Set() : null;
+    }
     return null;
+  }
+}
+
+/**
+ * The disclosure a repository-content refusal carries when Git cannot establish
+ * which paths are ignored. The affected content is the whole walk: a failed
+ * `.gitignore` answer could hide any untracked path, and the independent
+ * `.ignore` metadata cannot be safely read either, so no repository content is
+ * read at all. Coverage is narrowed, never broadened.
+ */
+const GIT_REFUSE_REASON =
+  "Not read: Git could not establish which paths are ignored, so no repository content was read in " +
+  "this state. Nothing was invented on Git's behalf.";
+
+/**
+ * The disclosure a withheld subtree carries when an `.ignore` file there was
+ * refused (a link, unreadable, or over the metadata bound). The refused file
+ * could have named anything under its own folder, so that content is left
+ * unread rather than guessed around.
+ */
+const WITHHELD_IGNORE_REASON =
+  "Not read: an .ignore file here could not be read, so the paths it might have named were withheld.";
+
+/**
+ * The disclosure a withheld subtree carries when the exclusion scan could not
+ * discover whether an `.ignore` file exists there (a directory listing or open
+ * failure). The file, if any, was never read, so the content it might have
+ * excluded is left unread rather than guessed around.
+ */
+const WITHHELD_DISCOVERY_REASON =
+  "Not read: the .ignore source here could not be discovered, so the paths it might have named were withheld.";
+
+/**
+ * How the exclusion scan observed a child, by a direct `lstat` through the pinned
+ * parent, taken BEFORE any open. Only a confirmed symlink or a confirmed plain
+ * file is a safe skip: the walker skips a symlink the same way, and a plain file
+ * cannot hold a nested `.ignore`. A directory, or a child whose type could not be
+ * established, is not a safe skip.
+ *
+ * An open error is NOT proof that a child is a symlink. A directory can be
+ * replaced, briefly, by a regular file, or removed, so the open fails with
+ * ENOTDIR, ELOOP or ENOENT, and then be restored. The classification is therefore
+ * taken before the open and is never derived from the open errno.
+ */
+type ChildObservation = "symlink" | "non-directory" | "directory" | "unknown";
+
+function observeChild(parentFd: number, name: string): ChildObservation {
+  try {
+    const info = lstatSync(join(directoryHandlePath(parentFd), name));
+    if (info.isSymbolicLink()) return "symlink";
+    if (info.isDirectory()) return "directory";
+    return "non-directory";
+  } catch {
+    return "unknown";
   }
 }
 
@@ -806,6 +974,13 @@ interface IgnoreFileOutcome {
   covered: Set<string>;
   /** Per-file refusals, already worded for the not-checked list. */
   refusals: NotChecked[];
+  /**
+   * Directory scopes whose own `.ignore` was refused and could not be applied.
+   * The walk withholds each scope's subtree, because the refused file could have
+   * named anything under its own folder. The root scope ("") withholds the whole
+   * tree.
+   */
+  withheld: Map<string, string>;
 }
 
 function readIgnoreFiles(
@@ -813,8 +988,9 @@ function readIgnoreFiles(
   flags: WalkFlags,
   exclusionsFromPaths: ReadonlySet<string>,
   policyExcludedPaths: ReadonlySet<string>,
+  rootLicensingNames: Set<string> = new Set(),
 ): IgnoreFileOutcome {
-  const outcome: IgnoreFileOutcome = { covered: new Set(), refusals: [] };
+  const outcome: IgnoreFileOutcome = { covered: new Set(), refusals: [], withheld: new Map() };
   // Exclusion-before-read also applies inside this scan. aPathMatchesSet uses
   // the same matching the governance layer uses: the path itself, or anything
   // under a named directory. The git set is exact answers per path, and the
@@ -858,9 +1034,17 @@ function readIgnoreFiles(
           scope: top.dir === "" ? "(repo)" : `${top.dir}/.ignore`,
           reason: "The directory could not be read.",
         });
+        // The scan could not see this folder's children, so an `.ignore` in it
+        // (if any) is undiscovered and could have excluded anything below it.
+        // Withhold the folder so the walk never reads that content; the root
+        // scope withholds the whole tree.
+        outcome.withheld.set(top.dir, WITHHELD_DISCOVERY_REASON);
         continue;
       }
       const ignoreFilePath = top.dir === "" ? ".ignore" : `${top.dir}/.ignore`;
+      if (top.dir === "") {
+        for (const name of listed.value) if (isRootLicensingCandidate(name)) rootLicensingNames.add(name);
+      }
       // An .ignore file at an excluded path itself (named by the policy set,
       // excluded by git, or covered by an outer .ignore) is not read either:
       // exclusion-before-read extends to the ignore files themselves. No row
@@ -870,10 +1054,16 @@ function readIgnoreFiles(
         const ignore = readBoundedFile(top.fd, ".ignore", MAX_LOCAL_METADATA_BYTES);
         if (ignore.state === "refused") {
           const scope = top.dir === "" ? ".ignore" : `${top.dir}/.ignore`;
+          flags.unreadable = true;
           outcome.refusals.push({
             scope,
-            reason: `${ignore.reason.replace(/^\.ignore/, "The .ignore file")} No paths it might exclude were read.`,
+            reason: `${ignore.reason.replace(/^\.ignore/, "The .ignore file")} Its possible exclusions were withheld: the paths it might have named were not read.`,
           });
+          // The refused file could have named anything under its own folder, so
+          // that whole subtree is withheld from the walk, and this scan is not
+          // descended into it either. The root scope withholds the whole tree.
+          outcome.withheld.set(top.dir, WITHHELD_IGNORE_REASON);
+          continue;
         } else if (ignore.state === "ok") {
           // The subset: lines that are blank or start with `#` are skipped; every
           // other line is one clean relative segment with no globs and no
@@ -914,9 +1104,24 @@ function readIgnoreFiles(
         if (SKIP.has(name)) continue;
         const childPath = top.dir === "" ? name : `${top.dir}/${name}`;
         if (outcome.covered.has(childPath) || pathExcluded(childPath)) continue;
+        // Classify the child by a direct observation BEFORE any open. A confirmed
+        // symlink or plain file is skipped: the walker skips a symlink the same
+        // way, and a plain file cannot hold a nested `.ignore`.
+        const observed = observeChild(top.fd, name);
+        if (observed === "symlink" || observed === "non-directory") continue;
+        // Only a successfully opened directory permits descent into an exclusion
+        // source. Any non-ok outcome after a directory was observed permanently
+        // withholds that scope for this review, whatever coarse errno-derived
+        // label it carries: a "link" or "absent" result from a failed open is not
+        // proof of a stable symlink or a stable absence, and the content the
+        // undiscovered `.ignore` might have excluded must not be read.
         const child = openChildDirectory(top.fd, name);
-        if (child.state !== "ok") continue;
-        stack.push({ fd: child.value, dir: childPath });
+        if (child.state === "ok") {
+          stack.push({ fd: child.value, dir: childPath });
+          continue;
+        }
+        flags.unreadable = true;
+        outcome.withheld.set(childPath, WITHHELD_DISCOVERY_REASON);
       }
     } finally {
       if (!borrowed) closeSync(top.fd);
@@ -1100,6 +1305,19 @@ interface WalkExclusions {
   /** Path -> source word naming why it was skipped ("gitignore" | ".ls policy"). */
   ignorePaths: ReadonlyMap<string, string>;
   ignorePrefixes: ReadonlySet<string>;
+  /**
+   * A whole-walk refusal: Git could not establish which paths are ignored, so
+   * no repository content is read. Non-null means every path is withheld with
+   * this reason, and nothing under the root is opened.
+   */
+  refuseAll: string | null;
+  /**
+   * Subtree scopes whose exclusion source could not be established (a refused
+   * `.ignore` file). A withheld path is not opened or descended, because the
+   * refused file could have excluded it. The root scope (""), if present,
+   * withholds the whole tree.
+   */
+  withheld: ReadonlyMap<string, string>;
 }
 
 /**
@@ -1148,7 +1366,8 @@ function walk(
   rootFd: number,
   exclusions: WalkExclusions,
   flags: WalkFlags = { capHit: false, vendored: false, agent: false, unreadable: false },
-): { files: ReviewFile[]; skipped: NotChecked[]; flags: WalkFlags; streamed: StreamedArtifactScan[] } {
+  rootLicensingNames: Set<string> = new Set(),
+): { files: ReviewFile[]; skipped: NotChecked[]; flags: WalkFlags; streamed: StreamedArtifactScan[]; rootLicensing: RootLicensingInput[] } {
   const files: ReviewFile[] = [];
   const skipped: NotChecked[] = [];
   const streamed: StreamedArtifactScan[] = [];
@@ -1175,7 +1394,11 @@ function walk(
         const right = b.name + (b.isDirectory() ? "/" : "");
         return left < right ? -1 : left > right ? 1 : 0;
       });
-      for (const entry of entries) { names.push(entry.name); listedDirectories.set(entry.name, entry.isDirectory()); }
+      for (const entry of entries) {
+        names.push(entry.name);
+        listedDirectories.set(entry.name, entry.isDirectory());
+        if (dir === root && isRootLicensingCandidate(entry.name)) rootLicensingNames.add(entry.name);
+      }
     } catch {
       if (directoryFd !== undefined) closeSync(directoryFd);
       flags.unreadable = true;
@@ -1211,6 +1434,21 @@ function walk(
         } else {
           skipped.push({ scope, reason: `Skipped directory ${name} was not read, so its notices were not checked.` });
         }
+        continue;
+      }
+      // Refusals resolve before the lstat and before any open, so a withheld
+      // path is never touched. A whole-walk refusal (Git could not establish the
+      // ignore set) withholds everything; a withheld subtree (a refused .ignore)
+      // withholds its own scope. Both sit after SKIP so the named vendored/cache
+      // skips keep their own, more specific disclosure.
+      const refuseReason = exclusions.refuseAll ?? exclusions.withheld.get("");
+      if (refuseReason !== undefined && refuseReason !== null) {
+        skipped.push({ scope: skippedScope, reason: refuseReason });
+        continue;
+      }
+      const withheldReason = exclusions.withheld.get(skippedScope);
+      if (withheldReason !== undefined) {
+        skipped.push({ scope: skippedScope, reason: withheldReason });
         continue;
       }
       const full = join(dir, name);
@@ -1326,7 +1564,24 @@ function walk(
   }
 
   visit(root, fstatSync(rootFd), `${directoryHandlePath(rootFd)}/.`);
-  return { files, skipped, flags, streamed };
+  const admittedPaths = new Set(files.map(file => file.path));
+  const rootSkipReasons = new Map<string, Set<string>>();
+  const wholeRootReasons = new Set<string>();
+  for (const row of skipped) {
+    if (row.scope === "(repo)") wholeRootReasons.add(row.reason);
+    if (!rootLicensingNames.has(row.scope)) continue;
+    const reasons = rootSkipReasons.get(row.scope) ?? new Set<string>();
+    reasons.add(row.reason);
+    rootSkipReasons.set(row.scope, reasons);
+  }
+  const rootLicensing = [...rootLicensingNames].sort().map(path => {
+    const reasons = [...new Set([...(rootSkipReasons.get(path) ?? []), ...wholeRootReasons])];
+    return admittedPaths.has(path) ? { path } : {
+      path,
+      unreadReason: reasons.length > 0 ? [...new Set(reasons)].join("; ") : "Named in root metadata, but no whole-content licensing text was admitted.",
+    };
+  });
+  return { files, skipped, flags, streamed, rootLicensing };
 }
 
 function rankLockPackages(packages: LockPackage[]): LockPackage[] {
@@ -1592,6 +1847,15 @@ async function main(): Promise<void> {
   // state that cannot be measured is carried, never guessed.
   const gitFacts = gitTrackedSet(root);
   const gitIgnores = computeGitIgnores(root, gitFacts);
+  // Already-known metadata only: no new enumeration, content read or permission.
+  const rootLicensingNames = new Set([...(gitFacts.tracked ?? []), ...gitIgnores.observedPaths].filter(isRootLicensingCandidate));
+  // Fail-safe: when Git cannot establish which paths are ignored, no repository
+  // content is read. A failed `.gitignore` answer could hide any untracked path,
+  // and the independent `.ignore` metadata cannot be safely read either (its own
+  // ignore status is unknown), so reading any content could broaden past an
+  // exclusion. Refusing the whole walk is the safest bounded fallback: coverage
+  // is narrowed, never broadened.
+  const gitRefused = gitIgnores.state === "unavailable";
   // The walk flags are created here, so a refusal inside readIgnoreFiles (its
   // own directory listing is often the first readdir on the pinned root) lands
   // on the same flags object the walk fills and completeness reads.
@@ -1600,12 +1864,19 @@ async function main(): Promise<void> {
   // directory the person excluded is refused before it is opened, and its
   // nested .ignore is never read or parsed. The walk's own policy-ignored
   // disclosure (built below from the same map) already covers each caught path.
-  const ignoreRead = readIgnoreFiles(
-    rootFd,
-    flags,
-    gitIgnores.state === "applied" ? gitIgnores.ignoredPaths : new Set(),
-    new Set(policyIgnorePaths.keys()),
-  );
+  //
+  // When Git cannot establish the ignore set, the `.ignore` scan is not run: the
+  // walk reads nothing, and reading an `.ignore` file whose own git-ignore status
+  // is unknown would itself be a read of possibly-ignored content.
+  const ignoreRead: IgnoreFileOutcome = gitRefused
+    ? { covered: new Set(), refusals: [], withheld: new Map() }
+    : readIgnoreFiles(
+        rootFd,
+        flags,
+        gitIgnores.state === "applied" ? gitIgnores.ignoredPaths : new Set(),
+        new Set(policyIgnorePaths.keys()),
+        rootLicensingNames,
+      );
   // One exclusion map, each entry naming its source: the policy's own
   // ignorePaths, Git's answer for the untracked candidates, and the `.ignore`
   // subset. The policy map keys can be directories, so children match through
@@ -1619,8 +1890,10 @@ async function main(): Promise<void> {
   const exclusions: WalkExclusions = {
     ignorePaths: new Map([...policyExclusions, ...gitExclusions]),
     ignorePrefixes: ignoreRead.covered,
+    refuseAll: gitRefused ? GIT_REFUSE_REASON : null,
+    withheld: ignoreRead.withheld,
   };
-  const { files, skipped, streamed } = walk(root, acknowledged, rootFd, exclusions, flags);
+  const { files, skipped, streamed, rootLicensing } = walk(root, acknowledged, rootFd, exclusions, flags, rootLicensingNames);
   const lock = files.find((file) => (file.path.split("/").pop() ?? "") === "package-lock.json");
   // Any lockfile the tree holds that was not inventoried and queried is a
   // version set that was in hand and unchecked: a Cargo.lock, a yarn.lock, or a
@@ -1633,7 +1906,7 @@ async function main(): Promise<void> {
   const unqueriedLockfileInHand = files.some(
     (file) => isLockfile(file.path) && file.path !== lock?.path,
   );
-  const inventory = lock === undefined ? null : inventoryNpmLock(lock.content, directNames(files));
+  const inventory = lock === undefined ? null : inventoryNpmLock(lock.content, directNames(files), npmManifestDeclarations(files, lock.path));
   const registry = offline || inventory === null
     ? null
     : await lookupPackages(inventory.packages.filter((pkg) => !pkg.dev).slice(0, 15));
@@ -1644,7 +1917,7 @@ async function main(): Promise<void> {
   // measured, so tracked-env cannot fire and one not-checked line says so.
   const trackedEnvPaths: ReadonlySet<string> | null = gitFacts.tracked;
   const trackedEnvUnknown = trackedEnvPaths === null;
-  const report = buildLocalReport(files, skipped, registry, advisories, lock, readLicenceAllow(policyRead), trackedEnvPaths, streamed);
+  const report = buildLocalReport(files, skipped, registry, advisories, lock, readLicenceAllow(policyRead), trackedEnvPaths, streamed, rootLicensing);
   // Tracked-state honesty, in the not-checked list. One line for the whole
   // rule, so the gap is named once and never per-file, whatever the file count.
   if (trackedEnvUnknown) {
@@ -1654,15 +1927,27 @@ async function main(): Promise<void> {
         "Tracked status of .env files could not be judged from this folder, so the tracked-environment-file rule did not run. Unknown stays unknown.",
     });
   }
-  // The Git ignore source, when it could not be applied. A not-git folder is an
-  // ordinary disclosed state, not an error; a Git failure inside a tree is a
-  // refusal, and the paths that might be ignored were read, which is why that
-  // must be stated, not left silent.
-  if (gitIgnores.state === "failed") {
+  // The Git ignore source, when it could not be established. A not-git folder
+  // is an ordinary disclosed state, not an error. A git that could not answer
+  // (no binary, an error, an inconsistent reply, or a failed lookup inside a
+  // tree) is a fail-safe: the walk read no repository content, and that is stated
+  // here. The run is partial, so it is never presented as a clean scope that was
+  // never proven. The wording names walker content only; the review's own
+  // metadata inputs (its `.ls/policy.yaml`, and `.gitignore` when it writes its
+  // own `.ls/` line) are read separately and are not repository content.
+  if (gitIgnores.state === "unavailable") {
+    flags.unreadable = true;
     report.notChecked.push({
       scope: ".gitignore",
       reason:
-        "git could not answer which paths are ignored, so the .gitignore exclusions were not applied and paths that might be ignored were not excluded. Nothing was invented on Git's behalf.",
+        gitIgnores.cause === "missing"
+          ? "Git could not be run, so which paths are ignored could not be established. The walk read no repository content in this state, and nothing was invented on Git's behalf."
+          : "Git could not answer which paths are ignored, so the .gitignore exclusions could not be established. The walk read no repository content in this state, and nothing was invented on Git's behalf.",
+    });
+    report.notChecked.push({
+      scope: ".ignore",
+      reason:
+        "The .ignore scan was not run, and the walk read no repository content, so no .ignore file was read in this state.",
     });
   } else if (gitIgnores.state === "not_a_git_tree") {
     report.notChecked.push({
@@ -1816,6 +2101,7 @@ async function main(): Promise<void> {
     analyzerCodeSkippedLines: omissions?.codeSkippedLines ?? 0,
     analyzerSuppressedMatches: omissions?.suppressedMatches ?? 0,
     artifactCoverage: report.artifactCoverage,
+    unresolvedLicenseInputs: report.unresolvedLicenseInputs,
   });
   report.status = completeness.status;
   report.statusNote = completeness.note;

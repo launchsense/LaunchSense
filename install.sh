@@ -2,7 +2,7 @@
 # Local review for a checkout of this repository.
 # Everyone who uses LaunchSense runs this script. It installs the skill,
 # registers the local file review and the online policy source, and asks one
-# question about reading files in the project.
+# question about reading agent instruction files and saving the local report.
 #
 # The folder to review defaults to this checkout, and that default is printed
 # so it is never silent. Name your own repo with --root <folder> or
@@ -22,10 +22,13 @@ set -eu
 # one that is validated and written.
 ROOT=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
 TIER=alpha
-# The wording of the local file-read acknowledgement. Its own version, because it
-# is its own question. Default is yes (operator decision), so the record and the
-# register call it an acknowledgement and not consent.
-FILES_NOTICE_VERSION=2026-10-06
+# The wording of the local agent-file/report acknowledgement. Its own version,
+# because it is its own question. Default is yes (operator decision), so the
+# record and the register call it an acknowledgement and not consent. The version
+# changed with the wording: the question now names exactly what the
+# acknowledgement covers, the agent instruction files and the saved local report
+# copy, so an answer given for the older, broader wording is not applied to it.
+FILES_NOTICE_VERSION=2026-10-14
 CONFIG_DIR="$HOME/.config/launchsense"
 CONFIG="$CONFIG_DIR/config.json"
 CONSENT_LOG="$CONFIG_DIR/consent.jsonl"
@@ -231,17 +234,33 @@ decision_time_from_log_purpose() {
   return 0
 }
 
-# The previous local config, when it exists, so the file-read acknowledgement
-# below can keep a remembered answer for the wording in force now. Read once.
-PRIOR=""
-if [ -f "$CONFIG" ]; then
-  PRIOR=$(cat "$CONFIG")
-fi
+# The remembered decision for the wording in force now, read from the specific
+# filesConsent object in the prior config. node parses the JSON, so a version
+# string in an unrelated field cannot satisfy the check: the version and the
+# acknowledged flag must be the same object's fields, and acknowledged must be a
+# boolean. Prints yes, no, or nothing when there is no valid current decision.
+# It never prints a config value. node is the product's own runtime; without it
+# the answer is "no decision", so the question is asked again rather than guessed.
+prior_files_decision() {
+  [ -f "$CONFIG" ] || return 0
+  command -v node > /dev/null 2>&1 || return 0
+  node -e '
+    const fs = require("fs");
+    let data;
+    try { data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch { process.exit(0); }
+    const files = data && typeof data === "object" && !Array.isArray(data) ? data.filesConsent : undefined;
+    if (!files || typeof files !== "object" || Array.isArray(files)) process.exit(0);
+    if (files.noticeVersion !== process.argv[2]) process.exit(0);
+    if (typeof files.acknowledged !== "boolean") process.exit(0);
+    process.stdout.write(files.acknowledged ? "yes" : "no");
+  ' "$CONFIG" "$FILES_NOTICE_VERSION" 2> /dev/null || true
+  return 0
+}
 
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || printf 'unknown')
 
 echo "LaunchSense local review for this checkout."
-echo "This script installs the skill, registers the local file review and the online policy source, and asks one question about reading files in this project."
+echo "This script installs the skill, registers the local file review and the online policy source, and asks one question about reading agent instruction files and saving the local report."
 echo "This local review reads files on this machine. It does not upload them."
 if [ "$TARGET_SET" -eq 1 ]; then
   echo "The review target is the folder you named: $TARGET_ROOT"
@@ -256,28 +275,27 @@ fi
 # These two names stay in the config, always false and off, because the local
 # review still reads them as a compatibility shape; they grant nothing.
 
-# The local file-read acknowledgement. Default is yes: pressing enter allows the
-# expanded read, which is the project files and the agent instruction files. A
+# The local agent-file/report acknowledgement. Default is yes: pressing enter
+# allows the extra reads, which are the agent instruction files, and the saving
+# of the local report copy under .ls/reports. Ordinary project files are read
+# only for a review the person asks for, which the skill asks them to approve
+# separately; this question is not a blanket gate on reading the working tree. A
 # pre-answered question is not a freely given agreement, so this is recorded and
 # described as an acknowledgement, and the lawful basis is contract, not consent.
 # It is asked once per wording: an answer already on record for this version is
 # kept, so a second run does not ask again or add a line.
 FILES_GRANTED=false
 FILES_REMEMBERED=""
-if [ -f "$CONFIG" ]; then
-  case "$PRIOR" in
-    *'"filesConsent"'*'"noticeVersion": "'"$FILES_NOTICE_VERSION"'"'*)
-      case "$PRIOR" in
-        *'"acknowledged": true'*) FILES_GRANTED=true; FILES_REMEMBERED="yes" ;;
-        *) FILES_GRANTED=false; FILES_REMEMBERED="no" ;;
-      esac
-      ;;
-  esac
-fi
+DECISION="$(prior_files_decision)"
+case "$DECISION" in
+  yes) FILES_GRANTED=true; FILES_REMEMBERED="yes" ;;
+  no) FILES_GRANTED=false; FILES_REMEMBERED="no" ;;
+esac
 if [ -z "$FILES_REMEMBERED" ]; then
-  printf '%s\n' "Allow the local LaunchSense server to read files in this project folder,"
-  printf '%s\n' "including agent instruction files like AGENTS.md and CLAUDE.md?"
-  printf '%s\n' "The reads happen on this machine. Nothing is uploaded."
+  printf '%s\n' "Allow the local LaunchSense server to read agent instruction files like AGENTS.md,"
+  printf '%s\n' "and to save its local report copy under .ls/reports?"
+  printf '%s\n' "Those stay on this machine. Nothing is uploaded."
+  printf '%s\n' "An ordinary review you ask for still reads the project files."
   printf '%s\n' "Default is yes. Press enter to allow, or type no to refuse."
   printf '%s' "yes or no [yes]: "
   FILES_ANSWER=""
@@ -285,7 +303,7 @@ if [ -z "$FILES_REMEMBERED" ]; then
   case "$FILES_ANSWER" in
     n | N | no | NO | No)
       FILES_GRANTED=false
-      echo "The expanded read stays off. The review reads only the working tree."
+      echo "The agent instruction files stay listed as not checked, and no local report copy is saved."
       ;;
     *)
       FILES_GRANTED=true
