@@ -5,7 +5,7 @@ description: Use when the repo you have open should be reviewed before you share
 
 # LaunchSense
 
-Skill version: 2026-10-14.2.
+Skill version: 2026-10-15.1.
 
 This skill reviews **your** checkout, the repository you installed it into, not only a checkout of LaunchSense itself. It runs on your machine, reads your working tree including uncommitted work, uploads no files and no file text, and has no hourly limit.
 
@@ -107,6 +107,20 @@ The report opens with START HERE, then the lead fix prompt and the next prompts 
 
 A solution here is the ranked, ordered fix path the fixed rules produce. It is not prose advice invented for the repo, and it is not a model's opinion.
 
+## The audit you write: two levels
+
+Level 1 is this engine run. Its findings are candidates until someone reads the named file and line. Never quote a Level 1 severity as a settled fact in your audit before that read has happened. The START HERE lead is Level 1 order, not a verdict.
+
+Level 2 is the verification pass you write into the audit. It runs on the files, and it never touches engine output: the engine report keeps every finding, every severity, and its own counts. Level 2 lives in your audit and in the governance file, nowhere else.
+
+- Every finding gets a verdict: Confirmed, Not real, Uncertain, or Not verified. Unknown stays unknown. A Not verified verdict names what was not checked, and no outcome is called verified without file evidence.
+- Every verdict carries a disposition: Fix now, Downgrade, Accept, or Advice corrected. A pattern that is real but harmless is Confirmed with Downgrade, not a false alarm.
+- One verdict states its evidence: the file and line, the content class (test fixture, cryptographic constant, locale string, generated value), and one sentence of why. Many hits of one shape share one grouped verdict, and the grouped row counts every hit.
+- Advice matches the environment. A client-only bundle gets no environment variable or rotation advice. A mismatch is recorded as Advice corrected, naming the environment.
+- A Not real verdict is proposed as an acceptance in `.ls/policy.yaml` with a reason, shown to the person, and written only on their confirmation. Once a fingerprint has a verdict, an unchanged finding does not need a second pass; new and changed findings get one.
+- Your audit carries a small metrics table, local only: findings by rule, verdicts by rule, and per-rule precision, confirmed against adjudicated. A rule whose precision stays low against adjudicated findings in real runs is a calibration candidate. Say so as an observation for the engine's maintainers; it is not a change you make here.
+- An observation that is not an engine finding, such as a design risk the fixed rules cannot see, is labelled an audit observation. It never shares a row, a count, or a severity with an engine finding, and it never raises the engine's numbers.
+
 ## Licences, and the file you can commit
 
 For an npm project with a committed `package-lock.json`, the review reads the licence every installed package declares, direct and transitive, and writes a third-party notice file named `THIRD-PARTY-NOTICES.generated.md`. That file is deterministic: the same lockfile gives the same bytes. It names each component with its licence, states what that licence text asks for with the clause it came from, and lists what was not read. It is a declaration, not legal advice.
@@ -133,6 +147,7 @@ The AI never decides a finding, a severity, a licence fact, consent, who a calle
 - The not-checked list goes back as it is, line for line. Do not summarise it, shorten it, or merge its lines. If it has 19 entries, the person sees 19 entries. A shortened list reads as a complete one, and that is the one thing this product must never do.
 - The coverage line goes back as it is: the file count, the skip count, and the sentence "A partial result is not a pass."
 - Explain a fixed finding in plain words.
+- In your audit, a finding may carry its Level 2 verdict and disposition, with the file and line that support them. Engine findings and counts stay quoted unchanged.
 - If the report includes a line that starts with `Suggestion, quoted from the model`, repeat that quote and say it is not a finding.
 
 ## What you must not do

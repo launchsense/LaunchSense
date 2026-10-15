@@ -46,6 +46,59 @@ export const PROVIDER_SHAPES: RegExp[] = [
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/,                  // PEM block
 ];
 
+// Case-insensitive exact hex: mathematical domain parameters of the standard
+// curves. These are public constants of the cryptography itself, so a value
+// equal to one of them cannot be a credential, whatever the name it sits under.
+// Measured 2026-10-15: the lead finding of a bitaddress.org review was eleven
+// "hardcoded credentials" that were one curve-order constant, three SEC1 public
+// keys, three published test scalars, and two WIF vectors.
+const CRYPTO_DOMAIN_PARAMETERS = new Set([
+  // secp256k1: field prime (p), group order (n), and order minus one (n-1).
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140",
+  // NIST P-256 (secp256r1): field prime and group order.
+  "FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551",
+  // Curve25519 field prime (2^255 - 19) and the Ed25519 group order.
+  "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED",
+  "1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED",
+]);
+
+// Case-sensitive exact strings: published key vectors carried by well-known test
+// suites, here the bitaddress.org ninja.unittests.js fixtures this run measured.
+// A leaked key equal to a published vector is itself public data. Extending this
+// set is measurement work done with the precision suite, never a guess.
+const PUBLISHED_KEY_VECTORS = new Set([
+  "B1202A137E917536B3B4C5010C3FF5DDD4784917B3EEF21D3A3BF21B2E03310C",
+  "7DE52819F1553C2BFEDE6A2628B6FDDF03C2A07EB21CF77ACA6C2C3D252E1FD9",
+  "292665C3872418ADF1DA7FFA3A646F2F0602246DA6098A91D229C32150F2718B",
+  "5J8QhiQtAiozKwyk3GCycAscg1tNaYhNdiiLey8vaDK8Bzm4znb",
+  "KxbhchnQquYQ2dfSxz7rrEaQTCukF4uCV57TkamyTbLzjFWcdi3S",
+]);
+
+// An SEC1-encoded EC public key is public by definition: uncompressed is 0x04
+// plus 64 bytes of hex, compressed is 0x02 or 0x03 plus 32 bytes. Any other value
+// of these hex lengths is judged normally.
+const SEC1_PUBLIC_KEY = /^(?:04[0-9a-fA-F]{128}|0[23][0-9a-fA-F]{64})$/;
+
+/**
+ * Public cryptographic material: exact domain parameters, exact published test
+ * vectors, and SEC1 public-key shapes. Nothing else.
+ *
+ * Placed after the provider shapes and the JWT check on purpose. Those formats
+ * are credentials on sight and a real provider key or token can never equal a
+ * published constant, so this branch never swallows one. It runs before the
+ * generic entropy floor, which is the branch that made these rows fire.
+ */
+export function isPublicCryptoMaterial(value: string): boolean {
+  const t = value.trim();
+  if (SEC1_PUBLIC_KEY.test(t)) return true;
+  if (t.toUpperCase() !== t.toLowerCase() && CRYPTO_DOMAIN_PARAMETERS.has(t.toUpperCase())) return true;
+  if (PUBLISHED_KEY_VECTORS.has(t)) return true;
+  return false;
+}
+
 /** Exact values that are never a secret, whatever the variable is called. */
 const PLACEHOLDER_VALUES = new Set([
   "", "changeme", "change_me", "change-me", "changethis", "changeit", "change_password",
@@ -162,6 +215,12 @@ export function looksLikeSecretValue(value: string, wasQuoted = true, name = "")
     if (shape.test(t)) return true;
   }
   if (/^[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/.test(t)) return true; // JWT
+
+  // Public cryptographic material is not a secret. Exact domain parameters, exact
+  // published test vectors, and SEC1 public-key shapes only, so a real 32-byte
+  // key under a key name, a leaked WIF key with any other value, and every other
+  // hex of these lengths still fires.
+  if (isPublicCryptoMaterial(t)) return false;
 
   const low = t.toLowerCase();
   if (PLACEHOLDER_VALUES.has(low)) return false;
