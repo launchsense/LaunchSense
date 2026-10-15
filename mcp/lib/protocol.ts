@@ -96,7 +96,7 @@ export function validateEnvelope(request: ParsedRequest): RpcError | null {
   if (!validID(request.id)) {
     return {
       code: -32600,
-      message: `Invalid Request. The id member must be a string, a number or null. Got ${jsonTypeOf(request.id)}. The id is echoed back unchanged on every answer, so a wrong one is a mistake worth naming rather than passing along.`,
+      message: `Invalid Request. The id member must be a string, a number or null. Got ${jsonTypeOf(request.id)}. A wrong id is not passed along: the answer carries id null. Measured 2026-10-15, protocol polish.`,
     };
   }
   return null;

@@ -2,6 +2,13 @@
 
 This is the engine and the skill. Clone it, run one installer, and your coding tool audits your repo on your own machine.
 
+## What this repo is, what is private, and how the hosted side is offered
+
+- This repository is the public engine: the local checks, the installer and the skill. It is one half of the product.
+- The other half is private: the hosted policy source, the website, the backend, the tests, and the setup that runs the engine and its policy source together. The complete self-hosted setup comes from the private repo. Contact the creator to get it: https://www.withkeshav.com/contact
+- At the moment, everything hosted is offered free, and the hosted side is used through a free MCP: the policy source serves the rules, the checklist and the audit instructions, and the engine in this repo reads them on demand.
+- One fact stated plainly, so there is no confusion: the chat endpoint has no auth. No is the answer, read from code rather than a live probe: no Authorization header was seen in the tx() function. Treat everything that endpoint receives as public.
+
 The two halves are separate on purpose. The checks live here: fixed analyzers, the severity table, the report builder, the governance reader. The coaching material lives online: the policy source serves the rules, the checklist, and the audit instructions, and it holds no code of yours. A coaching change reaches you on the next policy fetch. A change to a detector is a code change, and code reaches you when you pull this repo.
 
 ## Install

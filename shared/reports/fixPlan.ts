@@ -46,7 +46,7 @@ const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[
   },
   "secret.github-token": {
     title: "Revoke the exposed GitHub token",
-    why: "Tokens in tracked files can be used by anyone who can read the repo.",
+    why: "A token in the files read can be used by anyone who can read them.",
     checklist: [
       "Revoke the token in GitHub settings.",
       "Issue a replacement with the smallest scope that works.",

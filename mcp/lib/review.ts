@@ -79,12 +79,15 @@ export function looksLikeCheckout(root: string): boolean {
 // reviewRootNote names the folder the review read when that folder is not a
 // checkout. A wrong root is otherwise invisible: the report is a confident
 // review of whatever that folder held, and the reader never learns which folder
-// it was. A checkout gets no line, so the normal case stays quiet.
+// it was. A checkout gets no line, so the normal case stays quiet. The advice
+// names the check the person might want, without telling a correctly
+// configured customer run that its setting is wrong (measured 2026-10-15 on
+// the purple round-1 wording finding).
 export function reviewRootNote(root: string): string {
   if (looksLikeCheckout(root)) {
     return "";
   }
-  return `Reviewed folder: ${root}\nThat folder is what the review read. It has no mcp/review-entry.ts and no mcp/server.ts, so it is not a LaunchSense checkout. If this is the wrong folder, set LAUNCHSENSE_ROOT to the absolute checkout root and ask again.`;
+  return `Reviewed folder: ${root}\nThat folder is what the review read. It is not the LaunchSense checkout, which is the normal case for a customer repo. If the review was meant for a different folder, fix LAUNCHSENSE_ROOT to its absolute path and ask again.`;
 }
 
 // checkoutAbove returns the checkout that owns folder, or "" when folder is not

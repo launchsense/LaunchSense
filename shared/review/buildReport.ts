@@ -408,6 +408,26 @@ export function refreshDerivations(report: ReviewReport): void {
   report.prompts = derived.prompts;
 }
 
+// Row text for secret findings when tracking is unknowable (tracked set null,
+// measured 2026-10-15 on the purple round-1 wording finding): the "tracked
+// file" titles assert a fact the run cannot know, so three rules read neutral
+// source wording. A measured tracked set keeps the original wording, which
+// carries the stronger and true warning there.
+const NEUTRAL_ROW_TEXT: Record<string, { title: string; why: string }> = {
+  "secret.private-key": {
+    title: "Private key material in source",
+    why: "A committed private key must be treated as public from that moment on.",
+  },
+  "secret.github-token": {
+    title: "GitHub token in source",
+    why: "Anyone who can read these files can use the token.",
+  },
+  "secret.aws-key": {
+    title: "Cloud access key in source",
+    why: "Committed cloud keys are harvested by automated scanners within minutes.",
+  },
+};
+
 export function buildLocalReport(
   files: ReviewFile[],
   skipped: NotChecked[],
@@ -433,7 +453,8 @@ export function buildLocalReport(
   const findings: ReviewFinding[] = [];
   const artifactSignals: ReviewReport["artifactSignals"] = [];
   for (const match of secretScan) {
-    const text = TEXT[match.ruleId] ?? {
+    const neutral = trackedEnvPaths === null ? NEUTRAL_ROW_TEXT[match.ruleId] : undefined;
+    const text = neutral ?? TEXT[match.ruleId] ?? {
       title: match.ruleId,
       why: "A fixed check matched this line.",
     };
@@ -442,7 +463,8 @@ export function buildLocalReport(
   for (const artifact of streamedRead) {
     if (artifact.result === null) continue;
     for (const hit of artifact.result.hits) {
-      const text = TEXT[hit.ruleId];
+      const neutral = trackedEnvPaths === null ? NEUTRAL_ROW_TEXT[hit.ruleId] : undefined;
+      const text = neutral ?? TEXT[hit.ruleId];
       if (text === undefined) throw new TypeError("Unclassified provider signature rule");
       const row = finding(hit.ruleId, hit.path, hit.line, text.title, text.why, `provider-stream-v1 at byte ${hit.byteOffset}`);
       row.byteOffset = hit.byteOffset;

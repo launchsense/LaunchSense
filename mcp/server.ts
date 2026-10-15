@@ -80,11 +80,13 @@ function toolText(text: string, isError: boolean): Record<string, unknown> {
 // runs, so a client that wrote initialize and its next request in one write has
 // both admitted in that order.
 function begin(request: ParsedRequest): RpcError | null {
-  const envelopeError = validateEnvelope(request);
-  if (envelopeError) {
-    return envelopeError;
-  }
   if (request.method === "initialize") {
+    // An id-less initialize is a stray notification: it is never answered, and
+    // it must not consume the one initialize slot this session has. Measured
+    // 2026-10-15, protocol polish: a stray notification burned the handshake.
+    if (!request.hasId) {
+      return null;
+    }
     if (session.initialized) {
       return {
         code: -32600,
@@ -243,6 +245,15 @@ const reader = new LineReader((line, oversize) => {
   // never answered. An id that is present and null is a request, answered with
   // id null, which is what JSON-RPC 2.0 says about a null id.
   const notification = !request.hasId;
+  // An invalid envelope is answered even on a notification line, and the
+  // answer carries id null: a broken envelope has no trustworthy id to echo,
+  // so a wrong id is reflected nowhere. Measured 2026-10-15, protocol polish:
+  // a bare null line reached stderr only, and an object id echoed verbatim.
+  const envelopeRefusal = validateEnvelope(request);
+  if (envelopeRefusal) {
+    answer(null, undefined, envelopeRefusal);
+    return;
+  }
   const refusal = begin(request);
   if (refusal) {
     if (notification) {

@@ -42,4 +42,6 @@ export const defaultApiUrl = "https://harmless-chihuahua-667.convex.site";
 export interface RpcError {
   code: number;
   message: string;
+  /** Optional diagnostic payload for an error answer. Protocol only. */
+  data?: unknown;
 }

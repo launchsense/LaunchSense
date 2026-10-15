@@ -92,6 +92,124 @@ function isConfigStylePath(path: string): boolean {
   return CONFIG_STYLE_EXTENSIONS.some((ext) => base.endsWith(ext));
 }
 
+// DOC-style files: documentation contexts where the providers' own published
+// example keys appear on purpose. Measured 2026-10-15 on the purple round-1 red
+// corpus: a README quickstart carrying AKIAIOSFODNN7EXAMPLE (Amazon's
+// documented example id) fired as a high "Cloud access key in a tracked file"
+// row. In a doc file, an exact published example value or a value carrying an
+// obvious placeholder word is not a secret. The exemption is doc-context only
+// and never shape-wide: a real-shaped key in a doc still fires, and the same
+// example in source still fires.
+const DOC_STYLE_SUFFIXES = [".md", ".mdx", ".rst", ".adoc", ".txt"];
+
+function isDocStylePath(path: string): boolean {
+  if (path.length === 0) return false;
+  const base = basename(path).toLowerCase();
+  return DOC_STYLE_SUFFIXES.some((s) => base.endsWith(s));
+}
+
+const DOC_EXAMPLE_VALUES = new Set([
+  "AKIAIOSFODNN7EXAMPLE",
+]);
+
+function docValueExampleish(value: string): boolean {
+  return DOC_EXAMPLE_VALUES.has(value.toUpperCase()) ||
+    /(example|placeholder|sample|synthetic)/i.test(value);
+}
+
+// The value one assignment carries, for the doc-example decision inside the
+// credential gate. Quoted or bare, first token.
+function assignmentValueIsDocExample(line: string, from: number): boolean {
+  const rest = line.slice(from).trim();
+  const quoted = /^(['"])([^'"]*)\1/.exec(rest);
+  const value = quoted !== null ? quoted[2] : (rest.split(/[\s;,)]/)[0] ?? "").replace(/["',;:]+$/, "");
+  if (value.length === 0) return false;
+  return docValueExampleish(value);
+}
+
+// Every provider-shaped run on a line, for the doc-example decision above.
+function providerMatchSpans(line: string): string[] {
+  const spans: string[] = [];
+  for (const shape of PROVIDER_SHAPES) {
+    const globalShape = new RegExp(shape.source, /g/.test(shape.flags) ? shape.flags : shape.flags + "g");
+    let m: RegExpExecArray | null;
+    while ((m = globalShape.exec(line)) !== null) {
+      spans.push(m[0]);
+      if (m.index === globalShape.lastIndex) globalShape.lastIndex++;
+    }
+  }
+  return spans;
+}
+
+// Single-hop alias resolution. A secret written under an innocent name and read
+// by a credential-named variable is still committed source: `vault` holding a
+// literal that `password = vault` reads. Same file only. Definitions are
+// collected from quoted single-string assignments, first definition wins, and a
+// judged value may be one resolved identifier or up to four parts of quoted
+// literals and resolved identifiers joined by `+` (`scheme + rest`). A second
+// hop and an object reference deliberately dead-end, so the pass stays narrow.
+// Measured 2026-10-15 on the purple round-1 red corpus.
+function collectLiteralAssignments(lines: readonly string[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const line of lines) {
+    if (line.length === 0 || line.length > MAX_LINE_LENGTH) continue;
+    const trimmed = line.trim();
+    if (trimmed.startsWith("#") || trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
+    const assignAll = /["']?\s*(?::(?![=:])|=(?![=>])|:=)\s*/g;
+    let assign: RegExpExecArray | null;
+    while ((assign = assignAll.exec(line)) !== null) {
+      const nameMatch = /([A-Za-z0-9_]+)$/.exec(line.slice(0, assign.index));
+      if (nameMatch === null) continue;
+      const rest = line.slice(assign.index + assign[0].length).trim();
+      if (/^(process\.env|os\.getenv|os\.environ|sys\.environ|ENV\[|getenv|_ENV\[|\$env:|configuration\[|System\.getenv|\$\{\{|\$\{|\$\(|%\w+%|\$[A-Za-z_])/i.test(rest)) continue;
+      const quoted = /^(['"])([^'"]*)\1/.exec(rest);
+      if (quoted === null) continue;
+      const after = rest.slice(quoted[0].length).trim().replace(/[;,\s]+$/, "");
+      if (after === "" || after.startsWith("//") || after.startsWith("#")) {
+        if (!map.has(nameMatch[1])) map.set(nameMatch[1], quoted[2]);
+      }
+    }
+  }
+  return map;
+}
+
+function resolveAliasCredential(line: string, literals: Map<string, string>): { name: string; value: string } | null {
+  const assignAll = /["']?\s*(?::(?![=:])|=(?![=>])|:=)\s*/g;
+  let assign: RegExpExecArray | null;
+  while ((assign = assignAll.exec(line)) !== null) {
+    const nameMatch = /([A-Za-z0-9_]+)$/.exec(line.slice(0, assign.index));
+    if (nameMatch === null) continue;
+    if (!nameLooksLikeCredential(nameMatch[1])) continue;
+    const expr = line.slice(assign.index + assign[0].length).trim().replace(/[;,\s]+$/, "");
+    if (expr.includes("?.")) continue;
+    const parts = expr.split("+").map((p) => p.trim());
+    if (parts.length < 1 || parts.length > 4) continue;
+    let value = "";
+    let resolved = true;
+    for (const part of parts) {
+      const quoted = /^(['"])([^'"]*)\1$/.exec(part);
+      if (quoted !== null) {
+        value += quoted[2];
+        continue;
+      }
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(part)) {
+        const literal = literals.get(part);
+        if (literal === undefined) {
+          resolved = false;
+          break;
+        }
+        value += literal;
+        continue;
+      }
+      resolved = false;
+      break;
+    }
+    if (!resolved || value.length === 0) continue;
+    return { name: nameMatch[1], value };
+  }
+  return null;
+}
+
 /** The credential words a variable name can be built from. */
 const CREDENTIAL_WORDS = new Set([
   "password", "passwd", "pwd", "pass",
@@ -100,6 +218,7 @@ const CREDENTIAL_WORDS = new Set([
   "token", "tokens",
   "credential", "credentials",
   "authorization", "auth",
+  "cred", "creds",
 ]);
 
 /**
@@ -173,7 +292,19 @@ export function isHardcodedCredential(line: string, path = ""): boolean {
   // assigned to, or whether it is assigned to anything at all. A bare AWS key in a
   // list, or a token passed as a positional argument, has no variable name to match.
   // This runs before the name gate because the name gate cannot see those.
-  if (containsProviderKey(line)) return true;
+  // Doc-example exemption: in a doc file, when every provider-shaped run on the
+  // line is an exact published example or carries a placeholder word, the line
+  // falls through to the name gate instead. A real-shaped key in a doc still
+  // fires, and the same example outside a doc still fires.
+  if (containsProviderKey(line)) {
+    if (isDocStylePath(path)) {
+      const spans = providerMatchSpans(line);
+      const allExamples = spans.length > 0 && spans.every((span) => docValueExampleish(span));
+      if (!allExamples) return true;
+    } else {
+      return true;
+    }
+  }
 
   // In a config file a dotted name is the setting itself, so the receiver gate below
   // does not apply. Everywhere else the dot is an object member and the gate stands.
@@ -207,7 +338,13 @@ export function isHardcodedCredential(line: string, path = ""): boolean {
     // XML/HTML/IDE attributes: `key="..."` where the value is a path or a numeric
     // zoom. A framework attribute named `key` is not a credential assignment.
     if (/[<>]/.test(line) || /\s(?:key|value|name)\s*=\s*["']/.test(line)) continue;
-    if (valueAtIsCredential(line, assign.index, assign[0].length, nameMatch[1])) return true;
+    if (valueAtIsCredential(line, assign.index, assign[0].length, nameMatch[1])) {
+      // Doc-example pass: in a doc file, an assignment whose value is an exact
+      // published example or a placeholder-labeled value is not a secret. A
+      // real-shaped value in a doc still fires (measured 2026-10-15).
+      if (isDocStylePath(path) && assignmentValueIsDocExample(line, assign.index + assign[0].length)) continue;
+      return true;
+    }
   }
   return false;
 }
@@ -289,7 +426,16 @@ function valueAtIsCredential(line: string, at: number, opLen: number, name: stri
 
   // Read from the environment or injected by CI is not hardcoded. Covers the
   // common forms in Python, JS/TS, Go, Ruby, PHP, C#, and shell.
-  if (/^(process\.env|os\.getenv|os\.environ|sys\.environ|ENV\[|getenv|_ENV\[|\$env:|configuration\[|System\.getenv|\$\{\{|\$\{|\$\(|%\w+%|\$[A-Za-z_])/i.test(rest)) return false;
+  if (/^(process\.env|os\.getenv|os\.environ|sys\.environ|ENV\[|getenv|_ENV\[|\$env:|configuration\[|System\.getenv|\$\{\{|\$\{|\$\(|%\w+%|\$[A-Za-z_])/i.test(rest)) {
+    // A committed fallback default is a literal written into the source, so the
+    // literal is judged: `API_KEY = process.env.API_KEY || "hex-run"`. The read
+    // itself is still not a secret; a line with no literal default, an empty
+    // default, or a short generic one stays quiet. The first fallback wins.
+    // Measured 2026-10-15 (env-fallback class, purple round 1).
+    const fallback = /(?:\|\|=?|\?\?|\bor\b)\s*(['"])([^'"]+)\1/.exec(rest);
+    if (fallback === null) return false;
+    return looksLikeSecretValue(fallback[2], true, name);
+  }
 
   // An element of a container literal is not an assignment to the name.
   // `FEATURE_KEYS = ["rendered_phone_check"]` names the feature, it does not
@@ -482,6 +628,7 @@ export function scanSecrets(
     }
 
     const lines = file.content.split("\n");
+    const literalAssignments = collectLiteralAssignments(lines);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
       if (line.length > MAX_LINE_LENGTH) {
@@ -497,23 +644,32 @@ export function scanSecrets(
       if (codePatternSkippedLine(line)) facts.skippedCodeLines++;
       const lineNo = i + 1;
       const client = isClientPath(file.path);
-      if (/AKIA[0-9A-Z]{16}/.test(line)) {
-        pushCapped(out, {
-          ruleId: client ? "secret.client-exposure" : "secret.aws-key",
-          path: file.path,
-          line: lineNo,
-          snippet: line.trim(),
-        }, counters);
-        continue;
+      const awsMatch = /AKIA[0-9A-Z]{16}/.exec(line);
+      if (awsMatch !== null) {
+        // Doc-example exemption, measured 2026-10-15: a published example id in
+        // a doc file falls through, so a real key in the same line still fires.
+        if (!(isDocStylePath(file.path) && docValueExampleish(awsMatch[0]))) {
+          pushCapped(out, {
+            ruleId: client ? "secret.client-exposure" : "secret.aws-key",
+            path: file.path,
+            line: lineNo,
+            snippet: line.trim(),
+          }, counters);
+          continue;
+        }
       }
-      if (/((ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/.test(line)) {
-        pushCapped(out, {
-          ruleId: client ? "secret.client-exposure" : "secret.github-token",
-          path: file.path,
-          line: lineNo,
-          snippet: line.trim(),
-        }, counters);
-        continue;
+      const ghMatch = /((ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/.exec(line);
+      if (ghMatch !== null) {
+        // Same doc-example exemption for the GitHub token shapes.
+        if (!(isDocStylePath(file.path) && docValueExampleish(ghMatch[0]))) {
+          pushCapped(out, {
+            ruleId: client ? "secret.client-exposure" : "secret.github-token",
+            path: file.path,
+            line: lineNo,
+            snippet: line.trim(),
+          }, counters);
+          continue;
+        }
       }
       if (/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(line)) {
         pushCapped(out, {
@@ -532,6 +688,18 @@ export function scanSecrets(
           snippet: line.trim(),
         }, counters);
         continue;
+      }
+      if (literalAssignments.size > 0) {
+        const alias = resolveAliasCredential(line, literalAssignments);
+        if (alias !== null && looksLikeSecretValue(alias.value, true, alias.name)) {
+          pushCapped(out, {
+            ruleId: client ? "secret.client-exposure" : "secret.credential-pattern",
+            path: file.path,
+            line: lineNo,
+            snippet: line.trim(),
+          }, counters);
+          continue;
+        }
       }
       const code = matchCodePattern(line);
       if (code !== null) {

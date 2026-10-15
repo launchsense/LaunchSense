@@ -93,7 +93,9 @@ export function buildResult(
     id: id === undefined ? null : id,
   };
   if (rpcError) {
-    message.error = { code: rpcError.code, message: rpcError.message };
+    const error: Record<string, unknown> = { code: rpcError.code, message: rpcError.message };
+    if (rpcError.data !== undefined) error.data = rpcError.data;
+    message.error = error;
   } else {
     message.result = result;
   }
