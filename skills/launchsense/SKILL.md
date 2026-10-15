@@ -5,7 +5,7 @@ description: Use when the repo you have open should be reviewed before you share
 
 # LaunchSense
 
-Skill version: 2026-10-15.1.
+Skill version: 2026-10-15.2.
 
 This skill reviews **your** checkout, the repository you installed it into, not only a checkout of LaunchSense itself. It runs on your machine, reads your working tree including uncommitted work, uploads no files and no file text, and has no hourly limit.
 
@@ -148,6 +148,7 @@ The AI never decides a finding, a severity, a licence fact, consent, who a calle
 - The coverage line goes back as it is: the file count, the skip count, and the sentence "A partial result is not a pass."
 - Explain a fixed finding in plain words.
 - In your audit, a finding may carry its Level 2 verdict and disposition, with the file and line that support them. Engine findings and counts stay quoted unchanged.
+- The report may carry a MORE FINDINGS list: information-level rows with rule ids. Repeat it as it is.
 - If the report includes a line that starts with `Suggestion, quoted from the model`, repeat that quote and say it is not a finding.
 
 ## What you must not do

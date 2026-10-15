@@ -15,6 +15,24 @@
 
 import { KNOWN_RULE_IDS } from "../policies/severity.ts";
 
+// The closest three known rule ids, for a refusal that names them instead of
+// leaving the id hunt to the reader (measured 2026-10-15: six customer-round
+// sightings could not finish an acceptance from the report alone).
+function closeRuleIds(guessed: string, count: number): string[] {
+  const guessWords = guessed.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const guessFlat = guessed.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const scored = [...KNOWN_RULE_IDS].map((id) => {
+    const idWords = new Set(id.toLowerCase().split(/[^a-z0-9]+/));
+    const idFlat = id.toLowerCase().replace(/[^a-z0-9]/g, "");
+    let score = id === guessed ? 99 : guessWords.filter((w) => idWords.has(w)).length;
+    if (guessFlat.length > 4 && idFlat.includes(guessFlat)) score += 2;
+    if (guessFlat.length > 4 && guessFlat.includes(idFlat)) score += 1;
+    return { id, score };
+  });
+  scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  return scored.slice(0, count).map((s) => s.id);
+}
+
 export interface GovAccept {
   fingerprint: string | null;
   ruleId: string | null;
@@ -259,7 +277,7 @@ export function parseGovernance(text: string): GovParseResult {
         throw new Refused("accept_malformed_fingerprint", `not a fingerprint: ${fingerprint}`);
       }
       if (ruleId !== null && !KNOWN_RULE_IDS.has(ruleId)) {
-        throw new Refused("accept_unknown_rule", `${ruleId} is not a rule this product has`);
+        throw new Refused("accept_unknown_rule", `${ruleId} is not a rule this product has. Closest known ids: ${closeRuleIds(ruleId, 3).join(", ")}`);
       }
       accepts.push({ fingerprint, ruleId, path, reason: reason.trim() });
     }

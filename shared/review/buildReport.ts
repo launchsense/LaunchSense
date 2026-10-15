@@ -124,8 +124,8 @@ export interface ReviewReport {
   findings: ReviewFinding[];
   lead: string;
   prompts: string[];
-  /** The ordered fix plan: what to do first, with files and a short checklist. */
-  plan: Array<{ order: number; title: string; why: string; files: string[]; checklist: string[] }>;
+  /** The ordered fix plan: what to do first, with files and a short checklist. Rule ids are quotable for governance. */
+  plan: Array<{ order: number; title: string; why: string; files: string[]; checklist: string[]; ruleId: string }>;
   orderSource: "local" | "jev" | "perplexity" | "table";
   orderNote: string;
   /** Positions the decision lane moved inside a severity band. 0 means it changed nothing. */
@@ -279,9 +279,17 @@ export const OTHER_LOCKFILES = new Set([
 ]);
 
 function listNames(paths: string[]): string {
-  const named = paths.map((path) => path.split("/").pop() ?? path);
-  if (named.length === 1) return named[0] ?? "";
-  return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+  // The names are basenames, and distinct lockfile paths can share one, so the
+  // names are deduped and counted (measured 2026-10-15: a repo with thirty
+  // nested go.sum files rendered "go.sum" thirty times in one sentence).
+  const names = [...new Set(paths.map((path) => path.split("/").pop() ?? path))];
+  if (names.length === 1) {
+    return paths.length === 1
+      ? names[0] ?? ""
+      : `${names[0]} and ${paths.length - 1} more lockfile${paths.length - 1 === 1 ? "" : "s"} (${paths.length} in total)`;
+  }
+  if (names.length <= 3) return names.join(", ");
+  return `${names.slice(0, 3).join(", ")} and ${names.length - 3} more different names (${paths.length} lockfiles in total)`;
 }
 
 /**
@@ -386,6 +394,7 @@ function derivePlanAndPrompts(findings: ReviewFinding[]): {
   return {
     plan: plan.steps.map((step) => ({
       order: step.order,
+      ruleId: step.ruleId,
       title: step.title,
       why: step.why,
       files: step.files,
@@ -536,7 +545,7 @@ export function buildLocalReport(
         complete: false,
         note: otherLocks.length === 0
           ? "No npm lockfile was in the files read. The dependency inventory is incomplete."
-          : `No npm lockfile was in the files read. ${listNames(otherLocks)} was in the files read and was not read for versions. The dependency inventory is incomplete.`,
+          : `No npm lockfile was in the files read. Not read for versions: ${listNames(otherLocks)}. The dependency inventory is incomplete.`,
       }
     : inventoryNpmLock(lockFile.content, direct, declarations);
 
@@ -637,7 +646,7 @@ export function buildLocalReport(
       reason: lockFileInHand !== undefined
         ? `${lockFileInHand.path} was in the files read and its versions were not queried. Unknown stays unknown.`
         : otherLocks.length > 0
-          ? `No npm lockfile was in the files read, so no npm version could be queried. ${listNames(otherLocks)} was in the files read and was not queried either. Unknown stays unknown.`
+          ? `No npm lockfile was in the files read, so no npm version could be queried. Not queried either: ${listNames(otherLocks)}. Unknown stays unknown.`
           : "No lockfile was in the files read, so no version could be queried. Unknown stays unknown.",
     });
   } else if (advisories.timedOut) {

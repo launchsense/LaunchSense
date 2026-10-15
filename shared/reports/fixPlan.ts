@@ -25,7 +25,7 @@ export interface FixPlan {
   notActionable: PlanFinding[];
 }
 
-const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[] }> = {
+export const STEP_TEXT: Record<string, { title: string; why: string; checklist: string[] }> = {
   "secret.tracked-env": {
     title: "Remove tracked environment files from git",
     why: "Anyone with repo access can read everything in a tracked .env file.",

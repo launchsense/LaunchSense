@@ -127,6 +127,23 @@ function assignmentValueIsDocExample(line: string, from: number): boolean {
   return docValueExampleish(value);
 }
 
+// A prose-marked value is documentation text, not a source literal: the
+// value side carries a backtick (inline code) or a doc reference prefix.
+// Measured 2026-10-15 on flask's RST prose and fastapi's translated docs.
+function docInlineCodeValue(line: string, from: number): boolean {
+  const rest = line.slice(from).trim();
+  return /[`]/.test(rest) || /:data:/.test(rest);
+}
+
+// Documentation context: a doc-style file suffix, OR a docs/examples-family
+// folder in the path. Measured 2026-10-15 on curl: the top lead sat in
+// docs/examples/*.c, which a suffix-only rule missed.
+const DOC_FOLDER_SEGMENT = /(?:^|[/\\])(?:docs?|examples?|samples?|manual|guides?|documentation)(?:[/\\]|$)/i;
+
+function isDocContextPath(path: string): boolean {
+  return isDocStylePath(path) || DOC_FOLDER_SEGMENT.test(path);
+}
+
 // Every provider-shaped run on a line, for the doc-example decision above.
 function providerMatchSpans(line: string): string[] {
   const spans: string[] = [];
@@ -297,7 +314,7 @@ export function isHardcodedCredential(line: string, path = ""): boolean {
   // falls through to the name gate instead. A real-shaped key in a doc still
   // fires, and the same example outside a doc still fires.
   if (containsProviderKey(line)) {
-    if (isDocStylePath(path)) {
+    if (isDocContextPath(path)) {
       const spans = providerMatchSpans(line);
       const allExamples = spans.length > 0 && spans.every((span) => docValueExampleish(span));
       if (!allExamples) return true;
@@ -335,14 +352,25 @@ export function isHardcodedCredential(line: string, path = ""): boolean {
     const receiver = before.slice(0, before.length - nameMatch[1].length);
     if (/[.]$/.test(receiver) && !configStyle) continue;
     if (/\b(?:viewBinding|databinding|binding|Binding)$/.test(receiver)) continue;
+    // A struct-literal FIELD assignment (Go/JS/Rust: header{Key: value}) is a
+    // field name, not a variable. Brace-gated fields stay quiet only for the
+    // weak generic word "key", with or without padding after the brace; strong
+    // credential words and apiKey inside a literal keep firing. Measured
+    // 2026-10-15 on gin's routes_test (8 rows).
+    if (/[{]\s*$/.test(receiver) && nameMatch[1].toLowerCase() === "key") continue;
     // XML/HTML/IDE attributes: `key="..."` where the value is a path or a numeric
     // zoom. A framework attribute named `key` is not a credential assignment.
     if (/[<>]/.test(line) || /\s(?:key|value|name)\s*=\s*["']/.test(line)) continue;
     if (valueAtIsCredential(line, assign.index, assign[0].length, nameMatch[1])) {
-      // Doc-example pass: in a doc file, an assignment whose value is an exact
-      // published example or a placeholder-labeled value is not a secret. A
-      // real-shaped value in a doc still fires (measured 2026-10-15).
-      if (isDocStylePath(path) && assignmentValueIsDocExample(line, assign.index + assign[0].length)) continue;
+      // Documentation context (file suffix or a doc/example folder): an exact
+      // published example, a placeholder-labeled value, or a prose-marked
+      // inline-code value is not a secret. A real-shaped, unmarked value in a
+      // doc still fires (measured 2026-10-15: curl's examples folder led with
+      // a placeholder, and flask's RST prose fired through a backticked value).
+      if (isDocContextPath(path)) {
+        if (assignmentValueIsDocExample(line, assign.index + assign[0].length)) continue;
+        if (docInlineCodeValue(line, assign.index + assign[0].length)) continue;
+      }
       return true;
     }
   }
@@ -375,38 +403,25 @@ export function containsProviderKey(line: string): boolean {
     const before = line.slice(Math.max(0, m.index - 2), m.index);
     if (before.includes("-")) continue;
     const segs = token.split(".");
-    const hasUrlChar = segs.some((s) => /[-_]/.test(s));
     const looksBase64 = /^ey[A-Za-z0-9_-]/.test(token);
-    const mixedCase = /[a-z]/.test(token) && /[A-Z]/.test(token);
-    const allLowerDotted = segs.every((s) => /^[a-z][a-z0-9]*$/.test(s));
     // A JWT's three segments are base64url and contain no plain English words
     // joined by dashes. A flag like mount-points-exclude is hyphenated prose.
     const hyphenatedWords = segs.some((s) => /^[a-z]+(-[a-z]+){2,}$/.test(s));
     if (hyphenatedWords) continue;
-    // Three lowercase identifiers joined by dots, with underscores or dashes, are
-    // still source code (Rust/Go/CLI), not base64url. A real JWT of this length is
-    // mixed case. Require mixed case for the url-char path; keep the eyJ path above.
+    // A real JWT's header segment is base64url of JSON and always begins with
+    // `eyJ`, which the shape above answers. NOTHING else reaching this loop
+    // can be a JWT, whatever its case: the earlier guards remain for the
+    // measured classes that once fell through here (member chains:
+    // 823 of 925 corpus false positives; ALL_CAPS constant chains: wave-08,
+    // 8 measured; and a name with a single dash in a middle segment,
+    // `middlewares.api-stripprefix.stripPrefix`, measured 2026-10-15 on a
+    // TOML config line in four languages, 86 false rows in one repo). All of
+    // them stay quiet now.
     const allLower = !/[A-Z]/.test(token);
     if (looksBase64) return true;
     if (allLower) continue;
-    // A dotted chain of identifiers is source code, not a JWT. `_context.pushContext.call`,
-    // `_modification.updateSiblingKeys.call`, and `_printer.ChainFormatter.Config` are
-    // member chains: every segment is a valid identifier. A JWT's header segment is
-    // base64url of JSON and always begins with `eyJ`, which the branch above already
-    // returned on, so a real token never reaches here. Corpus: this branch produced 823 of
-    // 925 `secret.credential-pattern` false positives on real third-party code.
     if (segs.every((s) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(s))) continue;
-    if (hasUrlChar && mixedCase) return true;
-    if (allLowerDotted) continue;
-    // The last shape that reaches here has uppercase and NO lowercase, because
-    // `mixedCase` needs both and `allLower` already excluded the no-uppercase case.
-    // That is an ALL_CAPS constant chain, not base64url:
-    //   __C.TRAINING.OPTIMIZER.WEIGHT_DECAY    a config constant in a Python repo
-    //   cfg.TRAINING.OPTIMIZER.USE_WEIGHTS      a flag read on the next line
-    // Base64url of JSON carries lowercase letters, so a real JWT cannot land here. The
-    // wave-08 corpus measured 8 high-severity `secret.credential-pattern` false
-    // positives from this one branch. Reject them.
-    if (hasUrlChar && /[a-z]/.test(token)) return true;
+    continue;
   }
   return false;
 }
@@ -646,9 +661,10 @@ export function scanSecrets(
       const client = isClientPath(file.path);
       const awsMatch = /AKIA[0-9A-Z]{16}/.exec(line);
       if (awsMatch !== null) {
-        // Doc-example exemption, measured 2026-10-15: a published example id in
-        // a doc file falls through, so a real key in the same line still fires.
-        if (!(isDocStylePath(file.path) && docValueExampleish(awsMatch[0]))) {
+        // Doc-context exemption, measured 2026-10-15: a published example id
+        // in a doc file or an examples folder falls through, so a real key in
+        // the same line still fires.
+        if (!(isDocContextPath(file.path) && docValueExampleish(awsMatch[0]))) {
           pushCapped(out, {
             ruleId: client ? "secret.client-exposure" : "secret.aws-key",
             path: file.path,
@@ -660,8 +676,8 @@ export function scanSecrets(
       }
       const ghMatch = /((ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/.exec(line);
       if (ghMatch !== null) {
-        // Same doc-example exemption for the GitHub token shapes.
-        if (!(isDocStylePath(file.path) && docValueExampleish(ghMatch[0]))) {
+        // Same doc-context exemption for the GitHub token shapes.
+        if (!(isDocContextPath(file.path) && docValueExampleish(ghMatch[0]))) {
           pushCapped(out, {
             ruleId: client ? "secret.client-exposure" : "secret.github-token",
             path: file.path,
@@ -691,14 +707,21 @@ export function scanSecrets(
       }
       if (literalAssignments.size > 0) {
         const alias = resolveAliasCredential(line, literalAssignments);
-        if (alias !== null && looksLikeSecretValue(alias.value, true, alias.name)) {
-          pushCapped(out, {
-            ruleId: client ? "secret.client-exposure" : "secret.credential-pattern",
-            path: file.path,
-            line: lineNo,
-            snippet: line.trim(),
-          }, counters);
-          continue;
+        if (alias !== null) {
+          // The alias pass gets the same doc-context treatment the direct
+          // gate has: a published example value is quiet in a documentation
+          // context even when it resolves through an alias (measured
+          // 2026-10-15 on the curl example in an examples folder).
+          const docExample = isDocContextPath(file.path) && docValueExampleish(alias.value);
+          if (!docExample && looksLikeSecretValue(alias.value, true, alias.name)) {
+            pushCapped(out, {
+              ruleId: client ? "secret.client-exposure" : "secret.credential-pattern",
+              path: file.path,
+              line: lineNo,
+              snippet: line.trim(),
+            }, counters);
+            continue;
+          }
         }
       }
       const code = matchCodePattern(line);

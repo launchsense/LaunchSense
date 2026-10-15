@@ -36,7 +36,8 @@ import { npmManifestDeclarations } from "../shared/review/npmIdentity.ts";
 import type { LockInventory, LockPackage } from "../shared/review/lockfile.ts";
 import { findingsToAsk, laneCanReorder, questionIdFor, rankFromAnswers, rankState } from "../shared/reports/priority.ts";
 import type { RankableFinding } from "../shared/reports/priority.ts";
-import { buildFixPlan } from "../shared/reports/fixPlan.ts";
+import { buildFixPlan, STEP_TEXT as RULE_TITLES } from "../shared/reports/fixPlan.ts";
+import { KNOWN_RULE_IDS } from "../shared/policies/severity.ts";
 import { buildTopPrompt } from "../shared/reports/topPrompt.ts";
 import type { PromptFinding } from "../shared/reports/topPrompt.ts";
 import { lookupPackages, scorecardFact } from "../shared/review/registry.ts";
@@ -408,10 +409,39 @@ function ensureGitignored(rootFd: number): WriteResult {
   return { ok: true };
 }
 
-function argRoot(): string {
+// The entry flags, and which ones the run accepts. Anything else refuses the
+// run instead of being ignored: an ignored flag once turned --help into a full
+// review of whatever directory the caller stood in (measured on 2026-10-15 by
+// six independent customer-round simulations).
+const KNOWN_ENTRY_FLAGS = new Set(["--root", "--json", "--change", "--mcp", "--lenient", "--list-rules", "--help"]);
+
+const usageLines = (): string[] => {
+  const ids = [...KNOWN_RULE_IDS].sort();
+  const titled = ids.map((id) => (RULE_TITLES[id] !== undefined ? `${id}:${RULE_TITLES[id].title}` : id));
+  return [
+    "No review ran.",
+    "Flags: --root <absolute path> [--change <base>] [--json] [--mcp] [--lenient] [--list-rules] [--help].",
+    `Rule ids (${ids.length}): ${titled.join(", ")}.`,
+  ];
+};
+
+function entryFlagRefusal(): string | null {
+  const unknownArgs = process.argv.slice(2).filter((a) => a.startsWith("--") && !KNOWN_ENTRY_FLAGS.has(a));
+  if (unknownArgs.length > 0) {
+    return `No review ran: unknown flag ${unknownArgs[0]}.`;
+  }
+  return null;
+}
+
+function entryRoot(): string | null {
+  // No --root keeps the by-design default. A --root that is missing its value,
+  // that swallows another flag, or that is not absolute is refused, never
+  // silently reviewed as a different tree.
+  if (!process.argv.includes("--root")) return process.cwd();
   const index = process.argv.indexOf("--root");
-  const value = index >= 0 ? process.argv[index + 1] : undefined;
-  return value !== undefined && value.length > 0 ? value : process.cwd();
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith("--") || !/^[/\\]/.test(value)) return null;
+  return value;
 }
 
 // A change run's scope: the changed paths and the base it was taken from. The
@@ -1739,7 +1769,7 @@ function render(
   if (report.plan.length > 0) {
     lines.push("PLAN");
     for (const step of report.plan) {
-      lines.push(`${step.order}. ${step.title}`);
+      lines.push(`${step.order}. ${step.title} (rule ${step.ruleId})`);
       lines.push(`   Why: ${step.why}`);
       const files = step.files.slice(0, 5);
       if (files.length > 0) {
@@ -1747,6 +1777,16 @@ function render(
       }
       for (const item of step.checklist) lines.push(`   - ${item}`);
     }
+    lines.push("");
+  }
+  // 3b. The information band: findings below the lead bands, named with rule
+  // ids, so the text report never silently hides rows the JSON carries.
+  // Measured 2026-10-15: three repos shipped info rows the text never showed.
+  const infoRows = report.findings.filter((f) => f.severity === "info");
+  if (infoRows.length > 0) {
+    lines.push("MORE FINDINGS");
+    lines.push(`${infoRows.length} information-level row(s). The full list with fingerprints is in --json.`);
+    for (const row of infoRows) lines.push(`- ${row.title} (rule ${row.ruleId}): ${row.path}:${row.line}`);
     lines.push("");
   }
   // 4. Everything else: the detail behind the plan.
@@ -1808,7 +1848,23 @@ function render(
 }
 
 async function main(): Promise<void> {
-  const requestedRoot = argRoot();
+  const flagRefusal = entryFlagRefusal();
+  if (flagRefusal !== null) {
+    process.stdout.write(`${flagRefusal}\n${usageLines().join("\n")}\n`);
+    process.exitCode = 2;
+    return;
+  }
+  if (process.argv.includes("--help") || process.argv.includes("--list-rules")) {
+    process.stdout.write(`${usageLines().join("\n")}\n`);
+    process.exitCode = 0;
+    return;
+  }
+  const requestedRoot = entryRoot();
+  if (requestedRoot === null) {
+    process.stdout.write(`No review ran: --root takes an absolute path, not a flag or a relative name.\n${usageLines().join("\n")}\n`);
+    process.exitCode = 2;
+    return;
+  }
   // A linked root or ancestor would bypass all walker exclusions. Refuse it
   // before Git, governance reads, analysis, or local report writes.
   const { fd: rootFd } = openReviewRoot(requestedRoot);
