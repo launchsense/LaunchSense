@@ -1833,6 +1833,12 @@ function render(
     // not carry a hundred lines of it.
     lines.push(`The full third-party notice is in ${declaration.noticeFilename}, next to this report.`);
   }
+  // The clean advisory outcome. Non-null only when every queried coordinate
+  // was answered readable and none carried an advisory, so a capped answer's
+  // silence is readable as checked-and-empty, never as dropped.
+  if (report.osvOutcomeNote !== null) {
+    lines.push(report.osvOutcomeNote);
+  }
   if (report.notChecked.length > 0) {
     lines.push("Not checked:");
     for (const item of report.notChecked) lines.push(`- ${item.scope}: ${item.reason}`);

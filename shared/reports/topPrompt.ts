@@ -106,9 +106,21 @@ export function pickLead(ranked: RankedItem[]): RankedItem | null {
   return ranked[0] ?? null;
 }
 
-function actionPrompt(item: RankedItem): string {
-  const many = item.count > 1 ? ` (${item.count} places)` : "";
-  return `${item.title}${many}\nWhere: ${item.where}\nWhat is wrong: ${item.why}\nWhat to change: ${item.firstStep}`;
+/**
+ * The withheld fact rides a credential-family lead only: the secret checks
+ * judged those lines and withheld their listing past the 20-match cap, so the
+ * START HERE headline can never overstate what was listed (measured on red
+ * round 3, finding F5). A rule outside that family carries no suffix, because
+ * the cap belongs to the secret checks, not to the rule's own count.
+ */
+function actionPrompt(item: RankedItem, withheld = 0): string {
+  const many = item.count > 1 ? ` (${item.count} places` : "";
+  const close = item.count > 1 ? ")" : "";
+  const heldBack =
+    item.count > 1 && withheld > 0 && isCredentialRule(item.ruleId)
+      ? `; the secret checks held back ${withheld} further matched line${withheld === 1 ? "" : "s"} past their 20-match cap`
+      : "";
+  return `${item.title}${many}${heldBack}${close}\nWhere: ${item.where}\nWhat is wrong: ${item.why}\nWhat to change: ${item.firstStep}`;
 }
 
 export function liveActionItems(
@@ -189,6 +201,12 @@ export function buildTopPrompt(
    * and nothing changes.
    */
   priorityOrder: string[] = [],
+  /**
+   * Optional. Matched lines the secret checks judged but did not list, so a
+   * credential-family headline states the withheld count and never reads as
+   * everything there was.
+   */
+  withheldMatches = 0,
 ): TopPrompt {
   const repoItems: RankedItem[] = findings
     .filter((f) => f.severity !== "info")
@@ -247,7 +265,7 @@ export function buildTopPrompt(
   const lead =
     leadItem === null
       ? null
-      : { ruleId: leadItem.ruleId, title: leadItem.title, prompt: actionPrompt(leadItem) };
+      : { ruleId: leadItem.ruleId, title: leadItem.title, prompt: actionPrompt(leadItem, withheldMatches) };
   if (top.length === 0) {
     return { prompt: "", prompts: [], lead, topCount: 0, restCount, topRuleIds: [], restRuleIds: [] };
   }
@@ -262,7 +280,7 @@ export function buildTopPrompt(
     (restCount > 0 ? ` (${restCount} more).` : `.`);
   return {
     prompt,
-    prompts: top.map((item) => ({ ruleId: item.ruleId, title: item.title, prompt: actionPrompt(item) })),
+    prompts: top.map((item) => ({ ruleId: item.ruleId, title: item.title, prompt: actionPrompt(item, withheldMatches) })),
     lead,
     topCount: top.length,
     restCount,

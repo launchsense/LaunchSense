@@ -108,6 +108,13 @@ export interface ReviewReport {
   statusNote: string;
   filesRead: number;
   filesSkipped: number;
+  /**
+   * The clean advisory outcome, or null. Non-null only when the queried
+   * coordinates were all answered readable and none carried an advisory: the
+   * silence of a capped answer must be readable as "checked, none found",
+   * never as "dropped" (measured on red round 3, finding F4).
+   */
+  osvOutcomeNote: string | null;
   coverageNote: string;
   /**
    * What was reviewed: the whole working tree, or a change from a named base.
@@ -372,7 +379,10 @@ export function analyzerOmissionRows(
  * run scopes the findings to the diff; otherwise the report would still
  * recommend fixes for findings it no longer lists.
  */
-function derivePlanAndPrompts(findings: ReviewFinding[]): {
+function derivePlanAndPrompts(
+  findings: ReviewFinding[],
+  withheldMatches = 0,
+): {
   plan: ReviewReport["plan"];
   lead: string;
   prompts: string[];
@@ -394,7 +404,7 @@ function derivePlanAndPrompts(findings: ReviewFinding[]): {
     why: item.why,
   }));
   const plan = buildFixPlan(findings);
-  const top = buildTopPrompt(promptsIn, plan.steps, [], 3, order);
+  const top = buildTopPrompt(promptsIn, plan.steps, [], 3, order, withheldMatches);
   const lead = top.lead?.prompt ?? "Nothing was flagged in the files we read. This is not a clean bill of health.";
   const prompts = top.prompts
     .filter((item) => item.ruleId !== top.lead?.ruleId)
@@ -420,7 +430,10 @@ function derivePlanAndPrompts(findings: ReviewFinding[]): {
  * recommended fixes match the findings the report actually lists in either mode.
  */
 export function refreshDerivations(report: ReviewReport): void {
-  const derived = derivePlanAndPrompts(report.findings);
+  // The withheld fact comes from the report's own omission aggregate, so the
+  // refreshed lead keeps stating how many matched lines were never listed.
+  const withheld = report.analyzerOmissions?.suppressedMatches ?? 0;
+  const derived = derivePlanAndPrompts(report.findings, withheld);
   report.plan = derived.plan;
   report.lead = derived.lead;
   report.prompts = derived.prompts;
@@ -559,6 +572,10 @@ export function buildLocalReport(
     : inventoryNpmLock(lockFile.content, direct, declarations);
 
   const notChecked = [...skipped, ...streamedArtifactGaps(streamed)];
+  // The clean advisory outcome, promoted to the return object for the text and
+  // JSON surfaces. Null means either no run, a refusal, a timeout, an
+  // unanswered coordinate, or advisories being present: each has its own row.
+  let osvOutcomeNoteOut: string | null = null;
   for (const row of licenses.unresolved) notChecked.push({ scope: row.path, reason: row.reason });
   if (!inventory.complete) notChecked.push({ scope: "npm lockfile", reason: inventory.note });
   // A skipped line is a check that did not run on that line. Naming the file
@@ -681,6 +698,7 @@ export function buildLocalReport(
       reason: `The advisory query did not finish. ${advisories.queried} coordinates were sent. This is not a pass.`,
     });
   } else {
+    let osvOutcomeNote: string | null = null;
     if (advisories.skipped > 0) {
       notChecked.push({
         scope: "OSV",
@@ -732,6 +750,22 @@ export function buildLocalReport(
         reason: `${unlisted} more advisory row${unlisted === 1 ? "" : "s"} ${unlisted === 1 ? "sits" : "sit"} past the ${ADVISORY_ROW_LIST_CAP}-row listing cap and were not listed. Unknown stays unknown.`,
       });
     }
+    // A capped answer's silence must read as "checked, nothing there", never
+    // as "results dropped". When every queried coordinate answered readable
+    // and none carried an advisory, the note says so; coordinates past the cap
+    // stay the skip row's separate fact (red round 3, finding F4).
+    if (
+      advisories.hits.length === 0 &&
+      advisories.unanswered === 0 &&
+      advisories.unreadable === 0 &&
+      advisories.queried > 0
+    ) {
+      const rest = advisories.skipped > 0
+        ? ` The other ${advisories.skipped} were not queried (the ${advisories.queried}-package query cap).`
+        : "";
+      osvOutcomeNote = `Of the ${advisories.queried} lockfile packages queried, none carried a recorded advisory.${rest}`;
+    }
+    if (osvOutcomeNote !== null) osvOutcomeNoteOut = osvOutcomeNote;
   }
 
   const hostHits = networkHints(files);
@@ -765,7 +799,7 @@ export function buildLocalReport(
     findings.push(finding("hygiene.no-readme", "(repo)", 1, "No README in the files read", "A README was not in this read.", "no readme"));
   }
 
-  const derived = derivePlanAndPrompts(findings);
+  const derived = derivePlanAndPrompts(findings, secretOmissions?.suppressedMatches ?? 0);
   const plan = derived.plan;
   const lead = derived.lead;
   const promptLines = derived.prompts;
@@ -818,6 +852,7 @@ export function buildLocalReport(
     authRequired: false,
     status,
     statusNote,
+    osvOutcomeNote: osvOutcomeNoteOut,
     filesRead,
     filesSkipped,
     coverageNote,
