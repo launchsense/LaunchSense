@@ -40,7 +40,7 @@ import { buildFixPlan, STEP_TEXT as RULE_TITLES } from "../shared/reports/fixPla
 import { KNOWN_RULE_IDS } from "../shared/policies/severity.ts";
 import { buildTopPrompt } from "../shared/reports/topPrompt.ts";
 import type { PromptFinding } from "../shared/reports/topPrompt.ts";
-import { lookupPackages, scorecardFact } from "../shared/review/registry.ts";
+import { lookupPackages, REGISTRY_TERMS_QUERY_CAP, scorecardFact } from "../shared/review/registry.ts";
 import { quoteForChoice, suggestionOptions } from "../shared/review/unknownQuote.ts";
 import { parseManifests } from "../shared/analyzers/deps.ts";
 import { isRootLicensingCandidate } from "../shared/analyzers/licenses.ts";
@@ -1965,7 +1965,7 @@ async function main(): Promise<void> {
   const inventory = lock === undefined ? null : inventoryNpmLock(lock.content, directNames(files), npmManifestDeclarations(files, lock.path));
   const registry = offline || inventory === null
     ? null
-    : await lookupPackages(inventory.packages.filter((pkg) => !pkg.dev).slice(0, 15));
+    : await lookupPackages(inventory.packages.filter((pkg) => !pkg.dev).slice(0, REGISTRY_TERMS_QUERY_CAP));
   const advisories = await queryLockAdvisories(inventory, offline);
   // The repo's own allowlist. Only licence ids travel into the suggestion, never
   // file text.

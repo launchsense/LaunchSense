@@ -24,6 +24,7 @@ import type { LicenceSuggestion } from "../licensing/suggest.ts";
 import { clashSignal } from "./clash.ts";
 import { countNamedHosts, deadCopies, generatedMarkers, modelCards, networkHints, repeatedFunctions, NETWORK_HINT_CAP } from "./extraChecks.ts";
 import { inventoryNpmLock } from "./lockfile.ts";
+import { REGISTRY_TERMS_QUERY_CAP } from "./registry.ts";
 import { npmManifestDeclarations } from "./npmIdentity.ts";
 import { noLockfileInventory, readNpmDependencyLicenses } from "../licensing/dependencies.ts";
 import { buildNoticeArtifact } from "../licensing/notice.ts";
@@ -271,6 +272,14 @@ function finding(
   };
 }
 
+/**
+ * The most advisory rows one OSV answer contributes to the findings list.
+ * Rows past this cap are counted in the not-checked list by a sentence that
+ * names this cap, so a capped answer can never read as a clean one. The value
+ * mirrors OSV_VULN_CAP in shared/adapters/osv.ts.
+ */
+const ADVISORY_ROW_LIST_CAP = 20;
+
 /** Lockfiles this review reads but cannot inventory. Naming them beats claiming none was read. */
 export const OTHER_LOCKFILES = new Set([
   "cargo.lock", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "gemfile.lock",
@@ -351,7 +360,7 @@ export function analyzerOmissionRows(
     if (restSuppressed > 0) restParts.push(`${restSuppressed} withheld matches`);
     rows.push({
       scope: "line-level checks",
-      reason: `${restCount} more files carry the same line-level caps (${restParts.join(" and ")}). Their paths are not listed here; the totals include them.`,
+      reason: `${restCount} more files carry the same line-level caps (${restParts.join(" and ")}). Their paths are known to the engine and withheld by the ${rowsCap}-row listing cap; the totals include them.`,
     });
   }
   return rows;
@@ -636,6 +645,23 @@ export function buildLocalReport(
       scope: "archived",
       reason: "Archived status is not in the deps.dev record. Unknown stays unknown.",
     });
+    // The registry-terms lane queries a bounded slice of the lockfile's unique
+    // coordinates. The queried count, the eligible total, and the cap name go
+    // on one row, so the small answer can never read as a full sweep (measured
+    // live on round 3: fifteen per-package rows against 501 components, with
+    // nothing on the page connecting them).
+    if (lockFile !== undefined) {
+      const eligibleCoords = new Set(
+        inventory.packages.filter((pkg) => !pkg.dev).map((pkg) => `${pkg.name}@${pkg.version}`),
+      ).size;
+      const withheldCoords = eligibleCoords - registry.length;
+      if (withheldCoords > 0) {
+        notChecked.push({
+          scope: "dependency terms",
+          reason: `The registry-terms lane queried ${registry.length} of ${eligibleCoords} unique package coordinates. ${withheldCoords} more sit past the ${REGISTRY_TERMS_QUERY_CAP}-coordinate registry cap; the remaining names and versions are in the npm lockfile in hand, and their licence terms stay Unknown.`,
+        });
+      }
+    }
   }
   if (advisories === null) {
     // A lockfile we read but did not query is a different gap from having no
@@ -658,7 +684,7 @@ export function buildLocalReport(
     if (advisories.skipped > 0) {
       notChecked.push({
         scope: "OSV",
-        reason: `Queried ${advisories.queried} lockfile packages. ${advisories.skipped} were not queried.`,
+        reason: `Queried ${advisories.queried} lockfile packages. ${advisories.skipped} package version${advisories.skipped === 1 ? "" : "s"} ${advisories.skipped === 1 ? "was" : "were"} not queried, held back by the ${advisories.queried}-package query cap. Their names and versions are in the npm lockfile in hand; their advisories stay Unknown.`,
       });
     }
     // A coordinate the answer did not cover is not a clean coordinate. A short
@@ -679,7 +705,7 @@ export function buildLocalReport(
         reason: `${advisories.unreadable} advisory record${advisories.unreadable === 1 ? "" : "s"} the answer named could not be read or could not be listed. Those are not cleared. Unknown stays unknown.`,
       });
     }
-    const listed = advisories.hits.slice(0, 20);
+    const listed = advisories.hits.slice(0, ADVISORY_ROW_LIST_CAP);
     for (const hit of listed) {
       // An unknown advisory severity is real but unranked, so it lands at info,
       // the same choice the hosted door makes. A guessed medium here would let a
@@ -700,9 +726,10 @@ export function buildLocalReport(
       });
     }
     if (advisories.hits.length > listed.length) {
+      const unlisted = advisories.hits.length - listed.length;
       notChecked.push({
         scope: "OSV",
-        reason: `${advisories.hits.length - listed.length} more advisory rows were not listed.`,
+        reason: `${unlisted} more advisory row${unlisted === 1 ? "" : "s"} ${unlisted === 1 ? "sits" : "sit"} past the ${ADVISORY_ROW_LIST_CAP}-row listing cap and were not listed. Unknown stays unknown.`,
       });
     }
   }
@@ -724,7 +751,7 @@ export function buildLocalReport(
     if (leftOut > 0) {
       notChecked.push({
         scope: "named hosts",
-        reason: `The named-host list stops at ${NETWORK_HINT_CAP} files per run. ${leftOut} more file${leftOut === 1 ? "" : "s"} that name a host were not listed.`,
+        reason: `The named-host list stops at ${NETWORK_HINT_CAP} files per run. ${leftOut} more file${leftOut === 1 ? "" : "s"} that name a host were not listed; their file names are known to the engine.`,
       });
     }
   }
@@ -745,7 +772,12 @@ export function buildLocalReport(
 
   const filesSkipped = skipped.length;
   const filesRead = files.length + streamedRead.length;
-  const coverageNote = `We read ${filesRead} files. ${filesSkipped} skips are listed. A partial result is not a pass.`;
+  // The disclosure-mention rule: a stated skip count must reconcile with the
+  // rows the list carries. Every skipped input is spread into not-checked
+  // below, so the note says the names are there, not just a count.
+  const coverageNote = filesSkipped === 0
+    ? `We read ${filesRead} files. No input was skipped. A partial result is not a pass.`
+    : `We read ${filesRead} files. Every skipped input (${filesSkipped}) is named in the not-checked list with its reason. A partial result is not a pass.`;
   // The local review overrides this in change mode. Whole-tree stays the
   // default here, so a caller that does not set a scope still names one.
   const scopeNote = `Reviewed: whole working tree, ${filesRead} files.`;

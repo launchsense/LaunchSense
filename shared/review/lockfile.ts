@@ -51,10 +51,21 @@ export function inventoryNpmLock(
       dev: isRecord(raw) && raw["dev"] === true });
   }
   const omissions = links > 0 ? ` ${links} workspace/source link entry(s) are not inventoried; workspace dependency coverage is not provided.` : "";
+  // Installed entries and unique coordinates are different populations when a
+  // package at one version re-installs under a nested tree. The advisory lane
+  // deduplicates by name@version, so the note states both numbers, or a reader
+  // cannot reconcile the lockfile sentence with the advisory rows (measured
+  // live on round 3: treeE said 111 installed, 101 coordinates, 10 duplicates,
+  // and no sentence named the 10).
+  const uniqueCoordinates = new Set(out.map((pkg) => `${pkg.name}@${pkg.version}`)).size;
+  const duplicateIdentities = out.length - uniqueCoordinates;
   return {
     packages: out,
     complete: unresolved === 0 && links === 0,
     note: `Lockfile lists ${out.length} packages with validated queryable coordinates.` +
+      (duplicateIdentities > 0
+        ? ` ${out.length} installed entries deduplicate to ${uniqueCoordinates} unique name@version coordinates (${duplicateIdentities} nested duplicate identit${duplicateIdentities === 1 ? "y" : "ies"} share a coordinate).`
+        : "") +
       (unresolved > 0 ? ` ${unresolved} entry(s) have an unresolved identity, path, record or exact version and are not offered as coordinates. The inventory is incomplete.` : "") + omissions,
   };
 }

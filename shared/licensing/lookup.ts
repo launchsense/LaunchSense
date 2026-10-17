@@ -56,7 +56,7 @@ export interface LicenseLookupResult {
 }
 
 const NOT_CONFIGURED =
-  "The AI lane for licence lookups is not configured, so no licence was looked up. Unknown stays unknown.";
+  "The optional AI licence-lookup lane is not configured, so no AI lookup ran. Unknown stays unknown.";
 
 /**
  * The only words the prompt may use besides the name and version. Held as one
@@ -142,14 +142,22 @@ export function licenseLookupRefusal(
   limit = 25,
 ): LicenseLookupResult {
   const requests = unknownLicenseRequests(components, limit);
+  // The unknown total and the capped request list are different facts. When
+  // the cap binds, the note carries both: the total still governs (every one
+  // of them stays Unknown), and the name of the cap explains the small number
+  // the lane would ask. Measured live on round 3: a tree with 501 unknown
+  // components printed "25 component(s) read as Unknown".
+  const unknownTotal = components.filter((component) => component.spdx === UNKNOWN_LICENSE).length;
   return {
     configured: false,
     asked: 0,
     suggestions: [],
     note:
-      requests.length === 0
+      unknownTotal === 0
         ? "No dependency licence read as Unknown, so there was nothing to look up."
-        : `${NOT_CONFIGURED} ${requests.length} component(s) read as Unknown.`,
+        : requests.length < unknownTotal
+          ? `${NOT_CONFIGURED} ${unknownTotal} component(s) read as Unknown; the lookup request list stops at ${requests.length} (the ${limit}-request lookup cap).`
+          : `${NOT_CONFIGURED} ${unknownTotal} component(s) read as Unknown.`,
   };
 }
 

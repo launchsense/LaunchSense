@@ -1,6 +1,13 @@
 // Registry lookups send a package name and version only.
 // An empty answer stays unknown. This module is for the harness.
 
+/**
+ * The most package coordinates one run queries for licence terms. Coordinates
+ * past this cap are withheld and disclosed by a sentence that names this cap,
+ * so the registry lane's small answer can never read as a full sweep.
+ */
+export const REGISTRY_TERMS_QUERY_CAP = 15;
+
 import type { RegistryFact } from "./buildReport.ts";
 import { isRecord, validNpmName, validNpmVersion } from "./npmIdentity.ts";
 
@@ -138,7 +145,7 @@ export async function lookupOne(name: string, version: string): Promise<Registry
 export async function lookupPackages(
   packages: Array<{ name: string; version: string }>,
 ): Promise<RegistryFact[]> {
-  const capped = packages.slice(0, 15);
+  const capped = packages.slice(0, REGISTRY_TERMS_QUERY_CAP);
   const facts: RegistryFact[] = [];
   for (const pkg of capped) {
     facts.push(await lookupOne(pkg.name, pkg.version));
